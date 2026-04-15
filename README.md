@@ -43,7 +43,7 @@ Local technician web UI for a Raspberry Pi datalogger. The app lets a technician
 ## Deployment notes
 
 - You can deploy from a git clone on the Pi, then run `bash deploy/install.sh` from that clone.
-- For a one-step git-driven install, run `bash deploy/install-from-git.sh <repo-url> [branch]` on the Pi.
+- For a one-step git-driven install, run `bash deploy/install-from-git.sh <repo-url> [ref]` on the Pi, where ref can be `main` or a release tag like `v0.1.0`.
 - Copy `config/app.env.example` to `/etc/pi-network-admin/app.env` and set a unique secret key.
 - Create `/etc/pi-network-admin/admin_password.hash` with the generated hash.
 - Install the sudoers file only after reviewing the `nmcli` path on the target image.
@@ -62,15 +62,31 @@ Local technician web UI for a Raspberry Pi datalogger. The app lets a technician
 
 For a fresh one-step bootstrap on the Pi, you can also run:
 
-`bash deploy/install-from-git.sh <repo-url> [branch]`
+`bash deploy/install-from-git.sh <repo-url> [ref]`
 
 For updates after the first deploy:
 
 1. `cd /opt/pi-network-admin`
-2. `sudo git fetch --all --prune`
-3. `sudo git checkout <branch>`
-4. `sudo git pull --ff-only`
-5. `sudo bash deploy/install.sh`
+2. `sudo bash deploy/update-from-git.sh main`
+
+To pin the Pi to a specific release instead of the latest branch head:
+
+1. Create and push a tag such as `v0.1.0`
+2. On the Pi, run `sudo bash deploy/update-from-git.sh v0.1.0`
+
+## Versioned release workflow
+
+1. Make and test your changes locally.
+2. Commit and push them to GitHub.
+3. When you want a deployable milestone, create and push an annotated release tag such as `v0.1.0`:
+   - manual: `git tag -a v0.1.0 -m "Release v0.1.0" && git push origin v0.1.0`
+   - helper script: `bash deploy/create-release-tag.sh 0.1.0`
+4. Install or update the Pi to that exact version:
+   - fresh install: `bash deploy/install-from-git.sh <repo-url> v0.1.0`
+   - existing install: `sudo bash deploy/update-from-git.sh v0.1.0`
+5. If you want the newest development state instead, use `main` as the ref.
+
+The current repository version marker is stored in `VERSION`.
 
 ## Validation checklist
 

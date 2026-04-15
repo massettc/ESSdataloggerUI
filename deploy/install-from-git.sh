@@ -2,12 +2,12 @@
 set -euo pipefail
 
 if [[ $# -lt 1 || $# -gt 2 ]]; then
-    echo "Usage: $0 <repo-url> [branch]"
+    echo "Usage: $0 <repo-url> [ref]"
     exit 1
 fi
 
 REPO_URL=$1
-BRANCH=${2:-main}
+REF=${2:-main}
 WORK_DIR=${WORK_DIR:-/tmp/pi-network-admin-src}
 
 if ! command -v git >/dev/null 2>&1; then
