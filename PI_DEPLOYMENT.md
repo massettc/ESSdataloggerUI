@@ -68,6 +68,8 @@ Set the important values:
 - PI_ADMIN_PRIMARY_CONNECTION_NAME
 - PI_ADMIN_BACKUP_CONNECTION_NAME
 
+Note: use a non-privileged port such as 8080 for the app unless you later place nginx or another reverse proxy in front of it. Port 80 usually fails under the unprivileged service account.
+
 ### Step 5: Create the admin password hash
 
 Generate a password hash:
@@ -194,8 +196,9 @@ After the app is deployed, verify the following:
 4. Wi-Fi scan results appear.
 5. A valid Wi-Fi change succeeds.
 6. An invalid Wi-Fi change rolls back cleanly.
-7. The failover service starts and remains active.
-8. A reboot brings both services back automatically.
+7. The Ethernet page can switch between DHCP and a static IPv4 address cleanly.
+8. The failover service starts and remains active.
+9. A reboot brings both services back automatically.
 
 ---
 

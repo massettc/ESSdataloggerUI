@@ -43,3 +43,47 @@ def test_get_active_ethernet_connection_returns_matching_profile(monkeypatch):
     active = network_manager.get_active_ethernet_connection({"ETHERNET_INTERFACE": "eth0"})
 
     assert active == {"name": "Wired connection 1", "device": "eth0", "type": "802-3-ethernet"}
+
+
+def test_get_connection_ipv4_config_parses_manual_values(monkeypatch):
+    sample_output = "manual\n192.168.10.25/24\n192.168.10.1\n8.8.8.8,1.1.1.1\n"
+
+    monkeypatch.setattr(network_manager, "_run_nmcli", lambda config, arguments: sample_output)
+
+    settings = network_manager.get_connection_ipv4_config({}, "Wired connection 1")
+
+    assert settings["method"] == "manual"
+    assert settings["address"] == "192.168.10.25"
+    assert settings["prefix"] == "24"
+    assert settings["gateway"] == "192.168.10.1"
+    assert settings["dns"] == "8.8.8.8,1.1.1.1"
+
+
+def test_set_connection_ipv4_config_uses_nmcli_modify(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(network_manager, "_run_nmcli", lambda config, arguments: calls.append(arguments) or "")
+
+    network_manager.set_connection_ipv4_config(
+        {},
+        connection_name="Wired connection 1",
+        method="manual",
+        address="192.168.50.20",
+        prefix="24",
+        gateway="192.168.50.1",
+        dns="8.8.8.8,1.1.1.1",
+    )
+
+    assert calls == [[
+        "connection",
+        "modify",
+        "Wired connection 1",
+        "ipv4.method",
+        "manual",
+        "ipv4.addresses",
+        "192.168.50.20/24",
+        "ipv4.gateway",
+        "192.168.50.1",
+        "ipv4.dns",
+        "8.8.8.8,1.1.1.1",
+    ]]

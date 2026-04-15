@@ -6,9 +6,9 @@ Local technician web UI for a Raspberry Pi datalogger. The ESSdataloggerUI app l
 
 - Password-protected local admin login
 - Dashboard with interface state, active connection name, IP, gateway, and DNS
-- Visible Wi-Fi network scan through NetworkManager
+- Cleaner Wi-Fi workflow with scan, select, password entry, and connect behavior similar to a simple RasAP-style appliance page
 - Wi-Fi connect flow with staged verification and rollback to the previous active wireless profile
-- Ethernet profile activation and interface reconnect flow with verification and rollback
+- Ethernet profile selection plus DHCP or static IPv4 configuration with verification and rollback
 - Background watchdog service that probes upstream connectivity, promotes the configured primary interface, and fails over to the backup interface when needed
 - File-based audit logging
 - Deployment scaffolding for systemd and restricted sudo access to `nmcli`

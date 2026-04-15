@@ -7,6 +7,8 @@ from app.services.network_apply import apply_ethernet_settings, apply_wifi_setti
 from app.services.network_manager import (
     ETHERNET_CONNECTION_TYPE,
     NetworkManagerError,
+    get_active_ethernet_connection,
+    get_connection_ipv4_config,
     get_dashboard_state,
     list_connection_profiles,
     scan_wifi_networks,
@@ -32,6 +34,8 @@ def dashboard():
 @network_bp.route("/wifi", methods=["GET", "POST"])
 @login_required
 def wifi_settings():
+    selected_ssid = request.args.get("ssid", "").strip()
+
     if request.method == "POST":
         ssid = request.form.get("ssid", "").strip()
         password = request.form.get("password", "")
@@ -64,7 +68,7 @@ def wifi_settings():
         wifi_networks = []
         state = _default_state()
 
-    return render_template("wifi.html", wifi_networks=wifi_networks, state=state)
+    return render_template("wifi.html", wifi_networks=wifi_networks, state=state, selected_ssid=selected_ssid)
 
 
 @network_bp.route("/ethernet", methods=["GET", "POST"])
@@ -72,16 +76,33 @@ def wifi_settings():
 def ethernet_settings():
     if request.method == "POST":
         connection_name = request.form.get("connection_name", "").strip() or None
+        ip_method = request.form.get("ip_method", "").strip() or None
+        ip_address = request.form.get("ip_address", "").strip()
+        ip_prefix = request.form.get("ip_prefix", "").strip()
+        gateway = request.form.get("gateway", "").strip()
+        dns = request.form.get("dns", "").strip()
+
+        if ip_method == "manual" and not ip_address:
+            flash("Static IP address is required for manual Ethernet mode.", "error")
+            return redirect(url_for("network.ethernet_settings", profile=connection_name or ""))
 
         try:
-            result = apply_ethernet_settings(current_app.config, connection_name=connection_name)
+            result = apply_ethernet_settings(
+                current_app.config,
+                connection_name=connection_name,
+                ip_method=ip_method,
+                ip_address=ip_address,
+                ip_prefix=ip_prefix,
+                gateway=gateway,
+                dns=dns,
+            )
         except NetworkManagerError as exc:
             current_app.logger.exception("ethernet update error")
             flash(str(exc), "error")
-            return redirect(url_for("network.ethernet_settings"))
+            return redirect(url_for("network.ethernet_settings", profile=connection_name or ""))
 
         flash(result["message"], "success" if result["success"] else "error")
-        return redirect(url_for("network.ethernet_settings"))
+        return redirect(url_for("network.ethernet_settings", profile=connection_name or ""))
 
     try:
         state = get_dashboard_state(current_app.config)
@@ -90,14 +111,37 @@ def ethernet_settings():
             connection_type=ETHERNET_CONNECTION_TYPE,
             interface_name=current_app.config["ETHERNET_INTERFACE"],
         )
+        active_ethernet = get_active_ethernet_connection(current_app.config)
+        selected_profile = request.args.get("profile", "").strip() or (
+            active_ethernet["name"] if active_ethernet else (ethernet_profiles[0]["name"] if ethernet_profiles else "")
+        )
+        ipv4_config = (
+            get_connection_ipv4_config(current_app.config, selected_profile)
+            if selected_profile
+            else _default_ipv4_config()
+        )
     except NetworkManagerError as exc:
         current_app.logger.exception("ethernet view error")
         flash(str(exc), "error")
         state = _default_state()
         ethernet_profiles = []
+        active_ethernet = None
+        selected_profile = ""
+        ipv4_config = _default_ipv4_config()
 
-    return render_template("ethernet.html", ethernet_profiles=ethernet_profiles, state=state)
+    return render_template(
+        "ethernet.html",
+        ethernet_profiles=ethernet_profiles,
+        state=state,
+        active_ethernet=active_ethernet,
+        selected_profile=selected_profile,
+        ipv4_config=ipv4_config,
+    )
 
 
 def _default_state() -> dict[str, object]:
     return {"hostname": "unavailable", "interfaces": [], "wifi_networks": []}
+
+
+def _default_ipv4_config() -> dict[str, str]:
+    return {"method": "auto", "address": "", "prefix": "24", "gateway": "", "dns": ""}

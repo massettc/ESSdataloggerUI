@@ -53,3 +53,36 @@ def test_apply_ethernet_settings_rolls_back_on_failure(monkeypatch):
 
     assert result["success"] is False
     assert calls == ["Static LAN", "Wired connection 1"]
+
+
+def test_apply_ethernet_settings_updates_static_ipv4_and_restores_previous_profile(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(network_apply, "get_active_ethernet_connection", lambda config: {"name": "Wired connection 1", "device": "eth0"})
+    monkeypatch.setattr(network_apply, "get_connection_ipv4_config", lambda config, connection_name: {
+        "method": "auto",
+        "address": "",
+        "prefix": "",
+        "gateway": "",
+        "dns": "",
+    })
+    monkeypatch.setattr(network_apply, "set_connection_ipv4_config", lambda config, **kwargs: calls.append(("modify", kwargs)))
+    monkeypatch.setattr(network_apply, "bring_up_connection", lambda config, name: calls.append(("up", name)))
+    monkeypatch.setattr(network_apply, "_verify_connection", lambda config, interface_name, connection_type, expected_name=None: False)
+
+    result = network_apply.apply_ethernet_settings(
+        {"ETHERNET_INTERFACE": "eth0", "VERIFY_TIMEOUT_SECONDS": 1, "VERIFY_POLL_SECONDS": 0.01},
+        connection_name="Wired connection 1",
+        ip_method="manual",
+        ip_address="192.168.2.10",
+        ip_prefix="24",
+        gateway="192.168.2.1",
+        dns="8.8.8.8",
+    )
+
+    assert result["success"] is False
+    assert calls[0][0] == "modify"
+    assert calls[0][1]["method"] == "manual"
+    assert calls[-2][0] == "modify"
+    assert calls[-2][1]["method"] == "auto"
+    assert calls[-1] == ("up", "Wired connection 1")

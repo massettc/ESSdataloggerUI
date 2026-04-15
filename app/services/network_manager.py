@@ -210,6 +210,78 @@ def connect_wifi(config: dict[str, Any], ssid: str, password: str, hidden: bool)
     _run_nmcli(config, command)
 
 
+def get_connection_ipv4_config(config: dict[str, Any], connection_name: str) -> dict[str, str]:
+    output = _run_nmcli(
+        config,
+        [
+            "-g",
+            "ipv4.method,ipv4.addresses,ipv4.gateway,ipv4.dns",
+            "connection",
+            "show",
+            connection_name,
+        ],
+    )
+
+    lines = output.splitlines()
+    while len(lines) < 4:
+        lines.append("")
+
+    method, addresses, gateway, dns = [line.strip() for line in lines[:4]]
+    address = ""
+    prefix = ""
+
+    if addresses:
+        primary_address = addresses.split(",", 1)[0].strip()
+        if "/" in primary_address:
+            address, prefix = primary_address.split("/", 1)
+        else:
+            address = primary_address
+
+    return {
+        "method": method or "auto",
+        "address": address,
+        "prefix": prefix,
+        "gateway": gateway,
+        "dns": dns,
+    }
+
+
+def set_connection_ipv4_config(
+    config: dict[str, Any],
+    connection_name: str,
+    method: str,
+    address: str = "",
+    prefix: str = "",
+    gateway: str = "",
+    dns: str = "",
+) -> None:
+    normalized_method = (method or "auto").strip().lower()
+    if normalized_method not in {"auto", "manual"}:
+        raise NetworkManagerError("Unsupported IPv4 method. Use auto or manual.")
+
+    command = ["connection", "modify", connection_name, "ipv4.method", normalized_method]
+
+    if normalized_method == "manual":
+        if not address:
+            raise NetworkManagerError("Static IP address is required for manual Ethernet mode.")
+
+        prefix_value = prefix or "24"
+        command.extend(
+            [
+                "ipv4.addresses",
+                f"{address}/{prefix_value}",
+                "ipv4.gateway",
+                gateway,
+                "ipv4.dns",
+                dns,
+            ]
+        )
+    else:
+        command.extend(["ipv4.addresses", "", "ipv4.gateway", "", "ipv4.dns", ""])
+
+    _run_nmcli(config, command)
+
+
 def _get_device_status(config: dict[str, Any]) -> list[dict[str, Any]]:
     output = _run_nmcli(config, ["-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "device", "status"])
     interfaces = []

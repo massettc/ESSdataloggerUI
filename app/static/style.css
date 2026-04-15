@@ -195,14 +195,28 @@ td {
     gap: 0.9rem;
 }
 
-.network-card {
+.network-stack {
+    display: grid;
+    gap: 0.8rem;
+}
+
+.network-card,
+.network-picker {
     border: 1px solid #ddd1b8;
     border-radius: 16px;
     padding: 1rem;
     background: #fffdf8;
 }
 
-.network-card.active {
+.network-picker {
+    color: inherit;
+    text-decoration: none;
+    display: grid;
+    gap: 0.35rem;
+}
+
+.network-card.active,
+.network-picker.active {
     border-color: #63c4b5;
     background: #f0fcf8;
 }
@@ -211,6 +225,11 @@ td {
     display: flex;
     justify-content: space-between;
     gap: 0.75rem;
+}
+
+.network-meta {
+    color: var(--muted);
+    font-size: 0.92rem;
 }
 
 .badge {
@@ -254,6 +273,17 @@ td {
     padding-bottom: 0.75rem;
 }
 
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 120px;
+    gap: 0.85rem;
+}
+
+.muted-note {
+    color: var(--muted);
+    margin-bottom: 0;
+}
+
 @media (max-width: 760px) {
     .site-header,
     .hero,
@@ -262,7 +292,8 @@ td {
         align-items: stretch;
     }
 
-    .two-column {
+    .two-column,
+    .form-grid {
         grid-template-columns: 1fr;
     }
 }

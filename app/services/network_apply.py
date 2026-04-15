@@ -14,9 +14,11 @@ from app.services.network_manager import (
     get_active_connection,
     get_active_ethernet_connection,
     get_active_wifi_connection,
+    get_connection_ipv4_config,
     is_connection_active,
     is_ethernet_connected,
     is_wifi_connected,
+    set_connection_ipv4_config,
 )
 
 
@@ -43,14 +45,42 @@ def apply_wifi_settings(config: dict[str, Any], ssid: str, password: str, hidden
         }
 
 
-def apply_ethernet_settings(config: dict[str, Any], connection_name: str | None = None) -> dict[str, Any]:
+def apply_ethernet_settings(
+    config: dict[str, Any],
+    connection_name: str | None = None,
+    ip_method: str | None = None,
+    ip_address: str = "",
+    ip_prefix: str = "",
+    gateway: str = "",
+    dns: str = "",
+) -> dict[str, Any]:
     previous_connection = get_active_ethernet_connection(config)
-    requested_connection = connection_name or config["ETHERNET_INTERFACE"]
-    logger.info("ethernet change requested for connection=%s", requested_connection)
+    target_connection = connection_name
+    if target_connection is None and ip_method in {"auto", "manual"} and previous_connection:
+        target_connection = previous_connection["name"]
+
+    requested_connection = target_connection or config["ETHERNET_INTERFACE"]
+    previous_ipv4_config = None
+    logger.info("ethernet change requested for connection=%s method=%s", requested_connection, ip_method or "unchanged")
+
+    if ip_method == "manual" and not ip_address:
+        raise NetworkManagerError("Static IP address is required when Ethernet mode is set to static.")
 
     try:
-        if connection_name:
-            bring_up_connection(config, connection_name)
+        if target_connection and ip_method in {"auto", "manual"}:
+            previous_ipv4_config = get_connection_ipv4_config(config, target_connection)
+            set_connection_ipv4_config(
+                config,
+                connection_name=target_connection,
+                method=ip_method,
+                address=ip_address,
+                prefix=ip_prefix,
+                gateway=gateway,
+                dns=dns,
+            )
+
+        if target_connection:
+            bring_up_connection(config, target_connection)
         else:
             connect_device(config, config["ETHERNET_INTERFACE"])
 
@@ -58,7 +88,7 @@ def apply_ethernet_settings(config: dict[str, Any], connection_name: str | None 
             config,
             interface_name=config["ETHERNET_INTERFACE"],
             connection_type=ETHERNET_CONNECTION_TYPE,
-            expected_name=connection_name,
+            expected_name=target_connection,
         ):
             logger.info("ethernet change succeeded for connection=%s", requested_connection)
             return {"success": True, "message": f"Ethernet connected through {requested_connection}."}
@@ -66,6 +96,8 @@ def apply_ethernet_settings(config: dict[str, Any], connection_name: str | None 
         raise NetworkManagerError("The Ethernet connection did not become active before timeout.")
     except NetworkManagerError as exc:
         logger.warning("ethernet change failed for connection=%s: %s", requested_connection, exc)
+        if target_connection and previous_ipv4_config is not None:
+            _restore_ipv4_config(config, target_connection, previous_ipv4_config)
         _rollback(config, previous_connection)
         return {
             "success": False,
@@ -115,13 +147,29 @@ def ensure_connection_active(config: dict[str, Any], interface_name: str, connec
     return active["name"] == connection_name
 
 
+def _restore_ipv4_config(config: dict[str, Any], connection_name: str, previous_ipv4_config: dict[str, str]) -> None:
+    try:
+        set_connection_ipv4_config(
+            config,
+            connection_name=connection_name,
+            method=previous_ipv4_config.get("method", "auto"),
+            address=previous_ipv4_config.get("address", ""),
+            prefix=previous_ipv4_config.get("prefix", ""),
+            gateway=previous_ipv4_config.get("gateway", ""),
+            dns=previous_ipv4_config.get("dns", ""),
+        )
+        logger.info("restored IPv4 settings for connection=%s", connection_name)
+    except NetworkManagerError as exc:
+        logger.error("failed to restore IPv4 settings for connection=%s: %s", connection_name, exc)
+
+
 def _rollback(config: dict[str, Any], previous_connection: dict[str, str] | None) -> None:
     if not previous_connection:
-        logger.warning("no previous wifi connection available for rollback")
+        logger.warning("no previous connection available for rollback")
         return
 
     try:
         bring_up_connection(config, previous_connection["name"])
-        logger.info("rolled back to previous wifi connection=%s", previous_connection["name"])
+        logger.info("rolled back to previous connection=%s", previous_connection["name"])
     except NetworkManagerError as exc:
         logger.error("rollback failed for connection=%s: %s", previous_connection["name"], exc)

@@ -5,7 +5,7 @@
     <div>
         <p class="eyebrow">Wired configuration</p>
         <h2>Manage Ethernet</h2>
-        <p>Activate a saved Ethernet profile or reconnect the configured interface. The app verifies the change and restores the previous Ethernet profile if activation fails.</p>
+        <p>Choose the Ethernet profile, then keep it on DHCP or switch it to a fixed static address for the cabinet network.</p>
     </div>
     <div class="hero-actions">
         <a class="button-link" href="{{ url_for('network.wifi_settings') }}">Manage Wi-Fi</a>
@@ -16,27 +16,57 @@
 <section class="two-column">
     <article class="panel">
         <div class="section-heading">
-            <h3>Activate Ethernet</h3>
-            <p>Leave the profile blank to ask NetworkManager to reconnect the configured interface directly.</p>
+            <h3>Ethernet Profile Settings</h3>
+            <p>Use Automatic for DHCP or Static to set the address manually.</p>
         </div>
         <form method="post" class="stack-form">
             <label for="connection_name">Saved profile</label>
             <select id="connection_name" name="connection_name">
-                <option value="">Reconnect {{ config.ETHERNET_INTERFACE }}</option>
                 {% for profile in ethernet_profiles %}
-                <option value="{{ profile.name }}">{{ profile.name }}{% if profile.active %} (active){% endif %}</option>
+                <option value="{{ profile.name }}" {% if profile.name == selected_profile %}selected{% endif %}>{{ profile.name }}{% if profile.active %} (active){% endif %}</option>
                 {% endfor %}
             </select>
 
-            <button type="submit">Apply Ethernet Settings</button>
+            <label for="ip_method">IPv4 mode</label>
+            <select id="ip_method" name="ip_method">
+                <option value="auto" {% if ipv4_config.method != 'manual' %}selected{% endif %}>Automatic (DHCP)</option>
+                <option value="manual" {% if ipv4_config.method == 'manual' %}selected{% endif %}>Static IPv4</option>
+            </select>
+
+            <div class="form-grid">
+                <div>
+                    <label for="ip_address">IP address</label>
+                    <input id="ip_address" name="ip_address" placeholder="192.168.1.50" value="{{ ipv4_config.address }}">
+                </div>
+                <div>
+                    <label for="ip_prefix">Prefix</label>
+                    <input id="ip_prefix" name="ip_prefix" placeholder="24" value="{{ ipv4_config.prefix or '24' }}">
+                </div>
+            </div>
+
+            <label for="gateway">Gateway</label>
+            <input id="gateway" name="gateway" placeholder="192.168.1.1" value="{{ ipv4_config.gateway }}">
+
+            <label for="dns">DNS servers</label>
+            <input id="dns" name="dns" placeholder="8.8.8.8,1.1.1.1" value="{{ ipv4_config.dns }}">
+
+            <button type="submit">Save Ethernet Settings</button>
         </form>
+
+        <p class="muted-note">When Static is selected, enter the IP address and prefix. Gateway and DNS can be left blank if your network does not need them.</p>
     </article>
 
     <article class="panel">
         <div class="section-heading">
-            <h3>Current Connectivity</h3>
-            <p>Check active links before changing watchdog priorities or Wi-Fi credentials.</p>
+            <h3>Current Wired Status</h3>
+            <p>Check the active profile before changing watchdog priorities or Wi-Fi credentials.</p>
         </div>
+        {% if active_ethernet %}
+        <p><strong>Active profile:</strong> {{ active_ethernet.name }}</p>
+        {% else %}
+        <p class="muted-note">No active Ethernet profile detected right now.</p>
+        {% endif %}
+
         <ul class="interface-list">
             {% for interface in state.interfaces %}
             <li>
