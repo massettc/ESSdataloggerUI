@@ -29,6 +29,13 @@ fi
 
 echo "Preflight OK: NetworkManager is active ($(nmcli --version))."
 
+# ── Preflight: ensure Python 3 venv/pip support is available ──
+if ! python3 -m venv --help >/dev/null 2>&1; then
+    echo "python3-venv not found. Installing..."
+    sudo apt-get update -qq
+    sudo apt-get install -y python3-venv
+fi
+
 if ! id -u "$USER_NAME" >/dev/null 2>&1; then
     sudo useradd --system --create-home --home-dir "$APP_DIR" --shell /usr/sbin/nologin "$USER_NAME"
 fi

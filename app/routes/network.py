@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 
 from app.auth import login_required
