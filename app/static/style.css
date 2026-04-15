@@ -63,6 +63,12 @@ body {
     background: #e8f2f0;
 }
 
+.sidebar-nav a.active {
+    background: #d8efe9;
+    color: #0d5b54;
+    font-weight: 600;
+}
+
 .sidebar-logout {
     margin-top: auto;
 }
@@ -180,6 +186,14 @@ button.secondary,
     background: transparent;
     border: 1px solid #b8aa90;
     color: var(--ink);
+}
+
+button.danger-button {
+    background: var(--danger);
+}
+
+button.danger-button:hover {
+    background: #8d1723;
 }
 
 .small-button {
@@ -462,6 +476,151 @@ td {
     margin-bottom: 0;
 }
 
+.system-layout {
+    align-items: stretch;
+}
+
+.system-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.stat-card {
+    background: #fffdf8;
+    border: 1px solid #e4dcca;
+    border-radius: 14px;
+    padding: 0.85rem;
+    display: grid;
+    gap: 0.25rem;
+}
+
+.stat-card span {
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.usage-meter {
+    height: 12px;
+    background: #ebe2d1;
+    border-radius: 999px;
+    overflow: hidden;
+    margin: 0.85rem 0 0.6rem;
+}
+
+.usage-meter span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #0f766e, #2aa58d);
+}
+
+.system-meta-list {
+    display: grid;
+    gap: 0.7rem;
+    margin: 0 0 1rem;
+}
+
+.system-meta-list div {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 0.55rem;
+    border-bottom: 1px solid #e4dcca;
+}
+
+.system-meta-list dt {
+    color: var(--muted);
+}
+
+.system-meta-list dd {
+    margin: 0;
+    text-align: right;
+    font-weight: 600;
+}
+
+.system-action-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.update-state-note,
+.update-error-note {
+    border-radius: 12px;
+    padding: 0.75rem 0.85rem;
+    margin: 0.75rem 0 0;
+}
+
+.update-state-note {
+    background: #eef6fb;
+    color: #1e5f85;
+}
+
+.update-error-note {
+    background: #fff1f1;
+    color: #a53030;
+}
+
+.log-panel {
+    margin-top: 1rem;
+}
+
+.log-panel summary {
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.log-panel pre {
+    white-space: pre-wrap;
+    margin: 0.75rem 0 0;
+    padding: 0.85rem;
+    border-radius: 12px;
+    background: #f6f3eb;
+    border: 1px solid #e4dcca;
+    max-height: 220px;
+    overflow: auto;
+}
+
+.busy-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(16, 24, 32, 0.42);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    z-index: 1000;
+}
+
+.busy-dialog {
+    width: min(440px, 100%);
+}
+
+.busy-progress {
+    height: 12px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: #ebe2d1;
+    margin: 0.85rem 0;
+}
+
+.busy-progress span {
+    display: block;
+    width: 42%;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #0f766e, #2aa58d);
+    animation: busy-slide 1.2s ease-in-out infinite;
+}
+
+@keyframes busy-slide {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(240%); }
+}
+
 @media (max-width: 900px) {
     .app-shell {
         grid-template-columns: 1fr;
@@ -487,7 +646,8 @@ td {
     .wifi-details-grid,
     .password-row,
     .single-submit-row,
-    .wifi-cards-grid {
+    .wifi-cards-grid,
+    .system-stats-grid {
         grid-template-columns: 1fr;
     }
 

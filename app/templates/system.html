@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero panel">
+    <div>
+        <p class="eyebrow">Device administration</p>
+        <h2>System</h2>
+        <p>Manage the hostname, review storage usage, reboot the device, and install updates.</p>
+    </div>
+    <div class="hero-actions">
+        <span class="status-pill {{ 'status-online' if not update_status.update_available else 'status-neutral' }}">
+            <span class="status-dot"></span>
+            {% if update_status.update_available %}
+                Update available
+            {% else %}
+                Up to date
+            {% endif %}
+        </span>
+    </div>
+</section>
+
+<section class="two-column system-layout">
+    <article class="panel">
+        <div class="section-heading">
+            <div>
+                <h3>Hostname</h3>
+                <p>Update the device name shown on the local network.</p>
+            </div>
+        </div>
+        <form method="post" class="stack-form" data-confirm="Change the device hostname now? A reboot may be required." data-busy-label="Applying hostname change...">
+            <input type="hidden" name="action" value="hostname">
+            <label for="hostname">Current hostname</label>
+            <input id="hostname" name="hostname" value="{{ system.hostname }}" maxlength="63" pattern="[A-Za-z0-9][A-Za-z0-9-]{0,61}[A-Za-z0-9]|[A-Za-z0-9]" required>
+            <button type="submit">Save hostname</button>
+        </form>
+        <p class="muted-note">If the name changes, reboot the Pi so everything comes back with the new network name.</p>
+    </article>
+
+    <article class="panel">
+        <div class="section-heading">
+            <div>
+                <h3>Disk usage</h3>
+                <p>Current root filesystem space on the device.</p>
+            </div>
+        </div>
+        <div class="system-stats-grid">
+            <div class="stat-card">
+                <span>Total</span>
+                <strong>{{ system.disk_total }}</strong>
+            </div>
+            <div class="stat-card">
+                <span>Used</span>
+                <strong>{{ system.disk_used }}</strong>
+            </div>
+            <div class="stat-card">
+                <span>Free</span>
+                <strong>{{ system.disk_free }}</strong>
+            </div>
+        </div>
+        <div class="usage-meter" aria-label="Disk usage">
+            <span style="width: {{ system.disk_percent }}%"></span>
+        </div>
+        <p class="muted-note">{{ system.disk_percent }}% of the storage is currently in use.</p>
+    </article>
+</section>
+
+<section class="two-column system-layout">
+    <article class="panel">
+        <div class="section-heading">
+            <div>
+                <h3>Software updates</h3>
+                <p>Pull the latest code from git and run the installer on the Pi.</p>
+            </div>
+        </div>
+
+        <dl class="system-meta-list">
+            <div>
+                <dt>Branch</dt>
+                <dd>{{ update_status.current_branch }}</dd>
+            </div>
+            <div>
+                <dt>Commit</dt>
+                <dd>{{ update_status.current_commit }}</dd>
+            </div>
+            <div>
+                <dt>Status</dt>
+                <dd>
+                    {% if update_status.update_available %}
+                        {{ update_status.behind_by }} update(s) available
+                    {% else %}
+                        No pending updates
+                    {% endif %}
+                </dd>
+            </div>
+        </dl>
+
+        {% if update_status.message %}
+        <p class="update-state-note">{{ update_status.message }}</p>
+        {% endif %}
+
+        {% if update_status.error %}
+        <p class="update-error-note">{{ update_status.error }}</p>
+        {% endif %}
+
+        <div class="system-action-row">
+            <form method="post" data-busy-label="Checking for updates...">
+                <input type="hidden" name="action" value="check_updates">
+                <button class="secondary" type="submit">Check for updates</button>
+            </form>
+            <form method="post" data-confirm="Install the latest update now? The web service may restart during the process." data-busy-label="Installing update. This page may disconnect while the service restarts...">
+                <input type="hidden" name="action" value="update">
+                <button type="submit">Install update</button>
+            </form>
+        </div>
+
+        {% if update_status.log_excerpt %}
+        <details class="log-panel">
+            <summary>Recent update log</summary>
+            <pre>{{ update_status.log_excerpt }}</pre>
+        </details>
+        {% endif %}
+    </article>
+
+    <article class="panel">
+        <div class="section-heading">
+            <div>
+                <h3>Power</h3>
+                <p>Restart the device after hostname or software changes.</p>
+            </div>
+        </div>
+        <form method="post" data-confirm="Reboot the device now? The page will disconnect while it restarts." data-busy-label="Rebooting the device...">
+            <input type="hidden" name="action" value="reboot">
+            <button class="danger-button" type="submit">Reboot now</button>
+        </form>
+        <p class="muted-note">Use this when the cabinet connection path is available and the tech is ready for a short outage.</p>
+    </article>
+</section>
+{% endblock %}

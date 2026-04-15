@@ -15,9 +15,11 @@
                 <h1>{{ config.APP_NAME }}</h1>
             </div>
             <nav class="sidebar-nav">
-                <a href="{{ url_for('network.dashboard') }}">Dashboard</a>
-                <a href="{{ url_for('network.wifi_settings') }}">WiFi client</a>
-                <a href="{{ url_for('network.ethernet_settings') }}">Ethernet</a>
+                <a class="{{ 'active' if request.endpoint == 'network.dashboard' else '' }}" href="{{ url_for('network.dashboard') }}">Dashboard</a>
+                <a class="{{ 'active' if request.endpoint == 'network.wifi_settings' else '' }}" href="{{ url_for('network.wifi_settings') }}">WiFi client</a>
+                <a class="{{ 'active' if request.endpoint == 'network.ethernet_settings' else '' }}" href="{{ url_for('network.ethernet_settings') }}">Ethernet</a>
+                <a class="{{ 'active' if request.endpoint == 'network.datalogger' else '' }}" href="{{ url_for('network.datalogger') }}">Datalogger</a>
+                <a class="{{ 'active' if request.endpoint == 'network.system_settings' else '' }}" href="{{ url_for('network.system_settings') }}">System</a>
             </nav>
             <form method="post" action="{{ url_for('auth.logout') }}" class="sidebar-logout">
                 <button class="secondary" type="submit">Log out</button>
@@ -50,6 +52,16 @@
             </main>
         </div>
     </div>
+
+    <div id="busy-overlay" class="busy-overlay" hidden>
+        <div class="busy-dialog panel">
+            <p class="eyebrow">Please wait</p>
+            <h3 id="busy-title">Working...</h3>
+            <div class="busy-progress" aria-hidden="true"><span></span></div>
+            <p class="muted-note">The page will refresh when the action completes.</p>
+        </div>
+    </div>
+
     <script>
     document.addEventListener('click', function (event) {
         const toggle = event.target.closest('[data-password-target]');
@@ -59,6 +71,27 @@
         if (!input) return;
         input.type = input.type === 'password' ? 'text' : 'password';
         toggle.textContent = input.type === 'password' ? 'Show' : 'Hide';
+    });
+
+    document.addEventListener('submit', function (event) {
+        const form = event.target;
+        if (!(form instanceof HTMLFormElement)) return;
+
+        const confirmMessage = form.getAttribute('data-confirm');
+        if (confirmMessage && !window.confirm(confirmMessage)) {
+            event.preventDefault();
+            return;
+        }
+
+        const busyLabel = form.getAttribute('data-busy-label');
+        if (!busyLabel) return;
+
+        const overlay = document.getElementById('busy-overlay');
+        const title = document.getElementById('busy-title');
+        if (!overlay || !title) return;
+
+        title.textContent = busyLabel;
+        overlay.hidden = false;
     });
     </script>
 </body>

@@ -13,6 +13,14 @@ from app.services.network_manager import (
     list_connection_profiles,
     scan_wifi_networks,
 )
+from app.services.system_manager import (
+    SystemManagerError,
+    get_system_summary,
+    get_update_status,
+    request_system_reboot,
+    run_system_update,
+    set_system_hostname,
+)
 
 
 network_bp = Blueprint("network", __name__)
@@ -145,9 +153,81 @@ def ethernet_settings():
     )
 
 
+@network_bp.route("/datalogger")
+@login_required
+def datalogger():
+    return render_template("datalogger.html")
+
+
+@network_bp.route("/system", methods=["GET", "POST"])
+@login_required
+def system_settings():
+    if request.method == "POST":
+        action = request.form.get("action", "").strip()
+
+        try:
+            if action == "hostname":
+                result = set_system_hostname(current_app.config, request.form.get("hostname", ""))
+            elif action == "reboot":
+                result = request_system_reboot(current_app.config)
+            elif action == "check_updates":
+                update_status = get_update_status(current_app.config, refresh=True)
+                if update_status["error"]:
+                    flash(update_status["error"], "error")
+                elif update_status["update_available"]:
+                    flash(
+                        f"{update_status['behind_by']} update(s) available on {update_status['current_branch']}.",
+                        "info",
+                    )
+                else:
+                    flash("System is already up to date.", "success")
+                return redirect(url_for("network.system_settings"))
+            elif action == "update":
+                result = run_system_update(current_app.config)
+            else:
+                result = {"success": False, "message": "Unknown system action."}
+        except SystemManagerError as exc:
+            current_app.logger.exception("system action error")
+            flash(str(exc), "error")
+            return redirect(url_for("network.system_settings"))
+
+        flash(result["message"], "success" if result["success"] else "error")
+        if result.get("reboot_required"):
+            flash("A reboot is recommended to finish applying the new hostname.", "info")
+        return redirect(url_for("network.system_settings"))
+
+    try:
+        system = get_system_summary(current_app.config)
+        update_status = get_update_status(current_app.config)
+    except SystemManagerError as exc:
+        current_app.logger.exception("system view error")
+        flash(str(exc), "error")
+        system = _default_system_summary()
+        update_status = _default_update_status()
+
+    return render_template("system.html", system=system, update_status=update_status)
+
+
 def _default_state() -> dict[str, object]:
     return {"hostname": "unavailable", "interfaces": [], "wifi_networks": [], "internet_access": False}
 
 
 def _default_ipv4_config() -> dict[str, str]:
     return {"method": "auto", "address": "", "prefix": "24", "gateway": "", "dns": ""}
+
+
+def _default_system_summary() -> dict[str, object]:
+    return {"hostname": "unavailable", "disk_total": "0 GB", "disk_used": "0 GB", "disk_free": "0 GB", "disk_percent": 0}
+
+
+def _default_update_status() -> dict[str, object]:
+    return {
+        "current_branch": "unknown",
+        "current_commit": "unknown",
+        "update_available": False,
+        "behind_by": 0,
+        "error": "",
+        "state": "idle",
+        "message": "No recent update activity.",
+        "log_excerpt": "",
+    }

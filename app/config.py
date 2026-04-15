@@ -22,6 +22,17 @@ class Config:
     BACKUP_CONNECTION_NAME = os.getenv("PI_ADMIN_BACKUP_CONNECTION_NAME", "")
     NMCLI_BIN = os.getenv("PI_ADMIN_NMCLI_BIN", "nmcli")
     USE_SUDO_FOR_NMCLI = os.getenv("PI_ADMIN_USE_SUDO_FOR_NMCLI", "true").lower() == "true"
+    GIT_BIN = os.getenv("PI_ADMIN_GIT_BIN", "git")
+    BASH_BIN = os.getenv("PI_ADMIN_BASH_BIN", "bash")
+    SUDO_BIN = os.getenv("PI_ADMIN_SUDO_BIN", "sudo")
+    HOSTNAMECTL_BIN = os.getenv("PI_ADMIN_HOSTNAMECTL_BIN", "hostnamectl")
+    SYSTEMCTL_BIN = os.getenv("PI_ADMIN_SYSTEMCTL_BIN", "systemctl")
+    USE_SUDO_FOR_SYSTEM = os.getenv("PI_ADMIN_USE_SUDO_FOR_SYSTEM", "true").lower() == "true"
+    REPO_PATH = os.getenv("PI_ADMIN_REPO_PATH", str(BASE_DIR))
+    UPDATE_SCRIPT = os.getenv("PI_ADMIN_UPDATE_SCRIPT", str(BASE_DIR / "deploy" / "update-from-git.sh"))
+    UPDATE_LOG_PATH = os.getenv("PI_ADMIN_UPDATE_LOG_PATH", str(BASE_DIR / "update.log"))
+    UPDATE_STATUS_FILE = os.getenv("PI_ADMIN_UPDATE_STATUS_FILE", str(BASE_DIR / "update-status.txt"))
+    DISK_USAGE_PATH = os.getenv("PI_ADMIN_DISK_USAGE_PATH", "/")
     PING_BIN = os.getenv("PI_ADMIN_PING_BIN", "ping")
     COMMAND_TIMEOUT_SECONDS = int(os.getenv("PI_ADMIN_COMMAND_TIMEOUT_SECONDS", "15"))
     VERIFY_TIMEOUT_SECONDS = int(os.getenv("PI_ADMIN_VERIFY_TIMEOUT_SECONDS", "30"))
