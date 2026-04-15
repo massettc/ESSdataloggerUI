@@ -63,6 +63,13 @@
     </div>
 
     <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const overlay = document.getElementById('busy-overlay');
+        if (overlay) {
+            overlay.hidden = true;
+        }
+    });
+
     document.addEventListener('click', function (event) {
         const toggle = event.target.closest('[data-password-target]');
         if (!toggle) return;

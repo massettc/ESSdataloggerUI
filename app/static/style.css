@@ -595,6 +595,10 @@ td {
     z-index: 1000;
 }
 
+.busy-overlay[hidden] {
+    display: none !important;
+}
+
 .busy-dialog {
     width: min(440px, 100%);
 }
