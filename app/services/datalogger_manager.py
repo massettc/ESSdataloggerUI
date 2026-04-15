@@ -66,8 +66,9 @@ def ensure_portainer(config: dict[str, Any]) -> dict[str, Any]:
 
     docker_bin = config.get("DOCKER_BIN", "docker")
     container_name = config.get("PORTAINER_CONTAINER_NAME", "portainer")
-    http_port = str(config.get("PORTAINER_HTTP_PORT", 9000))
-    https_port = str(config.get("PORTAINER_HTTPS_PORT", 9443))
+    http_port = str(config.get("PORTAINER_HTTP_PORT", 9000)).strip()
+    https_port = str(config.get("PORTAINER_HTTPS_PORT", 9443)).strip()
+    edge_port = str(config.get("PORTAINER_EDGE_PORT", 8000)).strip()
 
     if status["portainer_running"]:
         return {"success": True, "message": "Portainer is already running and ready to use."}
@@ -82,27 +83,31 @@ def ensure_portainer(config: dict[str, Any]) -> dict[str, Any]:
     if volume_result.returncode != 0:
         return {"success": False, "message": _command_error(volume_result, "Unable to create the Portainer data volume")}
 
-    run_result = _run_docker_command(
-        config,
+    command = [
+        docker_bin,
+        "run",
+        "-d",
+        "--name",
+        container_name,
+        "--restart=always",
+        "-p",
+        f"{edge_port}:8000",
+        "-p",
+        f"{https_port}:9443",
+    ]
+    if http_port and http_port != "0":
+        command.extend(["-p", f"{http_port}:9000"])
+    command.extend(
         [
-            docker_bin,
-            "run",
-            "-d",
-            "--name",
-            container_name,
-            "--restart=always",
-            "-p",
-            f"{http_port}:9000",
-            "-p",
-            f"{https_port}:9443",
             "-v",
             "/var/run/docker.sock:/var/run/docker.sock",
             "-v",
             "portainer_data:/data",
-            "portainer/portainer-ce:lts",
-        ],
-        check=False,
+            "portainer/portainer-ce:sts",
+        ]
     )
+
+    run_result = _run_docker_command(config, command, check=False)
     if run_result.returncode != 0:
         return {"success": False, "message": _command_error(run_result, "Unable to install and start Portainer")}
 
@@ -111,6 +116,9 @@ def ensure_portainer(config: dict[str, Any]) -> dict[str, Any]:
 
 def _build_portainer_url(config: dict[str, Any], host: str | None = None) -> str:
     hostname = host or config.get("PORTAINER_HOSTNAME") or "localhost"
+    https_port = str(config.get("PORTAINER_HTTPS_PORT", 9443)).strip()
+    if https_port and https_port != "0":
+        return f"https://{hostname}:{https_port}"
     return f"http://{hostname}:{config.get('PORTAINER_HTTP_PORT', 9000)}"
 
 
@@ -131,10 +139,16 @@ def _run_docker_command(
 
 
 def _command_error(result: subprocess.CompletedProcess[str], prefix: str) -> str:
-    detail = (result.stderr or result.stdout or "unknown error").strip().splitlines()
-    if detail:
-        return f"{prefix}: {detail[-1]}"
-    return prefix
+    detail_lines = [line.strip() for line in (result.stderr or result.stdout or "unknown error").splitlines() if line.strip()]
+    if not detail_lines:
+        return prefix
+
+    for line in reversed(detail_lines):
+        if "--help" in line.lower() or line.lower().startswith("see '"):
+            continue
+        return f"{prefix}: {line}"
+
+    return f"{prefix}: {detail_lines[-1]}"
 
 
 def _is_linux_target() -> bool:
