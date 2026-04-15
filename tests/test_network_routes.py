@@ -59,13 +59,56 @@ def test_sidebar_includes_datalogger_and_system_links(client, monkeypatch):
     assert b"System" in response.data
 
 
-def test_datalogger_page_renders_placeholder(client):
+def test_datalogger_page_shows_portainer_status(client, monkeypatch):
+    monkeypatch.setattr(
+        network_routes,
+        "get_datalogger_status",
+        lambda config, host=None: {
+            "docker_available": True,
+            "docker_running": True,
+            "portainer_installed": True,
+            "portainer_running": True,
+            "portainer_url": "http://ess-pi:9000",
+            "containers": [{"name": "logger", "image": "my/logger:latest", "status": "Up 2 hours"}],
+            "error": "",
+        },
+    )
+
     _login(client)
     response = client.get("/datalogger")
 
     assert response.status_code == 200
-    assert b"Datalogger" in response.data
-    assert b"Coming soon" in response.data
+    assert b"Portainer" in response.data
+    assert b"http://ess-pi:9000" in response.data
+    assert b"logger" in response.data
+
+
+def test_datalogger_post_can_start_portainer(client, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        network_routes,
+        "ensure_portainer",
+        lambda config: calls.append(True) or {"success": True, "message": "Portainer is ready."},
+    )
+    monkeypatch.setattr(
+        network_routes,
+        "get_datalogger_status",
+        lambda config, host=None: {
+            "docker_available": True,
+            "docker_running": True,
+            "portainer_installed": True,
+            "portainer_running": True,
+            "portainer_url": "http://ess-pi:9000",
+            "containers": [],
+            "error": "",
+        },
+    )
+
+    _login(client)
+    response = client.post("/datalogger", data={"action": "portainer"}, follow_redirects=False)
+
+    assert response.status_code == 302
+    assert calls == [True]
 
 
 def test_system_page_shows_hostname_disk_and_updates(client, monkeypatch):

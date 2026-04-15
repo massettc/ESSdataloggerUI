@@ -23,11 +23,17 @@ class Config:
     NMCLI_BIN = os.getenv("PI_ADMIN_NMCLI_BIN", "nmcli")
     USE_SUDO_FOR_NMCLI = os.getenv("PI_ADMIN_USE_SUDO_FOR_NMCLI", "true").lower() == "true"
     GIT_BIN = os.getenv("PI_ADMIN_GIT_BIN", "git")
+    DOCKER_BIN = os.getenv("PI_ADMIN_DOCKER_BIN", "docker")
     BASH_BIN = os.getenv("PI_ADMIN_BASH_BIN", "bash")
     SUDO_BIN = os.getenv("PI_ADMIN_SUDO_BIN", "sudo")
     HOSTNAMECTL_BIN = os.getenv("PI_ADMIN_HOSTNAMECTL_BIN", "hostnamectl")
     SYSTEMCTL_BIN = os.getenv("PI_ADMIN_SYSTEMCTL_BIN", "systemctl")
     USE_SUDO_FOR_SYSTEM = os.getenv("PI_ADMIN_USE_SUDO_FOR_SYSTEM", "true").lower() == "true"
+    USE_SUDO_FOR_DOCKER = os.getenv("PI_ADMIN_USE_SUDO_FOR_DOCKER", "true").lower() == "true"
+    PORTAINER_CONTAINER_NAME = os.getenv("PI_ADMIN_PORTAINER_CONTAINER_NAME", "portainer")
+    PORTAINER_HTTP_PORT = int(os.getenv("PI_ADMIN_PORTAINER_HTTP_PORT", "9000"))
+    PORTAINER_HTTPS_PORT = int(os.getenv("PI_ADMIN_PORTAINER_HTTPS_PORT", "9443"))
+    PORTAINER_HOSTNAME = os.getenv("PI_ADMIN_PORTAINER_HOSTNAME", "")
     REPO_PATH = os.getenv("PI_ADMIN_REPO_PATH", str(BASE_DIR))
     UPDATE_SCRIPT = os.getenv("PI_ADMIN_UPDATE_SCRIPT", str(BASE_DIR / "deploy" / "update-from-git.sh"))
     UPDATE_LOG_PATH = os.getenv("PI_ADMIN_UPDATE_LOG_PATH", str(BASE_DIR / "update.log"))

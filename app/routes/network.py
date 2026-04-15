@@ -3,6 +3,7 @@ from __future__ import annotations
 from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 
 from app.auth import login_required
+from app.services.datalogger_manager import DataloggerManagerError, ensure_portainer, get_datalogger_status
 from app.services.network_apply import apply_ethernet_settings, apply_wifi_settings
 from app.services.network_manager import (
     ETHERNET_CONNECTION_TYPE,
@@ -153,10 +154,32 @@ def ethernet_settings():
     )
 
 
-@network_bp.route("/datalogger")
+@network_bp.route("/datalogger", methods=["GET", "POST"])
 @login_required
 def datalogger():
-    return render_template("datalogger.html")
+    if request.method == "POST":
+        action = request.form.get("action", "").strip()
+        try:
+            if action == "portainer":
+                result = ensure_portainer(current_app.config)
+            else:
+                result = {"success": False, "message": "Unknown datalogger action."}
+        except DataloggerManagerError as exc:
+            current_app.logger.exception("datalogger action error")
+            flash(str(exc), "error")
+            return redirect(url_for("network.datalogger"))
+
+        flash(result["message"], "success" if result["success"] else "error")
+        return redirect(url_for("network.datalogger"))
+
+    try:
+        datalogger_status = get_datalogger_status(current_app.config, host=request.host.split(":")[0])
+    except DataloggerManagerError as exc:
+        current_app.logger.exception("datalogger view error")
+        flash(str(exc), "error")
+        datalogger_status = _default_datalogger_status()
+
+    return render_template("datalogger.html", datalogger_status=datalogger_status)
 
 
 @network_bp.route("/system", methods=["GET", "POST"])
@@ -230,4 +253,16 @@ def _default_update_status() -> dict[str, object]:
         "state": "idle",
         "message": "No recent update activity.",
         "log_excerpt": "",
+    }
+
+
+def _default_datalogger_status() -> dict[str, object]:
+    return {
+        "docker_available": False,
+        "docker_running": False,
+        "portainer_installed": False,
+        "portainer_running": False,
+        "portainer_url": "",
+        "containers": [],
+        "error": "",
     }

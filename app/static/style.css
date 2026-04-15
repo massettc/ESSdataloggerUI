@@ -480,6 +480,10 @@ td {
     align-items: stretch;
 }
 
+.datalogger-stats-grid {
+    margin-bottom: 1rem;
+}
+
 .system-stats-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
