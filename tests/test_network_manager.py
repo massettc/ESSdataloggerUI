@@ -19,6 +19,20 @@ def test_scan_wifi_networks_sorts_active_first(monkeypatch):
     assert networks[1]["security"] == "Open"
 
 
+def test_scan_wifi_networks_retries_when_first_result_is_sparse(monkeypatch):
+    outputs = iter([
+        "",
+        "*:PlantWiFi:84:WPA2\n",
+        "*:PlantWiFi:84:WPA2\n:Guest:48:Open\n",
+    ])
+
+    monkeypatch.setattr(network_manager, "_run_nmcli", lambda config, arguments: next(outputs))
+
+    networks = network_manager.scan_wifi_networks({"WIFI_INTERFACE": "wlan0"})
+
+    assert [network["ssid"] for network in networks] == ["PlantWiFi", "Guest"]
+
+
 def test_list_connection_profiles_filters_by_type_and_interface(monkeypatch):
     sample_output = "Office WiFi:802-11-wireless:wlan0\nWired connection 1:802-3-ethernet:eth0\nSpare LAN:802-3-ethernet:--\nVPN:wireguard:--\n"
 

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
 import socket
 import subprocess
+import time
 from typing import Any
 
 
@@ -24,8 +26,11 @@ def get_dashboard_state(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def scan_wifi_networks(config: dict[str, Any]) -> list[dict[str, Any]]:
-    output = _run_nmcli(
-        config,
+    wifi_interface = config["WIFI_INTERFACE"]
+    _rescan_wifi(config, wifi_interface)
+
+    networks_by_ssid: dict[str, dict[str, Any]] = {}
+    scan_commands = [
         [
             "-t",
             "-f",
@@ -34,36 +39,41 @@ def scan_wifi_networks(config: dict[str, Any]) -> list[dict[str, Any]]:
             "wifi",
             "list",
             "ifname",
-            config["WIFI_INTERFACE"],
+            wifi_interface,
             "--rescan",
-            "auto",
+            "yes",
         ],
+        [
+            "-t",
+            "-f",
+            "IN-USE,SSID,SIGNAL,SECURITY",
+            "device",
+            "wifi",
+            "list",
+            "--rescan",
+            "yes",
+        ],
+    ]
+
+    last_error: NetworkManagerError | None = None
+    for command in scan_commands:
+        try:
+            output = _run_nmcli(config, command)
+        except NetworkManagerError as exc:
+            last_error = exc
+            continue
+
+        _merge_wifi_networks(networks_by_ssid, output)
+        if len(networks_by_ssid) > 1:
+            break
+
+    if not networks_by_ssid and last_error is not None:
+        raise last_error
+
+    return sorted(
+        networks_by_ssid.values(),
+        key=lambda item: (not item["in_use"], -_safe_int(item["signal"]), item["ssid"].lower()),
     )
-
-    networks = []
-    seen = set()
-    for line in output.splitlines():
-        if not line.strip():
-            continue
-        parts = _split_escaped_fields(line)
-        if len(parts) < 4:
-            continue
-
-        in_use, ssid, signal, security = parts[0], parts[1], parts[2], ":".join(parts[3:])
-        if not ssid or ssid in seen:
-            continue
-
-        seen.add(ssid)
-        networks.append(
-            {
-                "in_use": in_use == "*",
-                "ssid": ssid,
-                "signal": signal or "-",
-                "security": security or "Open",
-            }
-        )
-
-    return sorted(networks, key=lambda item: (not item["in_use"], -_safe_int(item["signal"]), item["ssid"].lower()))
 
 
 def list_connection_profiles(
@@ -280,6 +290,54 @@ def set_connection_ipv4_config(
         command.extend(["ipv4.addresses", "", "ipv4.gateway", "", "ipv4.dns", ""])
 
     _run_nmcli(config, command)
+
+
+def _rescan_wifi(config: dict[str, Any], wifi_interface: str) -> None:
+    try:
+        _run_nmcli(config, ["device", "wifi", "rescan", "ifname", wifi_interface])
+        time.sleep(1)
+    except NetworkManagerError:
+        if os.name != "nt":
+            try:
+                completed = subprocess.run(
+                    ["sudo", "-n", config["NMCLI_BIN"], "device", "wifi", "rescan", "ifname", wifi_interface],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    timeout=config["COMMAND_TIMEOUT_SECONDS"],
+                )
+                if completed.returncode == 0:
+                    time.sleep(1)
+            except (FileNotFoundError, subprocess.TimeoutExpired, subprocess.CalledProcessError):
+                pass
+
+
+def _merge_wifi_networks(networks_by_ssid: dict[str, dict[str, Any]], output: str) -> None:
+    for line in output.splitlines():
+        if not line.strip():
+            continue
+
+        parts = _split_escaped_fields(line)
+        if len(parts) < 4:
+            continue
+
+        in_use, ssid, signal, security = parts[0], parts[1], parts[2], ":".join(parts[3:])
+        if not ssid:
+            continue
+
+        candidate = {
+            "in_use": in_use == "*",
+            "ssid": ssid,
+            "signal": signal or "-",
+            "security": security or "Open",
+        }
+        existing = networks_by_ssid.get(ssid)
+        if existing is None:
+            networks_by_ssid[ssid] = candidate
+            continue
+
+        if candidate["in_use"] or _safe_int(candidate["signal"]) > _safe_int(existing["signal"]):
+            networks_by_ssid[ssid] = candidate
 
 
 def _get_device_status(config: dict[str, Any]) -> list[dict[str, Any]]:
