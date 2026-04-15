@@ -1,86 +1,100 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<section class="hero panel">
-    <div>
-        <p class="eyebrow">Wireless configuration</p>
-        <h2>Connect to Wi-Fi</h2>
-        <p>Pick a scanned network, enter the password, and connect. The device keeps the previous Wi-Fi profile ready if the new one fails.</p>
-    </div>
-    <div class="hero-actions">
-        <a class="button-link" href="{{ url_for('network.wifi_settings') }}">Scan Available Networks</a>
-        <a class="button-link secondary-link" href="{{ url_for('network.ethernet_settings') }}">Manage Ethernet</a>
-        <a class="button-link secondary-link" href="{{ url_for('network.dashboard') }}">Back to dashboard</a>
-    </div>
-</section>
-
-<section class="two-column">
-    <article class="panel">
-        <div class="section-heading">
-            <h3>Scanned Networks</h3>
-            <p>Choose one to fill the connect form.</p>
+<section class="wifi-shell panel">
+    <div class="wifi-toolbar">
+        <div>
+            <p class="eyebrow">WiFi client</p>
+            <h2>Client settings</h2>
         </div>
-        <div class="network-stack">
-            {% for network in wifi_networks %}
-            <div class="network-picker {% if network.in_use %}active{% endif %}">
-                <span class="network-topline">
-                    <strong>{{ network.ssid }}</strong>
-                    <span>{{ network.signal }}%</span>
-                </span>
-                <span class="network-meta">{{ network.security }}</span>
-                <div class="network-actions-row">
-                    <a class="inline-action-link" href="{{ url_for('network.wifi_settings', ssid=network.ssid) }}">Use This Network</a>
-                    {% if network.in_use %}
-                    <span class="badge">Connected</span>
-                    {% endif %}
+        <div class="wifi-toolbar-actions">
+            <span class="status-pill {% if state.internet_access %}status-online{% else %}status-offline{% endif %}">
+                <span class="status-dot"></span>
+                Internet access: {% if state.internet_access %}Online{% else %}Offline{% endif %}
+            </span>
+            <span class="status-pill status-neutral">{{ wifi_interface }} up</span>
+            <a class="button-link" href="{{ url_for('network.wifi_settings') }}">Scan Available Networks</a>
+        </div>
+    </div>
+
+    <div class="section-heading wifi-heading">
+        <div>
+            <h3>Nearby</h3>
+            <p>Choose a network, type the passphrase, and connect.</p>
+        </div>
+        <a class="button-link secondary-link" href="{{ url_for('network.ethernet_settings') }}">Manage Ethernet</a>
+    </div>
+
+    <div class="wifi-cards-grid">
+        {% for network in wifi_networks %}
+        <article class="wifi-card {% if network.in_use %}active{% endif %}">
+            <div class="wifi-card-title-row">
+                <div>
+                    <h3>{{ network.ssid }}</h3>
+                    <p class="wifi-card-subtitle">{{ network.security }}</p>
+                </div>
+                <div class="signal-pill signal-{{ 'high' if network.signal|int >= 70 else 'medium' if network.signal|int >= 40 else 'low' }}">
+                    {{ network.signal }}%
                 </div>
             </div>
-            {% else %}
-            <p class="muted-note">No Wi-Fi networks found. Rescan or type one manually.</p>
-            {% endfor %}
-        </div>
-    </article>
 
-    <article class="panel">
-        <div class="section-heading">
-            <h3>Add Password and Connect</h3>
-            <p>Passwords are sent directly to NetworkManager and are not stored by the web app.</p>
-        </div>
-        <form method="post" class="stack-form">
-            <label for="ssid">Network name</label>
-            <input id="ssid" name="ssid" placeholder="Select from the list or type manually" value="{{ selected_ssid }}" required>
+            <dl class="wifi-details-grid">
+                <div>
+                    <dt>Status</dt>
+                    <dd>{% if network.in_use %}Connected{% else %}Available{% endif %}</dd>
+                </div>
+                <div>
+                    <dt>Security</dt>
+                    <dd>{{ network.security }}</dd>
+                </div>
+                <div>
+                    <dt>Signal</dt>
+                    <dd>{{ network.signal }}%</dd>
+                </div>
+            </dl>
 
-            <label for="password">Password</label>
-            <input id="password" name="password" type="password" autocomplete="new-password" placeholder="Enter Wi-Fi password">
+            <form method="post" class="stack-form compact-form">
+                <input type="hidden" name="ssid" value="{{ network.ssid }}">
 
-            <label class="checkbox-row" for="hidden">
-                <input id="hidden" name="hidden" type="checkbox">
-                <span>Hidden network</span>
-            </label>
+                <label for="password-{{ loop.index }}">Passphrase</label>
+                <div class="password-row">
+                    <input id="password-{{ loop.index }}" name="password" type="password" autocomplete="new-password" placeholder="Enter Wi-Fi password">
+                    <button type="submit">Connect</button>
+                </div>
+            </form>
 
-            <button type="submit">Connect to Wi-Fi</button>
-        </form>
-
-        <p class="muted-note">Tip: keep Ethernet connected while testing a new wireless network so the cabinet stays reachable.</p>
-    </article>
+            {% if network.in_use %}
+            <span class="badge">Connected</span>
+            {% endif %}
+        </article>
+        {% else %}
+        <p class="muted-note">No Wi-Fi networks found. Use the scan button to refresh the list.</p>
+        {% endfor %}
+    </div>
 </section>
 
-<section class="panel">
+<section class="panel manual-network-panel">
     <div class="section-heading">
-        <h3>Current Connectivity</h3>
-        <p>Use this to confirm both interfaces stay available for failover.</p>
+        <div>
+            <h3>Hidden or manual network</h3>
+            <p>Use this if the SSID is not broadcasting or you want to type it directly.</p>
+        </div>
+        <a class="button-link secondary-link" href="{{ url_for('network.dashboard') }}">Back to dashboard</a>
     </div>
-    <ul class="interface-list">
-        {% for interface in state.interfaces %}
-        <li>
-            <strong>{{ interface.device }}</strong>
-            <span>{{ interface.type }} | {{ interface.state }}</span>
-            <span>{{ interface.connection }}</span>
-            <span>{{ interface.ipv4 }}</span>
-        </li>
-        {% else %}
-        <li>No interface data available.</li>
-        {% endfor %}
-    </ul>
+
+    <form method="post" class="stack-form manual-network-form">
+        <label for="ssid">Network name</label>
+        <input id="ssid" name="ssid" placeholder="Type SSID manually" value="{{ selected_ssid }}" required>
+
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="new-password" placeholder="Enter Wi-Fi password">
+
+        <label class="checkbox-row" for="hidden">
+            <input id="hidden" name="hidden" type="checkbox">
+            <span>Hidden network</span>
+        </label>
+
+        <button type="submit">Connect to Wi-Fi</button>
+    </form>
 </section>
 {% endblock %}

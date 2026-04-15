@@ -68,7 +68,13 @@ def wifi_settings():
         wifi_networks = []
         state = _default_state()
 
-    return render_template("wifi.html", wifi_networks=wifi_networks, state=state, selected_ssid=selected_ssid)
+    return render_template(
+        "wifi.html",
+        wifi_networks=wifi_networks,
+        state=state,
+        selected_ssid=selected_ssid,
+        wifi_interface=current_app.config["WIFI_INTERFACE"],
+    )
 
 
 @network_bp.route("/ethernet", methods=["GET", "POST"])
@@ -140,7 +146,7 @@ def ethernet_settings():
 
 
 def _default_state() -> dict[str, object]:
-    return {"hostname": "unavailable", "interfaces": [], "wifi_networks": []}
+    return {"hostname": "unavailable", "interfaces": [], "wifi_networks": [], "internet_access": False}
 
 
 def _default_ipv4_config() -> dict[str, str]:

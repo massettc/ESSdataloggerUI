@@ -22,6 +22,7 @@ def get_dashboard_state(config: dict[str, Any]) -> dict[str, Any]:
         "hostname": socket.gethostname(),
         "interfaces": interfaces,
         "wifi_networks": wifi_networks,
+        "internet_access": has_internet_access(config),
     }
 
 
@@ -290,6 +291,26 @@ def set_connection_ipv4_config(
         command.extend(["ipv4.addresses", "", "ipv4.gateway", "", "ipv4.dns", ""])
 
     _run_nmcli(config, command)
+
+
+def has_internet_access(config: dict[str, Any]) -> bool:
+    target_host = config.get("WATCHDOG_TARGET_HOST", "1.1.1.1")
+    ping_bin = config.get("PING_BIN", "ping")
+    count_flag = "-n" if os.name == "nt" else "-c"
+    timeout_flag = "-w" if os.name == "nt" else "-W"
+    timeout_value = str(max(1, int(config.get("WATCHDOG_PING_TIMEOUT_SECONDS", 2))))
+
+    try:
+        completed = subprocess.run(
+            [ping_bin, count_flag, "1", timeout_flag, timeout_value, target_host],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=max(3, int(config.get("COMMAND_TIMEOUT_SECONDS", 15))),
+        )
+        return completed.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired, ValueError):
+        return False
 
 
 def _rescan_wifi(config: dict[str, Any], wifi_interface: str) -> None:
