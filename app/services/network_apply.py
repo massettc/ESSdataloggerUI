@@ -39,9 +39,10 @@ def apply_wifi_settings(config: dict[str, Any], ssid: str, password: str, hidden
     except NetworkManagerError as exc:
         logger.warning("wifi change failed for ssid=%s: %s", ssid, exc)
         _rollback(config, previous_connection)
+        detail = str(exc).strip()
         return {
             "success": False,
-            "message": f"Unable to switch to {ssid}. The previous network settings were restored if available.",
+            "message": f"Unable to switch to {ssid}. {detail} Previous network settings were restored if available.",
         }
 
 

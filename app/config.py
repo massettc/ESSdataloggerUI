@@ -21,6 +21,7 @@ class Config:
     PRIMARY_CONNECTION_NAME = os.getenv("PI_ADMIN_PRIMARY_CONNECTION_NAME", "")
     BACKUP_CONNECTION_NAME = os.getenv("PI_ADMIN_BACKUP_CONNECTION_NAME", "")
     NMCLI_BIN = os.getenv("PI_ADMIN_NMCLI_BIN", "nmcli")
+    USE_SUDO_FOR_NMCLI = os.getenv("PI_ADMIN_USE_SUDO_FOR_NMCLI", "true").lower() == "true"
     PING_BIN = os.getenv("PI_ADMIN_PING_BIN", "ping")
     COMMAND_TIMEOUT_SECONDS = int(os.getenv("PI_ADMIN_COMMAND_TIMEOUT_SECONDS", "15"))
     VERIFY_TIMEOUT_SECONDS = int(os.getenv("PI_ADMIN_VERIFY_TIMEOUT_SECONDS", "30"))

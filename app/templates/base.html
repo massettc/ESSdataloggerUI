@@ -7,30 +7,59 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <header class="site-header">
-        <div>
-            <p class="eyebrow">Local technician access</p>
-            <h1>{{ config.APP_NAME }}</h1>
-        </div>
+    <div class="app-shell">
         {% if session.get('authenticated') %}
-        <form method="post" action="{{ url_for('auth.logout') }}">
-            <button class="secondary" type="submit">Log out</button>
-        </form>
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <p class="eyebrow">Local technician access</p>
+                <h1>{{ config.APP_NAME }}</h1>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('network.dashboard') }}">Dashboard</a>
+                <a href="{{ url_for('network.wifi_settings') }}">WiFi client</a>
+                <a href="{{ url_for('network.ethernet_settings') }}">Ethernet</a>
+            </nav>
+            <form method="post" action="{{ url_for('auth.logout') }}" class="sidebar-logout">
+                <button class="secondary" type="submit">Log out</button>
+            </form>
+        </aside>
         {% endif %}
-    </header>
 
-    <main class="content-shell">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                <section class="flash-stack">
-                    {% for category, message in messages %}
-                    <div class="flash flash-{{ category }}">{{ message }}</div>
-                    {% endfor %}
-                </section>
+        <div class="main-shell">
+            {% if not session.get('authenticated') %}
+            <header class="site-header">
+                <div>
+                    <p class="eyebrow">Local technician access</p>
+                    <h1>{{ config.APP_NAME }}</h1>
+                </div>
+            </header>
             {% endif %}
-        {% endwith %}
 
-        {% block content %}{% endblock %}
-    </main>
+            <main class="content-shell">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        <section class="flash-stack">
+                            {% for category, message in messages %}
+                            <div class="flash flash-{{ category }}">{{ message }}</div>
+                            {% endfor %}
+                        </section>
+                    {% endif %}
+                {% endwith %}
+
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
+    <script>
+    document.addEventListener('click', function (event) {
+        const toggle = event.target.closest('[data-password-target]');
+        if (!toggle) return;
+        const targetId = toggle.getAttribute('data-password-target');
+        const input = document.getElementById(targetId);
+        if (!input) return;
+        input.type = input.type === 'password' ? 'text' : 'password';
+        toggle.textContent = input.type === 'password' ? 'Show' : 'Hide';
+    });
+    </script>
 </body>
 </html>

@@ -12,7 +12,23 @@ def test_apply_wifi_settings_rolls_back_on_failed_verify(monkeypatch):
     result = network_apply.apply_wifi_settings({"VERIFY_TIMEOUT_SECONDS": 1, "VERIFY_POLL_SECONDS": 0.01}, "NewWiFi", "badpass", False)
 
     assert result["success"] is False
+    assert "did not become active" in result["message"]
     assert calls[-1] == ("rollback", "OldWiFi")
+
+
+def test_apply_wifi_settings_returns_nmcli_error_details(monkeypatch):
+    monkeypatch.setattr(network_apply, "get_active_wifi_connection", lambda config: {"name": "OldWiFi", "device": "wlan0"})
+    monkeypatch.setattr(network_apply, "bring_up_connection", lambda config, name: None)
+
+    def raise_error(config, ssid, password, hidden):
+        raise network_apply.NetworkManagerError("Not authorized to control networking.")
+
+    monkeypatch.setattr(network_apply, "connect_wifi", raise_error)
+
+    result = network_apply.apply_wifi_settings({"VERIFY_TIMEOUT_SECONDS": 1, "VERIFY_POLL_SECONDS": 0.01}, "NewWiFi", "pw", False)
+
+    assert result["success"] is False
+    assert "Not authorized" in result["message"]
 
 
 def test_apply_wifi_settings_succeeds(monkeypatch):

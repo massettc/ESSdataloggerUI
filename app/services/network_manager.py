@@ -412,7 +412,7 @@ def _get_ip_details(config: dict[str, Any], interface_name: str) -> dict[str, st
 
 
 def _run_nmcli(config: dict[str, Any], arguments: list[str]) -> str:
-    command = [config["NMCLI_BIN"], *arguments]
+    command = _build_nmcli_command(config, arguments)
     try:
         completed = subprocess.run(
             command,
@@ -430,6 +430,27 @@ def _run_nmcli(config: dict[str, Any], arguments: list[str]) -> str:
         raise NetworkManagerError(error_text) from exc
 
     return completed.stdout.strip()
+
+
+def _build_nmcli_command(config: dict[str, Any], arguments: list[str]) -> list[str]:
+    nmcli_bin = config.get("NMCLI_BIN", "nmcli")
+    if config.get("USE_SUDO_FOR_NMCLI", False) and _is_mutating_nmcli_command(arguments):
+        return ["sudo", "-n", nmcli_bin, *arguments]
+    return [nmcli_bin, *arguments]
+
+
+def _is_mutating_nmcli_command(arguments: list[str]) -> bool:
+    mutating_prefixes = {
+        ("connection", "modify"),
+        ("connection", "up"),
+        ("device", "connect"),
+        ("device", "wifi", "connect"),
+        ("device", "wifi", "rescan"),
+    }
+    for prefix in mutating_prefixes:
+        if tuple(arguments[: len(prefix)]) == prefix:
+            return True
+    return False
 
 
 def _safe_int(value: str) -> int:

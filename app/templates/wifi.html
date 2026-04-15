@@ -59,6 +59,7 @@
                 <label for="password-{{ loop.index }}">Passphrase</label>
                 <div class="password-row">
                     <input id="password-{{ loop.index }}" name="password" type="password" autocomplete="new-password" placeholder="Enter Wi-Fi password">
+                    <button type="button" class="secondary small-button" data-password-target="password-{{ loop.index }}">Show</button>
                     <button type="submit">Connect</button>
                 </div>
             </form>
@@ -87,7 +88,10 @@
         <input id="ssid" name="ssid" placeholder="Type SSID manually" value="{{ selected_ssid }}" required>
 
         <label for="password">Password</label>
-        <input id="password" name="password" type="password" autocomplete="new-password" placeholder="Enter Wi-Fi password">
+        <div class="password-row single-submit-row">
+            <input id="password" name="password" type="password" autocomplete="new-password" placeholder="Enter Wi-Fi password">
+            <button type="button" class="secondary small-button" data-password-target="password">Show</button>
+        </div>
 
         <label class="checkbox-row" for="hidden">
             <input id="hidden" name="hidden" type="checkbox">
