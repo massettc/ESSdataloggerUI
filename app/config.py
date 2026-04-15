@@ -1,0 +1,40 @@
+import os
+from pathlib import Path
+
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+DEFAULT_LOG_PATH = Path(os.getenv("PI_ADMIN_LOG_PATH", BASE_DIR / "pi-network-admin.log"))
+DEFAULT_PASSWORD_HASH_PATH = Path(
+    os.getenv("PI_ADMIN_PASSWORD_HASH_FILE", BASE_DIR / "config" / "admin_password.hash")
+)
+
+
+class Config:
+    SECRET_KEY = os.getenv("PI_ADMIN_SECRET_KEY", "change-me-before-deploy")
+    APP_HOST = os.getenv("PI_ADMIN_HOST", "0.0.0.0")
+    APP_PORT = int(os.getenv("PI_ADMIN_PORT", "8080"))
+    APP_NAME = os.getenv("PI_ADMIN_NAME", "Pi Network Admin")
+    WIFI_INTERFACE = os.getenv("PI_ADMIN_WIFI_INTERFACE", "wlan0")
+    ETHERNET_INTERFACE = os.getenv("PI_ADMIN_ETHERNET_INTERFACE", "eth0")
+    PRIMARY_INTERFACE = os.getenv("PI_ADMIN_PRIMARY_INTERFACE", ETHERNET_INTERFACE)
+    BACKUP_INTERFACE = os.getenv("PI_ADMIN_BACKUP_INTERFACE", WIFI_INTERFACE)
+    PRIMARY_CONNECTION_NAME = os.getenv("PI_ADMIN_PRIMARY_CONNECTION_NAME", "")
+    BACKUP_CONNECTION_NAME = os.getenv("PI_ADMIN_BACKUP_CONNECTION_NAME", "")
+    NMCLI_BIN = os.getenv("PI_ADMIN_NMCLI_BIN", "nmcli")
+    PING_BIN = os.getenv("PI_ADMIN_PING_BIN", "ping")
+    COMMAND_TIMEOUT_SECONDS = int(os.getenv("PI_ADMIN_COMMAND_TIMEOUT_SECONDS", "15"))
+    VERIFY_TIMEOUT_SECONDS = int(os.getenv("PI_ADMIN_VERIFY_TIMEOUT_SECONDS", "30"))
+    VERIFY_POLL_SECONDS = float(os.getenv("PI_ADMIN_VERIFY_POLL_SECONDS", "2"))
+    WATCHDOG_ENABLED = os.getenv("PI_ADMIN_WATCHDOG_ENABLED", "true").lower() == "true"
+    WATCHDOG_TARGET_HOST = os.getenv("PI_ADMIN_WATCHDOG_TARGET_HOST", "1.1.1.1")
+    WATCHDOG_INTERVAL_SECONDS = int(os.getenv("PI_ADMIN_WATCHDOG_INTERVAL_SECONDS", "10"))
+    WATCHDOG_PING_TIMEOUT_SECONDS = int(os.getenv("PI_ADMIN_WATCHDOG_PING_TIMEOUT_SECONDS", "2"))
+    WATCHDOG_FAILURE_THRESHOLD = int(os.getenv("PI_ADMIN_WATCHDOG_FAILURE_THRESHOLD", "3"))
+    WATCHDOG_RECOVERY_THRESHOLD = int(os.getenv("PI_ADMIN_WATCHDOG_RECOVERY_THRESHOLD", "2"))
+    PRIMARY_ROUTE_METRIC = int(os.getenv("PI_ADMIN_PRIMARY_ROUTE_METRIC", "100"))
+    BACKUP_ROUTE_METRIC = int(os.getenv("PI_ADMIN_BACKUP_ROUTE_METRIC", "200"))
+    LOG_PATH = str(DEFAULT_LOG_PATH)
+    PASSWORD_HASH_FILE = str(DEFAULT_PASSWORD_HASH_PATH)
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Strict"
+    SESSION_COOKIE_SECURE = os.getenv("PI_ADMIN_SECURE_COOKIE", "false").lower() == "true"

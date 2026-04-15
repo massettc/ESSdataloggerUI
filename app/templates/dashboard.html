@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<section class="hero panel">
+    <div>
+        <p class="eyebrow">Device overview</p>
+        <h2>{{ state.hostname }}</h2>
+        <p>Use the dashboard to inspect current connectivity before applying a Wi-Fi or Ethernet change.</p>
+    </div>
+    <div class="hero-actions">
+        <a class="button-link" href="{{ url_for('network.wifi_settings') }}">Manage Wi-Fi</a>
+        <a class="button-link secondary-link" href="{{ url_for('network.ethernet_settings') }}">Manage Ethernet</a>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="section-heading">
+        <h3>Interface Status</h3>
+        <p>Use this view to confirm which interface is active and which one is available for failover.</p>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Device</th>
+                    <th>Type</th>
+                    <th>State</th>
+                    <th>Connection</th>
+                    <th>IPv4</th>
+                    <th>Gateway</th>
+                    <th>DNS</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for interface in state.interfaces %}
+                <tr>
+                    <td>{{ interface.device }}</td>
+                    <td>{{ interface.type }}</td>
+                    <td>{{ interface.state }}</td>
+                    <td>{{ interface.connection }}</td>
+                    <td>{{ interface.ipv4 }}</td>
+                    <td>{{ interface.gateway }}</td>
+                    <td>{{ interface.dns }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7">No interface data available.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="section-heading">
+        <h3>Visible Wi-Fi Networks</h3>
+        <p>Current scan results from NetworkManager.</p>
+    </div>
+    <div class="network-grid">
+        {% for network in state.wifi_networks %}
+        <article class="network-card {% if network.in_use %}active{% endif %}">
+            <div class="network-topline">
+                <strong>{{ network.ssid }}</strong>
+                <span>{{ network.signal }}%</span>
+            </div>
+            <p>{{ network.security }}</p>
+            {% if network.in_use %}
+            <span class="badge">Active</span>
+            {% endif %}
+        </article>
+        {% else %}
+        <p>No Wi-Fi networks found.</p>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

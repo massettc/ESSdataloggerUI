@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<section class="hero panel">
+    <div>
+        <p class="eyebrow">Wireless configuration</p>
+        <h2>Update Wi-Fi Settings</h2>
+        <p>Choose a visible network or enter one manually. The app verifies the new connection and restores the previous Wi-Fi profile if the change fails.</p>
+    </div>
+    <div class="hero-actions">
+        <a class="button-link" href="{{ url_for('network.ethernet_settings') }}">Manage Ethernet</a>
+        <a class="button-link secondary-link" href="{{ url_for('network.dashboard') }}">Back to dashboard</a>
+    </div>
+</section>
+
+<section class="two-column">
+    <article class="panel">
+        <div class="section-heading">
+            <h3>Connect to Wi-Fi</h3>
+            <p>Passwords are sent directly to NetworkManager and are not stored by the web app.</p>
+        </div>
+        <form method="post" class="stack-form">
+            <label for="ssid">SSID</label>
+            <input id="ssid" name="ssid" list="wifi-ssids" placeholder="Select or type network name" required>
+            <datalist id="wifi-ssids">
+                {% for network in wifi_networks %}
+                <option value="{{ network.ssid }}"></option>
+                {% endfor %}
+            </datalist>
+
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" autocomplete="new-password">
+
+            <label class="checkbox-row" for="hidden">
+                <input id="hidden" name="hidden" type="checkbox">
+                <span>Hidden network</span>
+            </label>
+
+            <button type="submit">Apply Wi-Fi Settings</button>
+        </form>
+    </article>
+
+    <article class="panel">
+        <div class="section-heading">
+            <h3>Current Connectivity</h3>
+            <p>Use this to confirm both interfaces stay available for watchdog failover.</p>
+        </div>
+        <ul class="interface-list">
+            {% for interface in state.interfaces %}
+            <li>
+                <strong>{{ interface.device }}</strong>
+                <span>{{ interface.type }} | {{ interface.state }}</span>
+                <span>{{ interface.connection }}</span>
+                <span>{{ interface.ipv4 }}</span>
+            </li>
+            {% else %}
+            <li>No interface data available.</li>
+            {% endfor %}
+        </ul>
+    </article>
+</section>
+{% endblock %}

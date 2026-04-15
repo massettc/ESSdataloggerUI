@@ -1,0 +1,6 @@
+__pycache__/
+.pytest_cache/
+.venv/
+*.pyc
+config/admin_password.hash
+pi-network-admin.log

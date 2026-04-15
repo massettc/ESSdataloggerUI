@@ -1,0 +1,3 @@
+# Allow the service account to run nmcli without a password.
+# Adjust the path if nmcli is installed elsewhere on the target image.
+pi-network-admin ALL=(root) NOPASSWD: /usr/bin/nmcli

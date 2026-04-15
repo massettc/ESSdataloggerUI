@@ -1,0 +1,17 @@
+[Unit]
+Description=Pi Network Admin Web UI
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi-network-admin
+Group=pi-network-admin
+WorkingDirectory=/opt/pi-network-admin
+EnvironmentFile=/etc/pi-network-admin/app.env
+ExecStart=/opt/pi-network-admin/.venv/bin/gunicorn --bind 0.0.0.0:${PI_ADMIN_PORT} --workers 2 --timeout 30 run:app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

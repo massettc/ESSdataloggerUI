@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<section class="panel auth-panel">
+    <div>
+        <p class="eyebrow">Protected configuration</p>
+        <h2>Technician Login</h2>
+        <p>Use the local admin password to view network state and change Wi-Fi settings.</p>
+    </div>
+    <form method="post" class="stack-form">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+        <button type="submit">Sign in</button>
+    </form>
+</section>
+{% endblock %}

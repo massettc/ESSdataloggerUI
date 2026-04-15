@@ -1,0 +1,17 @@
+[Unit]
+Description=Pi Network Admin Interface Failover Watchdog
+After=network-online.target pi-network-admin.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi-network-admin
+Group=pi-network-admin
+WorkingDirectory=/opt/pi-network-admin
+EnvironmentFile=/etc/pi-network-admin/app.env
+ExecStart=/opt/pi-network-admin/.venv/bin/python watchdog.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

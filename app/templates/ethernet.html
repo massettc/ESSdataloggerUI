@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<section class="hero panel">
+    <div>
+        <p class="eyebrow">Wired configuration</p>
+        <h2>Manage Ethernet</h2>
+        <p>Activate a saved Ethernet profile or reconnect the configured interface. The app verifies the change and restores the previous Ethernet profile if activation fails.</p>
+    </div>
+    <div class="hero-actions">
+        <a class="button-link" href="{{ url_for('network.wifi_settings') }}">Manage Wi-Fi</a>
+        <a class="button-link secondary-link" href="{{ url_for('network.dashboard') }}">Back to dashboard</a>
+    </div>
+</section>
+
+<section class="two-column">
+    <article class="panel">
+        <div class="section-heading">
+            <h3>Activate Ethernet</h3>
+            <p>Leave the profile blank to ask NetworkManager to reconnect the configured interface directly.</p>
+        </div>
+        <form method="post" class="stack-form">
+            <label for="connection_name">Saved profile</label>
+            <select id="connection_name" name="connection_name">
+                <option value="">Reconnect {{ config.ETHERNET_INTERFACE }}</option>
+                {% for profile in ethernet_profiles %}
+                <option value="{{ profile.name }}">{{ profile.name }}{% if profile.active %} (active){% endif %}</option>
+                {% endfor %}
+            </select>
+
+            <button type="submit">Apply Ethernet Settings</button>
+        </form>
+    </article>
+
+    <article class="panel">
+        <div class="section-heading">
+            <h3>Current Connectivity</h3>
+            <p>Check active links before changing watchdog priorities or Wi-Fi credentials.</p>
+        </div>
+        <ul class="interface-list">
+            {% for interface in state.interfaces %}
+            <li>
+                <strong>{{ interface.device }}</strong>
+                <span>{{ interface.type }} | {{ interface.state }}</span>
+                <span>{{ interface.connection }}</span>
+                <span>{{ interface.ipv4 }}</span>
+            </li>
+            {% else %}
+            <li>No interface data available.</li>
+            {% endfor %}
+        </ul>
+    </article>
+</section>
+{% endblock %}
