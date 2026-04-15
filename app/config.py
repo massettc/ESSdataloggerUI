@@ -13,7 +13,7 @@ class Config:
     SECRET_KEY = os.getenv("PI_ADMIN_SECRET_KEY", "change-me-before-deploy")
     APP_HOST = os.getenv("PI_ADMIN_HOST", "0.0.0.0")
     APP_PORT = int(os.getenv("PI_ADMIN_PORT", "8080"))
-    APP_NAME = os.getenv("PI_ADMIN_NAME", "Pi Network Admin")
+    APP_NAME = os.getenv("PI_ADMIN_NAME", "ESS Datalogger UI")
     WIFI_INTERFACE = os.getenv("PI_ADMIN_WIFI_INTERFACE", "wlan0")
     ETHERNET_INTERFACE = os.getenv("PI_ADMIN_ETHERNET_INTERFACE", "eth0")
     PRIMARY_INTERFACE = os.getenv("PI_ADMIN_PRIMARY_INTERFACE", ETHERNET_INTERFACE)

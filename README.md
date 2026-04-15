@@ -1,6 +1,6 @@
-# Pi Network Admin
+# ESS Datalogger UI
 
-Local technician web UI for a Raspberry Pi datalogger. The app lets a technician sign in, inspect network status, manage Wi-Fi and Ethernet connections, and run a watchdog that fails traffic over between the two interfaces.
+Local technician web UI for a Raspberry Pi datalogger. The ESSdataloggerUI app lets a technician sign in, inspect network status, manage Wi-Fi and Ethernet connections, and run a watchdog that fails traffic over between the two interfaces.
 
 ## Features
 
@@ -35,8 +35,8 @@ Local technician web UI for a Raspberry Pi datalogger. The app lets a technician
 
 1. Create a new empty repository on GitHub.
 2. In this project folder, run:
-   - git remote add origin <your-repo-url>
-   - git commit -m "Initial Pi network admin app"
+   - git remote add origin YOUR_GITHUB_REPO_URL
+   - git commit -m "Initial ESSdataloggerUI app"
    - git push -u origin main
 3. After that, the Pi can clone and install from the repo remotely.
 

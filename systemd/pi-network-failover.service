@@ -1,5 +1,5 @@
 [Unit]
-Description=Pi Network Admin Interface Failover Watchdog
+Description=ESS Datalogger UI Failover Watchdog
 After=network-online.target pi-network-admin.service
 Wants=network-online.target
 
