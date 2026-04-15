@@ -8,7 +8,7 @@
         <p>Pick a scanned network, enter the password, and connect. The device keeps the previous Wi-Fi profile ready if the new one fails.</p>
     </div>
     <div class="hero-actions">
-        <a class="button-link" href="{{ url_for('network.wifi_settings') }}">Rescan networks</a>
+        <a class="button-link" href="{{ url_for('network.wifi_settings') }}">Scan Available Networks</a>
         <a class="button-link secondary-link" href="{{ url_for('network.ethernet_settings') }}">Manage Ethernet</a>
         <a class="button-link secondary-link" href="{{ url_for('network.dashboard') }}">Back to dashboard</a>
     </div>
@@ -22,16 +22,19 @@
         </div>
         <div class="network-stack">
             {% for network in wifi_networks %}
-            <a class="network-picker {% if network.in_use %}active{% endif %}" href="{{ url_for('network.wifi_settings', ssid=network.ssid) }}">
+            <div class="network-picker {% if network.in_use %}active{% endif %}">
                 <span class="network-topline">
                     <strong>{{ network.ssid }}</strong>
                     <span>{{ network.signal }}%</span>
                 </span>
                 <span class="network-meta">{{ network.security }}</span>
-                {% if network.in_use %}
-                <span class="badge">Connected</span>
-                {% endif %}
-            </a>
+                <div class="network-actions-row">
+                    <a class="inline-action-link" href="{{ url_for('network.wifi_settings', ssid=network.ssid) }}">Use This Network</a>
+                    {% if network.in_use %}
+                    <span class="badge">Connected</span>
+                    {% endif %}
+                </div>
+            </div>
             {% else %}
             <p class="muted-note">No Wi-Fi networks found. Rescan or type one manually.</p>
             {% endfor %}

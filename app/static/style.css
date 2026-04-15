@@ -232,6 +232,23 @@ td {
     font-size: 0.92rem;
 }
 
+.network-actions-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.inline-action-link {
+    color: var(--accent-strong);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.inline-action-link:hover {
+    text-decoration: underline;
+}
+
 .badge {
     display: inline-flex;
     margin-top: 0.75rem;
