@@ -137,6 +137,12 @@ cd /opt/pi-network-admin
 sudo bash deploy/update-from-git.sh main
 ```
 
+If Git complains once about a dubious ownership or safe.directory check, run:
+
+```bash
+sudo git config --global --add safe.directory /opt/pi-network-admin
+```
+
 ### Update to a specific tagged release
 
 ```bash

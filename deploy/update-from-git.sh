@@ -9,10 +9,13 @@ if [[ ! -d "$APP_DIR/.git" ]]; then
     exit 1
 fi
 
+git config --global --add safe.directory "$APP_DIR" >/dev/null 2>&1 || true
+sudo git config --global --add safe.directory "$APP_DIR" >/dev/null 2>&1 || true
+
 cd "$APP_DIR"
 sudo git fetch --all --tags --prune
 
-if git show-ref --verify --quiet "refs/remotes/origin/$REF"; then
+if sudo git show-ref --verify --quiet "refs/remotes/origin/$REF"; then
     sudo git checkout "$REF"
     sudo git pull --ff-only origin "$REF"
 else

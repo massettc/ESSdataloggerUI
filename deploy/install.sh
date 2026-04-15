@@ -41,13 +41,21 @@ if ! id -u "$USER_NAME" >/dev/null 2>&1; then
 fi
 
 sudo mkdir -p "$APP_DIR" "$CONFIG_DIR" /var/log/pi-network-admin
-sudo cp -a "$REPO_DIR"/. "$APP_DIR/"
+
+REPO_REALPATH=$(cd -- "$REPO_DIR" && pwd -P)
+APP_REALPATH=$(cd -- "$APP_DIR" && pwd -P)
+
+if [[ "$REPO_REALPATH" != "$APP_REALPATH" ]]; then
+    sudo cp -a "$REPO_DIR"/. "$APP_DIR/"
+else
+    echo "Running from installed app directory; skipping source copy."
+fi
+
 sudo chown -R "$USER_NAME:$USER_NAME" "$APP_DIR" /var/log/pi-network-admin
 
-python3 -m venv "$APP_DIR/.venv"
-source "$APP_DIR/.venv/bin/activate"
-pip install --upgrade pip
-pip install -r "$APP_DIR/requirements.txt"
+sudo -u "$USER_NAME" python3 -m venv "$APP_DIR/.venv"
+sudo -u "$USER_NAME" "$APP_DIR/.venv/bin/pip" install --upgrade pip
+sudo -u "$USER_NAME" "$APP_DIR/.venv/bin/pip" install -r "$APP_DIR/requirements.txt"
 if [[ ! -f "$CONFIG_DIR/app.env" ]]; then
     sudo cp "$APP_DIR/config/app.env.example" "$CONFIG_DIR/app.env"
     echo "Created $CONFIG_DIR/app.env from template."
