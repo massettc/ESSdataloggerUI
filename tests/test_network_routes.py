@@ -162,7 +162,7 @@ def test_datalogger_status_api_handles_unexpected_errors(client, monkeypatch):
     assert response.get_json()["error"] == "boom"
 
 
-def test_technician_tools_page_shows_buttons_and_terminal(client, monkeypatch):
+def test_technician_tools_page_shows_buttons_terminal_and_remove_action(client, monkeypatch):
     monkeypatch.setattr(
         network_routes,
         "get_technician_tools_state",
@@ -174,6 +174,7 @@ def test_technician_tools_page_shows_buttons_and_terminal(client, monkeypatch):
                     "command": "date",
                     "description": "Display current date",
                     "confirm": False,
+                    "builtin": True,
                 }
             ],
             "last_result": {
@@ -194,6 +195,7 @@ def test_technician_tools_page_shows_buttons_and_terminal(client, monkeypatch):
     assert b"Add new button" in response.data
     assert b"Show date" in response.data
     assert b"Terminal output" in response.data
+    assert b"Remove" in response.data
 
 
 

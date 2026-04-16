@@ -34,11 +34,18 @@
                     {% endif %}
                 </div>
                 <p>{{ item.description or 'Run this saved technician command.' }}</p>
-                <form method="post" {% if item.confirm %}data-confirm="Run {{ item.label }} now?"{% endif %} data-busy-label="Running {{ item.label }}...">
-                    <input type="hidden" name="action" value="run_command">
-                    <input type="hidden" name="command_id" value="{{ item.id }}">
-                    <button type="submit">Run</button>
-                </form>
+                <div class="saved-command-actions">
+                    <form method="post" class="inline-form" {% if item.confirm %}data-confirm="Run {{ item.label }} now?"{% endif %} data-busy-label="Running {{ item.label }}...">
+                        <input type="hidden" name="action" value="run_command">
+                        <input type="hidden" name="command_id" value="{{ item.id }}">
+                        <button type="submit">Run</button>
+                    </form>
+                    <form method="post" class="inline-form" data-confirm="Remove {{ item.label }} from the quick command buttons?">
+                        <input type="hidden" name="action" value="delete_command">
+                        <input type="hidden" name="command_id" value="{{ item.id }}">
+                        <button class="secondary" type="submit">Remove</button>
+                    </form>
+                </div>
             </div>
             {% endfor %}
         </div>
@@ -141,13 +148,11 @@ Use a quick action or the custom command field below.</pre>
                     <input type="hidden" name="command_id" value="{{ item.id }}">
                     <button type="submit">Run</button>
                 </form>
-                {% if not item.builtin %}
                 <form method="post" class="inline-form" data-confirm="Remove {{ item.label }} from the saved buttons?">
                     <input type="hidden" name="action" value="delete_command">
                     <input type="hidden" name="command_id" value="{{ item.id }}">
-                    <button class="secondary" type="submit">Delete</button>
+                    <button class="secondary" type="submit">Remove</button>
                 </form>
-                {% endif %}
             </div>
         </div>
         {% endfor %}
