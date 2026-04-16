@@ -187,6 +187,18 @@ def datalogger():
     return render_template("datalogger.html", datalogger_status=datalogger_status)
 
 
+@network_bp.route("/datalogger/status")
+@login_required
+def datalogger_status_api():
+    try:
+        return get_datalogger_status(current_app.config, host=request.host.split(":")[0])
+    except DataloggerManagerError as exc:
+        current_app.logger.exception("datalogger status api error")
+        status = _default_datalogger_status()
+        status["error"] = str(exc)
+        return status
+
+
 @network_bp.route("/system", methods=["GET", "POST"])
 @login_required
 def system_settings():
@@ -317,6 +329,31 @@ def _default_datalogger_status() -> dict[str, object]:
         "portainer_installed": False,
         "portainer_running": False,
         "portainer_url": "",
+        "mqtt_ui_url": "",
+        "active_logger": "No Logger Running",
+        "warnings": [],
+        "mqtt_logger": {
+            "name": "opsviewer2-edge",
+            "summary": "No recent activity",
+            "last_activity_text": "Unknown",
+            "last_push_age_seconds": None,
+            "last_push_label": "Waiting for data",
+            "status_class": "status-neutral",
+            "device_id": "",
+            "channel_count": None,
+            "error": "",
+        },
+        "plc_logger": {
+            "name": "plcreader",
+            "summary": "No recent activity",
+            "last_activity_text": "Unknown",
+            "last_push_age_seconds": None,
+            "last_push_label": "Waiting for data",
+            "status_class": "status-neutral",
+            "measurements": None,
+            "queue_size": None,
+            "error": "",
+        },
         "containers": [],
         "error": "",
     }

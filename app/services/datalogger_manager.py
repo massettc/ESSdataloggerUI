@@ -4,6 +4,7 @@ import json
 import os
 import re
 import subprocess
+from datetime import datetime, timezone
 from typing import Any
 
 
@@ -69,14 +70,18 @@ def get_datalogger_status(config: dict[str, Any], host: str | None = None) -> di
             status["mqtt_logger"]["mqtt_ui_url"] = status["mqtt_ui_url"]
             log_output = _read_container_logs(config, docker_bin, mqtt_container_name)
             status["mqtt_logger"].update(_parse_mqtt_logger_logs(log_output))
+            status["mqtt_logger"] = _finalize_logger_state(status["mqtt_logger"])
 
         if name == plc_container_name:
             status["plc_logger"].update(container)
             status["plc_logger"]["running"] = container_status.lower().startswith("up")
             log_output = _read_container_logs(config, docker_bin, plc_container_name)
             status["plc_logger"].update(_parse_plc_logger_logs(log_output))
+            status["plc_logger"] = _finalize_logger_state(status["plc_logger"])
 
     status["containers"] = containers
+    status["mqtt_logger"] = _finalize_logger_state(status["mqtt_logger"])
+    status["plc_logger"] = _finalize_logger_state(status["plc_logger"])
     status["active_logger"] = _determine_active_logger(status["mqtt_logger"], status["plc_logger"])
     status["warnings"] = _build_logger_warnings(status["mqtt_logger"], status["plc_logger"])
     return status
@@ -163,6 +168,9 @@ def _default_logger_state(label: str, container_name: str) -> dict[str, Any]:
         "running": False,
         "summary": "No recent activity",
         "last_activity_text": "Unknown",
+        "last_push_age_seconds": None,
+        "last_push_label": "Waiting for data",
+        "status_class": "status-neutral",
         "error": "",
         "measurements": None,
         "queue_size": None,
@@ -177,7 +185,13 @@ def _read_container_logs(config: dict[str, Any], docker_bin: str, container_name
 
 
 def _parse_plc_logger_logs(log_text: str) -> dict[str, Any]:
-    parsed = {"summary": "No recent activity", "last_activity_text": "Unknown", "measurements": None, "queue_size": None, "error": ""}
+    parsed = {
+        "summary": "No recent activity",
+        "last_activity_text": "Unknown",
+        "measurements": None,
+        "queue_size": None,
+        "error": "",
+    }
     if not log_text:
         return parsed
 
@@ -201,7 +215,13 @@ def _parse_plc_logger_logs(log_text: str) -> dict[str, Any]:
 
 
 def _parse_mqtt_logger_logs(log_text: str) -> dict[str, Any]:
-    parsed = {"summary": "No recent activity", "last_activity_text": "Unknown", "device_id": "", "channel_count": None, "error": ""}
+    parsed = {
+        "summary": "No recent activity",
+        "last_activity_text": "Unknown",
+        "device_id": "",
+        "channel_count": None,
+        "error": "",
+    }
     if not log_text:
         return parsed
 
@@ -218,12 +238,79 @@ def _parse_mqtt_logger_logs(log_text: str) -> dict[str, Any]:
                 pass
 
     if "Sending PUBLISH" in log_text or "Received PUBLISH" in log_text:
-        parsed["summary"] = "Relay traffic OK"
+        parsed["summary"] = "Data pushed successfully"
     if re.search(r"error|exception|failed", log_text, re.IGNORECASE):
         parsed["summary"] = "Error detected"
         parsed["error"] = _last_meaningful_line(log_text)
 
     return parsed
+
+
+def _finalize_logger_state(logger: dict[str, Any]) -> dict[str, Any]:
+    logger = dict(logger)
+    logger.setdefault("last_push_age_seconds", None)
+    logger.setdefault("last_push_label", "Waiting for data")
+    logger.setdefault("status_class", "status-neutral")
+
+    if logger.get("error"):
+        logger["status_class"] = "status-offline"
+        logger["last_push_label"] = "Push error detected"
+        return logger
+
+    if not logger.get("running"):
+        logger["status_class"] = "status-offline"
+        logger["last_push_label"] = "Logger stopped"
+        return logger
+
+    timestamp = _parse_activity_timestamp(logger.get("last_activity_text", ""))
+    if timestamp is None:
+        logger["status_class"] = "status-neutral"
+        logger["last_push_label"] = "Waiting for data"
+        return logger
+
+    if timestamp.tzinfo is not None:
+        age_seconds = max(0, int((datetime.now(timezone.utc) - timestamp.astimezone(timezone.utc)).total_seconds()))
+    else:
+        age_seconds = max(0, int((datetime.now() - timestamp).total_seconds()))
+
+    logger["last_push_age_seconds"] = age_seconds
+    if age_seconds <= 15:
+        logger["status_class"] = "status-online"
+        logger["last_push_label"] = _format_last_push_label(age_seconds)
+    elif age_seconds <= 60:
+        logger["status_class"] = "status-neutral"
+        logger["last_push_label"] = _format_last_push_label(age_seconds)
+    else:
+        logger["status_class"] = "status-offline"
+        logger["last_push_label"] = f"No push seen for {max(1, age_seconds // 60)} min"
+
+    return logger
+
+
+def _parse_activity_timestamp(value: str) -> datetime | None:
+    text = (value or "").strip()
+    if not text or text == "Unknown":
+        return None
+
+    try:
+        if "T" in text:
+            normalized = text.replace("Z", "+00:00")
+            match = re.match(r"^(.*?\.)(\d+)([+-]\d\d:\d\d)$", normalized)
+            if match:
+                head, fraction, suffix = match.groups()
+                normalized = f"{head}{fraction[:6]}{suffix}"
+            return datetime.fromisoformat(normalized)
+        return datetime.strptime(text, "%m/%d/%Y %H:%M:%S")
+    except ValueError:
+        return None
+
+
+def _format_last_push_label(age_seconds: int) -> str:
+    if age_seconds < 60:
+        return f"Last pushed {age_seconds} sec ago"
+    if age_seconds < 3600:
+        return f"Last pushed {max(1, age_seconds // 60)} min ago"
+    return f"Last pushed {max(1, age_seconds // 3600)} hr ago"
 
 
 def _determine_active_logger(mqtt_logger: dict[str, Any], plc_logger: dict[str, Any]) -> str:

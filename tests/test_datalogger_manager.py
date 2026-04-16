@@ -61,8 +61,9 @@ def test_get_datalogger_status_parses_logger_roles_and_health(monkeypatch):
     assert status["active_logger"] == "MQTT Logger"
     assert status["mqtt_logger"]["running"] is True
     assert status["mqtt_logger"]["device_id"] == "ESS-UNIT-81"
-    assert status["mqtt_logger"]["summary"] == "Relay traffic OK"
+    assert status["mqtt_logger"]["summary"] == "Data pushed successfully"
     assert status["mqtt_logger"]["mqtt_ui_url"] == "http://ess-pi:8080"
+    assert "push" in status["mqtt_logger"]["last_push_label"].lower()
     assert status["plc_logger"]["running"] is False
     assert status["plc_logger"]["measurements"] == 43
     assert status["plc_logger"]["queue_size"] == 0
@@ -113,5 +114,5 @@ def test_parse_mqtt_logs_extracts_device_and_publish_state():
 
     assert parsed["device_id"] == "ESS-UNIT-81"
     assert parsed["channel_count"] == 1
-    assert parsed["summary"] == "Relay traffic OK"
+    assert parsed["summary"] == "Data pushed successfully"
     assert parsed["last_activity_text"] == "2026-04-16T17:39:10.3038222Z"

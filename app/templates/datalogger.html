@@ -19,93 +19,104 @@
     </div>
 </section>
 
-<section class="two-column system-layout">
-    <article class="panel">
-        <div class="section-heading">
-            <div>
-                <h3>Docker and Portainer</h3>
-                <p>Check whether the container stack is available and start Portainer when needed.</p>
-            </div>
+<section class="panel">
+    <div class="section-heading">
+        <div>
+            <h3>Logger health</h3>
+            <p>Live technician view of recent push activity. This section refreshes every second while the page is open.</p>
         </div>
+        <span class="status-pill status-neutral" id="logger-live-pill"><span class="status-dot"></span>Live updating</span>
+    </div>
 
-        <div class="system-stats-grid datalogger-stats-grid">
-            <div class="stat-card">
-                <span>Active logger</span>
-                <strong>{{ datalogger_status.get('active_logger', 'Unknown') }}</strong>
-            </div>
-            <div class="stat-card">
-                <span>Docker</span>
-                <strong>{{ 'Ready' if datalogger_status.docker_available else 'Unavailable' }}</strong>
-            </div>
-            <div class="stat-card">
-                <span>Portainer</span>
-                <strong>{{ 'Running' if datalogger_status.portainer_running else 'Stopped' }}</strong>
-            </div>
-            <div class="stat-card">
-                <span>Containers</span>
-                <strong>{{ datalogger_status.containers|length }}</strong>
-            </div>
-        </div>
+    {% if datalogger_status.get('warnings') %}
+    <ul class="interface-list">
+        {% for warning in datalogger_status.get('warnings', []) %}
+        <li>{{ warning }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
 
-        {% if datalogger_status.get('warnings') %}
-        <ul class="interface-list">
-            {% for warning in datalogger_status.get('warnings', []) %}
-            <li>{{ warning }}</li>
-            {% endfor %}
-        </ul>
-        {% endif %}
-
-        {% if datalogger_status.error %}
-        <p class="update-error-note">{{ datalogger_status.error }}</p>
-        {% endif %}
-
-        <div class="system-action-row">
-            <form method="post" data-busy-label="Starting Portainer...">
-                <input type="hidden" name="action" value="portainer">
-                <button type="submit">Start or install Portainer</button>
-            </form>
-            {% if datalogger_status.portainer_url %}
-            <a class="button-link secondary-link" href="{{ datalogger_status.portainer_url }}" target="_blank" rel="noopener noreferrer">Launch Portainer</a>
-            {% endif %}
-        </div>
-
-        {% if datalogger_status.portainer_url %}
-        <p class="muted-note">Portainer address: {{ datalogger_status.portainer_url }}</p>
-        {% endif %}
-    </article>
-
-    <article class="panel">
-        <div class="section-heading">
-            <div>
-                <h3>Logger health</h3>
-                <p>These summaries translate the recent logger output into a quick technician view.</p>
-            </div>
-        </div>
-
-        <div class="stack-form">
-            <div>
+    <div class="logger-health-grid">
+        <article class="stat-card logger-health-card">
+            <div class="logger-card-header">
                 <strong>MQTT logger</strong>
-                <p>{{ mqtt_logger.get('summary', 'No recent activity') }}</p>
-                <p class="muted-note">Container: {{ mqtt_logger.get('name', 'opsviewer2-edge') }} | Last activity: {{ mqtt_logger.get('last_activity_text', 'Unknown') }}</p>
-                {% if mqtt_logger.get('device_id') %}
-                <p class="muted-note">Device: {{ mqtt_logger.get('device_id') }}{% if mqtt_logger.get('channel_count') %} | Channels in sample: {{ mqtt_logger.get('channel_count') }}{% endif %}</p>
-                {% endif %}
-                {% if mqtt_logger.get('error') %}
-                <p class="update-error-note">{{ mqtt_logger.get('error') }}</p>
-                {% endif %}
+                <span id="mqtt-push-pill" class="status-pill {{ mqtt_logger.get('status_class', 'status-neutral') }}"><span class="status-dot"></span>{{ mqtt_logger.get('last_push_label', 'Waiting for data') }}</span>
             </div>
+            <p id="mqtt-summary" class="logger-summary">{{ mqtt_logger.get('summary', 'No recent activity') }}</p>
+            <p id="mqtt-activity" class="muted-note">Container: {{ mqtt_logger.get('name', 'opsviewer2-edge') }} | Last activity: {{ mqtt_logger.get('last_activity_text', 'Unknown') }}</p>
+            {% if mqtt_logger.get('device_id') %}
+            <p id="mqtt-device" class="muted-note">Device: {{ mqtt_logger.get('device_id') }}{% if mqtt_logger.get('channel_count') %} | Channels in sample: {{ mqtt_logger.get('channel_count') }}{% endif %}</p>
+            {% else %}
+            <p id="mqtt-device" class="muted-note">Device: not detected yet</p>
+            {% endif %}
+            {% if mqtt_logger.get('error') %}
+            <p id="mqtt-error" class="update-error-note">{{ mqtt_logger.get('error') }}</p>
+            {% else %}
+            <p id="mqtt-error" class="update-error-note" hidden></p>
+            {% endif %}
+        </article>
 
-            <div>
+        <article class="stat-card logger-health-card">
+            <div class="logger-card-header">
                 <strong>PLC logger</strong>
-                <p>{{ plc_logger.get('summary', 'No recent activity') }}</p>
-                <p class="muted-note">Container: {{ plc_logger.get('name', 'plcreader') }} | Last activity: {{ plc_logger.get('last_activity_text', 'Unknown') }}</p>
-                <p class="muted-note">{% if plc_logger.get('measurements') is not none %}Measurements: {{ plc_logger.get('measurements') }}{% else %}Measurements: n/a{% endif %} | {% if plc_logger.get('queue_size') is not none %}Queue: {{ plc_logger.get('queue_size') }}{% else %}Queue: n/a{% endif %}</p>
-                {% if plc_logger.get('error') %}
-                <p class="update-error-note">{{ plc_logger.get('error') }}</p>
-                {% endif %}
+                <span id="plc-push-pill" class="status-pill {{ plc_logger.get('status_class', 'status-neutral') }}"><span class="status-dot"></span>{{ plc_logger.get('last_push_label', 'Waiting for data') }}</span>
             </div>
+            <p id="plc-summary" class="logger-summary">{{ plc_logger.get('summary', 'No recent activity') }}</p>
+            <p id="plc-activity" class="muted-note">Container: {{ plc_logger.get('name', 'plcreader') }} | Last activity: {{ plc_logger.get('last_activity_text', 'Unknown') }}</p>
+            <p id="plc-metrics" class="muted-note">{% if plc_logger.get('measurements') is not none %}Measurements: {{ plc_logger.get('measurements') }}{% else %}Measurements: n/a{% endif %} | {% if plc_logger.get('queue_size') is not none %}Queue: {{ plc_logger.get('queue_size') }}{% else %}Queue: n/a{% endif %}</p>
+            {% if plc_logger.get('error') %}
+            <p id="plc-error" class="update-error-note">{{ plc_logger.get('error') }}</p>
+            {% else %}
+            <p id="plc-error" class="update-error-note" hidden></p>
+            {% endif %}
+        </article>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="section-heading">
+        <div>
+            <h3>Docker and Portainer</h3>
+            <p>Infrastructure details and container management tools.</p>
         </div>
-    </article>
+    </div>
+
+    <div class="system-stats-grid datalogger-stats-grid">
+        <div class="stat-card">
+            <span>Active logger</span>
+            <strong>{{ datalogger_status.get('active_logger', 'Unknown') }}</strong>
+        </div>
+        <div class="stat-card">
+            <span>Docker</span>
+            <strong>{{ 'Ready' if datalogger_status.docker_available else 'Unavailable' }}</strong>
+        </div>
+        <div class="stat-card">
+            <span>Portainer</span>
+            <strong>{{ 'Running' if datalogger_status.portainer_running else 'Stopped' }}</strong>
+        </div>
+        <div class="stat-card">
+            <span>Containers</span>
+            <strong>{{ datalogger_status.containers|length }}</strong>
+        </div>
+    </div>
+
+    {% if datalogger_status.error %}
+    <p class="update-error-note">{{ datalogger_status.error }}</p>
+    {% endif %}
+
+    <div class="system-action-row">
+        <form method="post" data-busy-label="Starting Portainer...">
+            <input type="hidden" name="action" value="portainer">
+            <button type="submit">Start or install Portainer</button>
+        </form>
+        {% if datalogger_status.portainer_url %}
+        <a class="button-link secondary-link" href="{{ datalogger_status.portainer_url }}" target="_blank" rel="noopener noreferrer">Launch Portainer</a>
+        {% endif %}
+    </div>
+
+    {% if datalogger_status.portainer_url %}
+    <p class="muted-note">Portainer address: {{ datalogger_status.portainer_url }}</p>
+    {% endif %}
 </section>
 
 <section class="panel">
@@ -141,4 +152,77 @@
     <p class="muted-note">No containers were reported yet.</p>
     {% endif %}
 </section>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const endpoint = "{{ url_for('network.datalogger_status_api') }}";
+
+    function setPill(elementId, label, statusClass) {
+        const element = document.getElementById(elementId);
+        if (!element) return;
+        element.className = 'status-pill ' + (statusClass || 'status-neutral');
+        element.innerHTML = '<span class="status-dot"></span>' + (label || 'Waiting for data');
+    }
+
+    function setText(elementId, text) {
+        const element = document.getElementById(elementId);
+        if (element) {
+            element.textContent = text || '';
+        }
+    }
+
+    function setError(elementId, text) {
+        const element = document.getElementById(elementId);
+        if (!element) return;
+        if (text) {
+            element.hidden = false;
+            element.textContent = text;
+        } else {
+            element.hidden = true;
+            element.textContent = '';
+        }
+    }
+
+    function updateLoggerSection(prefix, logger) {
+        if (!logger) return;
+        setPill(prefix + '-push-pill', logger.last_push_label, logger.status_class);
+        setText(prefix + '-summary', logger.summary || 'No recent activity');
+        setText(prefix + '-activity', 'Container: ' + (logger.name || 'unknown') + ' | Last activity: ' + (logger.last_activity_text || 'Unknown'));
+
+        if (prefix === 'mqtt') {
+            let deviceText = 'Device: not detected yet';
+            if (logger.device_id) {
+                deviceText = 'Device: ' + logger.device_id;
+                if (logger.channel_count) {
+                    deviceText += ' | Channels in sample: ' + logger.channel_count;
+                }
+            }
+            setText('mqtt-device', deviceText);
+        }
+
+        if (prefix === 'plc') {
+            const measurements = logger.measurements !== null && logger.measurements !== undefined ? logger.measurements : 'n/a';
+            const queue = logger.queue_size !== null && logger.queue_size !== undefined ? logger.queue_size : 'n/a';
+            setText('plc-metrics', 'Measurements: ' + measurements + ' | Queue: ' + queue);
+        }
+
+        setError(prefix + '-error', logger.error || '');
+    }
+
+    async function refreshLoggerHealth() {
+        try {
+            const response = await fetch(endpoint, { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
+            if (!response.ok) return;
+            const status = await response.json();
+            updateLoggerSection('mqtt', status.mqtt_logger || {});
+            updateLoggerSection('plc', status.plc_logger || {});
+        } catch (error) {
+            // keep the last rendered values if polling fails
+        }
+    }
+
+    refreshLoggerHealth();
+    window.setInterval(refreshLoggerHealth, 1000);
+});
+</script>
 {% endblock %}
