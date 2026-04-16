@@ -24,7 +24,7 @@ class Config:
     USE_SUDO_FOR_NMCLI = os.getenv("PI_ADMIN_USE_SUDO_FOR_NMCLI", "true").lower() == "true"
     GIT_BIN = os.getenv("PI_ADMIN_GIT_BIN", "git")
     DOCKER_BIN = os.getenv("PI_ADMIN_DOCKER_BIN", "docker")
-    BASH_BIN = os.getenv("PI_ADMIN_BASH_BIN", "bash")
+    BASH_BIN = os.getenv("PI_ADMIN_BASH_BIN", "/bin/bash" if os.name != "nt" else "bash")
     SUDO_BIN = os.getenv("PI_ADMIN_SUDO_BIN", "sudo")
     HOSTNAMECTL_BIN = os.getenv("PI_ADMIN_HOSTNAMECTL_BIN", "hostnamectl")
     SYSTEMCTL_BIN = os.getenv("PI_ADMIN_SYSTEMCTL_BIN", "systemctl")
@@ -43,6 +43,9 @@ class Config:
     )
     TECHNICIAN_OUTPUT_FILE = os.getenv(
         "PI_ADMIN_TECHNICIAN_OUTPUT_FILE", str(BASE_DIR / "technician-output.json")
+    )
+    TECHNICIAN_COMMAND_PATH = os.getenv(
+        "PI_ADMIN_TECHNICIAN_COMMAND_PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
     )
     DISK_USAGE_PATH = os.getenv("PI_ADMIN_DISK_USAGE_PATH", "/")
     PING_BIN = os.getenv("PI_ADMIN_PING_BIN", "ping")

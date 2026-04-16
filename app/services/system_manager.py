@@ -217,21 +217,59 @@ def run_custom_technician_command(config: dict[str, Any], label: str, command: s
     if not command:
         return {"success": False, "message": "A command is required."}
 
+    if command.startswith("sudo "):
+        _write_technician_output(
+            config,
+            {
+                "command_label": label,
+                "command": command,
+                "exit_code": 1,
+                "output": "This page runs commands without sudo. Remove sudo from the saved button and use a full binary path like /usr/bin/docker.",
+                "ran_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            },
+        )
+        return {"success": False, "message": "This page runs commands without sudo. Remove sudo from the button."}
+
     timeout = int(config.get("COMMAND_TIMEOUT_SECONDS", 15))
-    run_kwargs: dict[str, Any] = {
-        "args": command,
-        "capture_output": True,
-        "text": True,
-        "shell": True,
-        "check": False,
-        "timeout": timeout,
-    }
+    working_directory = str(config.get("REPO_PATH", BASE_DIR))
+    command_env = _build_technician_command_env(config)
+
     if _is_linux_target():
-        run_kwargs["executable"] = config.get("BASH_BIN", "bash")
+        bash_bin = str(config.get("BASH_BIN", "/bin/bash") or "/bin/bash")
+        run_args: Any = [bash_bin, "-lc", command]
+        run_kwargs: dict[str, Any] = {
+            "capture_output": True,
+            "text": True,
+            "check": False,
+            "timeout": timeout,
+            "cwd": working_directory,
+            "env": command_env,
+        }
+    else:
+        run_args = command
+        run_kwargs = {
+            "capture_output": True,
+            "text": True,
+            "shell": True,
+            "check": False,
+            "timeout": timeout,
+            "cwd": working_directory,
+            "env": command_env,
+        }
 
     try:
-        result = subprocess.run(**run_kwargs)
+        result = subprocess.run(run_args, **run_kwargs)
         combined_output = "\n".join(part.strip() for part in [result.stdout or "", result.stderr or ""] if part.strip())
+        if result.returncode == 127:
+            combined_output = "\n".join(
+                part
+                for part in [
+                    combined_output or "Command returned code 127.",
+                    "Hint: the command was not found for the app user. Try a full path such as /usr/bin/docker and avoid sudo in this page.",
+                ]
+                if part
+            )
+
         payload = {
             "command_label": label,
             "command": command,
@@ -341,6 +379,15 @@ def _read_update_log(config: dict[str, Any], lines: int = 12) -> str:
 
     content = log_path.read_text(encoding="utf-8", errors="ignore").splitlines()
     return "\n".join(content[-lines:])
+
+
+def _build_technician_command_env(config: dict[str, Any]) -> dict[str, str]:
+    env = os.environ.copy()
+    if _is_linux_target():
+        default_path = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        env["PATH"] = str(config.get("TECHNICIAN_COMMAND_PATH", default_path) or default_path)
+        env.setdefault("HOME", str(Path.home()))
+    return env
 
 
 def _load_technician_commands(config: dict[str, Any]) -> list[dict[str, Any]]:
