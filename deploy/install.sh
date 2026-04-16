@@ -40,6 +40,13 @@ if ! id -u "$USER_NAME" >/dev/null 2>&1; then
     sudo useradd --system --create-home --home-dir "$APP_DIR" --shell /usr/sbin/nologin "$USER_NAME"
 fi
 
+if getent group docker >/dev/null 2>&1; then
+    sudo usermod -aG docker "$USER_NAME"
+    echo "Ensured $USER_NAME has docker group access."
+else
+    echo "Docker group not present yet; technician Docker commands will stay unavailable until Docker is installed."
+fi
+
 sudo mkdir -p "$APP_DIR" "$CONFIG_DIR" /var/log/pi-network-admin
 
 REPO_REALPATH=$(cd -- "$REPO_DIR" && pwd -P)

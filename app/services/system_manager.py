@@ -260,12 +260,24 @@ def run_custom_technician_command(config: dict[str, Any], label: str, command: s
     try:
         result = subprocess.run(run_args, **run_kwargs)
         combined_output = "\n".join(part.strip() for part in [result.stdout or "", result.stderr or ""] if part.strip())
+        lower_output = combined_output.lower()
+        docker_permission_denied = "permission denied" in lower_output and "docker.sock" in lower_output
+
         if result.returncode == 127:
             combined_output = "\n".join(
                 part
                 for part in [
                     combined_output or "Command returned code 127.",
                     "Hint: the command was not found for the app user. Try a full path such as /usr/bin/docker and avoid sudo in this page.",
+                ]
+                if part
+            )
+        elif docker_permission_denied:
+            combined_output = "\n".join(
+                part
+                for part in [
+                    combined_output or "Docker access was denied.",
+                    "Hint: add pi-network-admin to the docker group and restart the pi-network-admin service.",
                 ]
                 if part
             )
@@ -281,6 +293,8 @@ def run_custom_technician_command(config: dict[str, Any], label: str, command: s
 
         if result.returncode == 0:
             return {"success": True, "message": f"Finished: {label}."}
+        if docker_permission_denied:
+            return {"success": False, "message": "Docker access denied for the app service user."}
         return {"success": False, "message": f"{label} exited with code {result.returncode}."}
     except subprocess.TimeoutExpired as exc:
         timed_output = "\n".join(
