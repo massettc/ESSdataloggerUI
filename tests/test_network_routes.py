@@ -141,6 +141,27 @@ def test_datalogger_post_can_start_portainer(client, monkeypatch):
     assert calls == [True]
 
 
+def test_datalogger_page_handles_unexpected_status_errors(client, monkeypatch):
+    monkeypatch.setattr(network_routes, "get_datalogger_status", lambda config, host=None: (_ for _ in ()).throw(RuntimeError("boom")))
+
+    _login(client)
+    response = client.get("/datalogger")
+
+    assert response.status_code == 200
+    assert b"Datalogger" in response.data
+
+
+def test_datalogger_status_api_handles_unexpected_errors(client, monkeypatch):
+    monkeypatch.setattr(network_routes, "get_datalogger_status", lambda config, host=None: (_ for _ in ()).throw(RuntimeError("boom")))
+
+    _login(client)
+    response = client.get("/datalogger/status")
+
+    assert response.status_code == 200
+    assert response.is_json
+    assert response.get_json()["error"] == "boom"
+
+
 def test_technician_tools_page_shows_buttons_and_terminal(client, monkeypatch):
     monkeypatch.setattr(
         network_routes,

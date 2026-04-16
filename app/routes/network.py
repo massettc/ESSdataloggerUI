@@ -179,10 +179,11 @@ def datalogger():
 
     try:
         datalogger_status = get_datalogger_status(current_app.config, host=request.host.split(":")[0])
-    except DataloggerManagerError as exc:
+    except Exception as exc:
         current_app.logger.exception("datalogger view error")
         flash(str(exc), "error")
         datalogger_status = _default_datalogger_status()
+        datalogger_status["error"] = str(exc)
 
     return render_template("datalogger.html", datalogger_status=datalogger_status)
 
@@ -192,7 +193,7 @@ def datalogger():
 def datalogger_status_api():
     try:
         return get_datalogger_status(current_app.config, host=request.host.split(":")[0])
-    except DataloggerManagerError as exc:
+    except Exception as exc:
         current_app.logger.exception("datalogger status api error")
         status = _default_datalogger_status()
         status["error"] = str(exc)
