@@ -187,6 +187,9 @@ class FailoverWatchdog:
         return completed.returncode == 0
 
     def _activate_interface(self, interface_name: str, connection_name: str | None) -> bool:
+        if ensure_connection_active(self.config, interface_name, connection_name):
+            return True
+
         try:
             if connection_name:
                 bring_up_connection(self.config, connection_name)

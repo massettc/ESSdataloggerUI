@@ -124,6 +124,20 @@ def test_watchdog_restores_primary_route_priority_after_recovery(monkeypatch):
     assert default_route_flags == [("PlantWiFi", False), ("Wired connection 1", True)]
 
 
+def test_activate_interface_skips_reconnect_when_already_active(monkeypatch):
+    watchdog = network_watchdog.FailoverWatchdog(dict(BASE_CONFIG))
+    calls = []
+
+    monkeypatch.setattr(network_watchdog, "ensure_connection_active", lambda config, interface_name, connection_name=None: True)
+    monkeypatch.setattr(network_watchdog, "bring_up_connection", lambda config, connection_name: calls.append(("up", connection_name)))
+    monkeypatch.setattr(network_watchdog, "connect_device", lambda config, interface_name: calls.append(("connect", interface_name)))
+
+    result = watchdog._activate_interface("wlan0", "PlantWiFi")
+
+    assert result is True
+    assert calls == []
+
+
 def test_watchdog_uses_active_connection_name_when_not_configured(monkeypatch):
     config = dict(BASE_CONFIG)
     config["PRIMARY_CONNECTION_NAME"] = ""
