@@ -93,12 +93,21 @@ class FailoverWatchdog:
     def _configure_route_metrics(self, prefer_backup: bool = False) -> None:
         primary_metric = self.config["PRIMARY_ROUTE_METRIC"]
         backup_metric = self.config["BACKUP_ROUTE_METRIC"]
-        metric_by_interface = {
-            self.config["PRIMARY_INTERFACE"]: backup_metric if prefer_backup else primary_metric,
-            self.config["BACKUP_INTERFACE"]: primary_metric if prefer_backup else backup_metric,
-        }
 
-        for interface_name in (self.config["PRIMARY_INTERFACE"], self.config["BACKUP_INTERFACE"]):
+        if self.config.get("PREFER_WLAN_FOR_INTERNET", False) and not prefer_backup:
+            metric_by_interface = {
+                self.config["WIFI_INTERFACE"]: primary_metric,
+                self.config["ETHERNET_INTERFACE"]: backup_metric,
+            }
+            interfaces = (self.config["WIFI_INTERFACE"], self.config["ETHERNET_INTERFACE"])
+        else:
+            metric_by_interface = {
+                self.config["PRIMARY_INTERFACE"]: backup_metric if prefer_backup else primary_metric,
+                self.config["BACKUP_INTERFACE"]: primary_metric if prefer_backup else backup_metric,
+            }
+            interfaces = (self.config["PRIMARY_INTERFACE"], self.config["BACKUP_INTERFACE"])
+
+        for interface_name in interfaces:
             connection_name = self._configured_connection_name(interface_name)
             if not connection_name:
                 continue

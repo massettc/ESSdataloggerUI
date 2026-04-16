@@ -1,3 +1,4 @@
+from app.config import Config
 from app.services import network_watchdog
 
 
@@ -12,12 +13,19 @@ BASE_CONFIG = {
     "BACKUP_INTERFACE": "wlan0",
     "PRIMARY_CONNECTION_NAME": "Wired connection 1",
     "BACKUP_CONNECTION_NAME": "PlantWiFi",
+    "PREFER_WLAN_FOR_INTERNET": True,
     "PRIMARY_ROUTE_METRIC": 100,
     "BACKUP_ROUTE_METRIC": 200,
     "PING_BIN": "ping",
     "WIFI_INTERFACE": "wlan0",
     "ETHERNET_INTERFACE": "eth0",
 }
+
+
+def test_default_preferences_keep_wifi_primary_for_internet():
+    assert Config.PRIMARY_INTERFACE == Config.WIFI_INTERFACE
+    assert Config.BACKUP_INTERFACE == Config.ETHERNET_INTERFACE
+    assert Config.PRIMARY_ROUTE_METRIC < Config.BACKUP_ROUTE_METRIC
 
 
 def test_watchdog_fails_over_after_threshold(monkeypatch):
@@ -93,7 +101,7 @@ def test_watchdog_restores_primary_route_priority_after_recovery(monkeypatch):
     result = watchdog.run_once()
 
     assert result["status"] == "restored-primary"
-    assert route_metrics == [("Wired connection 1", 100), ("PlantWiFi", 200)]
+    assert route_metrics == [("PlantWiFi", 100), ("Wired connection 1", 200)]
 
 
 def test_watchdog_uses_active_connection_name_when_not_configured(monkeypatch):
