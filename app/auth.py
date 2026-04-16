@@ -10,6 +10,10 @@ auth_bp = Blueprint("auth", __name__)
 
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
+    if not _auth_enabled():
+        session["authenticated"] = True
+        return redirect(url_for("network.dashboard"))
+
     if session.get("authenticated"):
         return redirect(url_for("network.dashboard"))
 
@@ -29,8 +33,10 @@ def login():
 @auth_bp.route("/logout", methods=["POST"])
 def logout():
     session.clear()
-    flash("Logged out.", "info")
-    return redirect(url_for("auth.login"))
+    if _auth_enabled():
+        flash("Logged out.", "info")
+        return redirect(url_for("auth.login"))
+    return redirect(url_for("network.dashboard"))
 
 
 @auth_bp.route("/health")
@@ -41,11 +47,17 @@ def health():
 def login_required(view):
     @wraps(view)
     def wrapped_view(*args, **kwargs):
+        if not _auth_enabled():
+            return view(*args, **kwargs)
         if not session.get("authenticated"):
             return redirect(url_for("auth.login"))
         return view(*args, **kwargs)
 
     return wrapped_view
+
+
+def _auth_enabled() -> bool:
+    return bool(current_app.config.get("AUTH_ENABLED", False))
 
 
 def _is_valid_password(password: str) -> bool:

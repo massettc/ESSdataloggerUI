@@ -7,8 +7,9 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+    {% set is_authenticated = (not config.AUTH_ENABLED) or session.get('authenticated') %}
     <div class="app-shell">
-        {% if session.get('authenticated') %}
+        {% if is_authenticated %}
         <aside class="sidebar">
             <div class="sidebar-brand">
                 <p class="eyebrow">Local technician access</p>
@@ -21,14 +22,16 @@
                 <a class="{{ 'active' if request.endpoint == 'network.datalogger' else '' }}" href="{{ url_for('network.datalogger') }}">Datalogger</a>
                 <a class="{{ 'active' if request.endpoint == 'network.system_settings' else '' }}" href="{{ url_for('network.system_settings') }}">System</a>
             </nav>
+            {% if config.AUTH_ENABLED %}
             <form method="post" action="{{ url_for('auth.logout') }}" class="sidebar-logout">
                 <button class="secondary" type="submit">Log out</button>
             </form>
+            {% endif %}
         </aside>
         {% endif %}
 
         <div class="main-shell">
-            {% if not session.get('authenticated') %}
+            {% if not is_authenticated %}
             <header class="site-header">
                 <div>
                     <p class="eyebrow">Local technician access</p>
