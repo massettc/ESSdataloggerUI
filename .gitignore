@@ -4,3 +4,5 @@ __pycache__/
 *.pyc
 config/admin_password.hash
 pi-network-admin.log
+technician-output.json
+config/technician_commands.json

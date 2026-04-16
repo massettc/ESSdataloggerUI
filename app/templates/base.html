@@ -21,6 +21,7 @@
                 <a class="{{ 'active' if request.endpoint == 'network.ethernet_settings' else '' }}" href="{{ url_for('network.ethernet_settings') }}">Ethernet</a>
                 <a class="{{ 'active' if request.endpoint == 'network.datalogger' else '' }}" href="{{ url_for('network.datalogger') }}">Datalogger</a>
                 <a class="{{ 'active' if request.endpoint == 'network.system_settings' else '' }}" href="{{ url_for('network.system_settings') }}">System</a>
+                <a class="{{ 'active' if request.endpoint == 'network.technician_tools' else '' }}" href="{{ url_for('network.technician_tools') }}">Tech tools</a>
             </nav>
             {% if config.AUTH_ENABLED %}
             <form method="post" action="{{ url_for('auth.logout') }}" class="sidebar-logout">

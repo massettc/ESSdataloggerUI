@@ -44,7 +44,7 @@ def test_wifi_page_prefills_selected_network_from_query(client, monkeypatch):
     assert b"Offline" in response.data
 
 
-def test_sidebar_includes_datalogger_and_system_links(client, monkeypatch):
+def test_sidebar_includes_datalogger_system_and_tools_links(client, monkeypatch):
     monkeypatch.setattr(
         network_routes,
         "get_dashboard_state",
@@ -57,6 +57,7 @@ def test_sidebar_includes_datalogger_and_system_links(client, monkeypatch):
     assert response.status_code == 200
     assert b"Datalogger" in response.data
     assert b"System" in response.data
+    assert b"Tech tools" in response.data
 
 
 def test_datalogger_page_shows_portainer_status(client, monkeypatch):
@@ -109,6 +110,94 @@ def test_datalogger_post_can_start_portainer(client, monkeypatch):
 
     assert response.status_code == 302
     assert calls == [True]
+
+
+def test_technician_tools_page_shows_buttons_and_terminal(client, monkeypatch):
+    monkeypatch.setattr(
+        network_routes,
+        "get_technician_tools_state",
+        lambda config: {
+            "commands": [
+                {
+                    "id": "show-date",
+                    "label": "Show date",
+                    "command": "date",
+                    "description": "Display current date",
+                    "confirm": False,
+                }
+            ],
+            "last_result": {
+                "command_label": "Show date",
+                "command": "date",
+                "exit_code": 0,
+                "output": "Thu Apr 16",
+            },
+            "error": "",
+        },
+    )
+
+    _login(client)
+    response = client.get("/tools")
+
+    assert response.status_code == 200
+    assert b"Technician Tools" in response.data
+    assert b"Add new button" in response.data
+    assert b"Show date" in response.data
+    assert b"Terminal output" in response.data
+
+
+
+def test_technician_tools_post_can_add_button(client, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        network_routes,
+        "add_technician_command",
+        lambda config, label, command, description="", confirm=False: calls.append((label, command, description, confirm))
+        or {"success": True, "message": "Button saved."},
+    )
+    monkeypatch.setattr(
+        network_routes,
+        "get_technician_tools_state",
+        lambda config: {"commands": [], "last_result": None, "error": ""},
+    )
+
+    _login(client)
+    response = client.post(
+        "/tools",
+        data={
+            "action": "add_command",
+            "label": "Check disk",
+            "command": "df -h",
+            "description": "Disk usage",
+            "confirm": "on",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert calls == [("Check disk", "df -h", "Disk usage", True)]
+
+
+
+def test_technician_tools_post_can_run_saved_button(client, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        network_routes,
+        "run_technician_command",
+        lambda config, command_id: calls.append(command_id) or {"success": True, "message": "Ran command."},
+    )
+    monkeypatch.setattr(
+        network_routes,
+        "get_technician_tools_state",
+        lambda config: {"commands": [], "last_result": None, "error": ""},
+    )
+
+    _login(client)
+    response = client.post("/tools", data={"action": "run_command", "command_id": "show-date"}, follow_redirects=False)
+
+    assert response.status_code == 302
+    assert calls == ["show-date"]
+
 
 
 def test_system_page_shows_hostname_disk_and_updates(client, monkeypatch):

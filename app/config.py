@@ -38,6 +38,12 @@ class Config:
     UPDATE_SCRIPT = os.getenv("PI_ADMIN_UPDATE_SCRIPT", str(BASE_DIR / "deploy" / "update-from-git.sh"))
     UPDATE_LOG_PATH = os.getenv("PI_ADMIN_UPDATE_LOG_PATH", str(BASE_DIR / "update.log"))
     UPDATE_STATUS_FILE = os.getenv("PI_ADMIN_UPDATE_STATUS_FILE", str(BASE_DIR / "update-status.txt"))
+    TECHNICIAN_COMMANDS_FILE = os.getenv(
+        "PI_ADMIN_TECHNICIAN_COMMANDS_FILE", str(BASE_DIR / "config" / "technician_commands.json")
+    )
+    TECHNICIAN_OUTPUT_FILE = os.getenv(
+        "PI_ADMIN_TECHNICIAN_OUTPUT_FILE", str(BASE_DIR / "technician-output.json")
+    )
     DISK_USAGE_PATH = os.getenv("PI_ADMIN_DISK_USAGE_PATH", "/")
     PING_BIN = os.getenv("PI_ADMIN_PING_BIN", "ping")
     COMMAND_TIMEOUT_SECONDS = int(os.getenv("PI_ADMIN_COMMAND_TIMEOUT_SECONDS", "15"))

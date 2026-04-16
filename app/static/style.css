@@ -147,6 +147,7 @@ p {
 
 input,
 select,
+textarea,
 button,
 .button-link {
     border-radius: 12px;
@@ -154,11 +155,17 @@ button,
 }
 
 input,
-select {
+select,
+textarea {
     width: 100%;
     border: 1px solid #c7bca9;
     background: #fffdf8;
     padding: 0.8rem 0.9rem;
+}
+
+textarea {
+    min-height: 120px;
+    resize: vertical;
 }
 
 button,
@@ -588,6 +595,105 @@ td {
     overflow: auto;
 }
 
+.technician-grid {
+    display: grid;
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: 1.2rem;
+}
+
+.command-button-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.75rem;
+}
+
+.command-card {
+    border: 1px solid #e4dcca;
+    border-radius: 14px;
+    padding: 0.9rem;
+    background: #fffdf8;
+    display: grid;
+    gap: 0.65rem;
+}
+
+.command-card h4 {
+    margin: 0;
+}
+
+.command-card p {
+    margin: 0;
+    color: var(--muted);
+}
+
+.terminal-shell {
+    background: #101820;
+    color: #d8f3dc;
+    border-radius: 16px;
+    padding: 1rem;
+    border: 1px solid #24323f;
+}
+
+.terminal-meta {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.85rem;
+    color: #9fc7b1;
+    font-size: 0.92rem;
+}
+
+.terminal-output {
+    margin: 0;
+    min-height: 220px;
+    max-height: 360px;
+    overflow: auto;
+    white-space: pre-wrap;
+    font-family: Consolas, "Cascadia Code", monospace;
+    font-size: 0.92rem;
+}
+
+.terminal-placeholder {
+    color: #9fb0bd;
+}
+
+.saved-command-list {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.saved-command-row {
+    border: 1px solid #e4dcca;
+    border-radius: 14px;
+    padding: 0.9rem;
+    background: #fffdf8;
+    display: grid;
+    gap: 0.75rem;
+}
+
+.saved-command-header,
+.saved-command-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.inline-form {
+    display: inline-flex;
+}
+
+.mini-badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 0.2rem 0.55rem;
+    background: #e8f2f0;
+    color: #0d5b54;
+    font-size: 0.8rem;
+}
+
 .busy-overlay {
     position: fixed;
     inset: 0;
@@ -650,6 +756,7 @@ td {
     }
 
     .two-column,
+    .technician-grid,
     .form-grid,
     .wifi-details-grid,
     .password-row,

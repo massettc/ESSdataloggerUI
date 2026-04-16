@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
 import socket
 import subprocess
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -149,6 +151,122 @@ def run_system_update(config: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def get_technician_tools_state(config: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "commands": _load_technician_commands(config),
+        "last_result": _read_technician_output(config),
+        "error": "",
+    }
+
+
+def add_technician_command(
+    config: dict[str, Any],
+    label: str,
+    command: str,
+    description: str = "",
+    confirm: bool = False,
+) -> dict[str, Any]:
+    label = label.strip()
+    command = command.strip()
+    description = description.strip()
+
+    if not label or not command:
+        return {"success": False, "message": "Button label and command are required."}
+
+    commands = _load_technician_commands(config)
+    command_id = _build_unique_command_id(commands, label)
+    commands.append(
+        {
+            "id": command_id,
+            "label": label,
+            "command": command,
+            "description": description,
+            "confirm": bool(confirm),
+            "builtin": False,
+        }
+    )
+    _save_technician_commands(config, commands)
+    return {"success": True, "message": f"Saved button {label}."}
+
+
+def delete_technician_command(config: dict[str, Any], command_id: str) -> dict[str, Any]:
+    command_id = command_id.strip()
+    commands = _load_technician_commands(config)
+    remaining = [item for item in commands if item.get("id") != command_id]
+
+    if len(remaining) == len(commands):
+        return {"success": False, "message": "That saved button was not found."}
+
+    _save_technician_commands(config, remaining)
+    return {"success": True, "message": "Saved button removed."}
+
+
+def run_technician_command(config: dict[str, Any], command_id: str) -> dict[str, Any]:
+    command_id = command_id.strip()
+    commands = _load_technician_commands(config)
+    selected = next((item for item in commands if item.get("id") == command_id), None)
+    if not selected:
+        return {"success": False, "message": "Saved button was not found."}
+
+    return run_custom_technician_command(config, selected.get("label", "Saved command"), selected.get("command", ""))
+
+
+def run_custom_technician_command(config: dict[str, Any], label: str, command: str) -> dict[str, Any]:
+    label = label.strip() or "Custom command"
+    command = command.strip()
+    if not command:
+        return {"success": False, "message": "A command is required."}
+
+    timeout = int(config.get("COMMAND_TIMEOUT_SECONDS", 15))
+    run_kwargs: dict[str, Any] = {
+        "args": command,
+        "capture_output": True,
+        "text": True,
+        "shell": True,
+        "check": False,
+        "timeout": timeout,
+    }
+    if _is_linux_target():
+        run_kwargs["executable"] = config.get("BASH_BIN", "bash")
+
+    try:
+        result = subprocess.run(**run_kwargs)
+        combined_output = "\n".join(part.strip() for part in [result.stdout or "", result.stderr or ""] if part.strip())
+        payload = {
+            "command_label": label,
+            "command": command,
+            "exit_code": result.returncode,
+            "output": combined_output or "(no output)",
+            "ran_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        _write_technician_output(config, payload)
+
+        if result.returncode == 0:
+            return {"success": True, "message": f"Finished: {label}."}
+        return {"success": False, "message": f"{label} exited with code {result.returncode}."}
+    except subprocess.TimeoutExpired as exc:
+        timed_output = "\n".join(
+            part.strip()
+            for part in [
+                (exc.stdout.decode("utf-8", errors="ignore") if isinstance(exc.stdout, bytes) else exc.stdout) or "",
+                (exc.stderr.decode("utf-8", errors="ignore") if isinstance(exc.stderr, bytes) else exc.stderr) or "",
+                f"Command timed out after {timeout} seconds.",
+            ]
+            if part and part.strip()
+        )
+        _write_technician_output(
+            config,
+            {
+                "command_label": label,
+                "command": command,
+                "exit_code": -1,
+                "output": timed_output or f"Command timed out after {timeout} seconds.",
+                "ran_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            },
+        )
+        return {"success": False, "message": f"{label} timed out after {timeout} seconds."}
+
+
 def _is_linux_target() -> bool:
     return os.name == "posix" and os.uname().sysname.lower() == "linux"
 
@@ -223,3 +341,132 @@ def _read_update_log(config: dict[str, Any], lines: int = 12) -> str:
 
     content = log_path.read_text(encoding="utf-8", errors="ignore").splitlines()
     return "\n".join(content[-lines:])
+
+
+def _load_technician_commands(config: dict[str, Any]) -> list[dict[str, Any]]:
+    commands_path = Path(config.get("TECHNICIAN_COMMANDS_FILE", BASE_DIR / "config" / "technician_commands.json"))
+    if not commands_path.exists():
+        return _default_technician_commands()
+
+    try:
+        payload = json.loads(commands_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return _default_technician_commands()
+
+    if not isinstance(payload, list):
+        return _default_technician_commands()
+
+    commands: list[dict[str, Any]] = []
+    for entry in payload:
+        if not isinstance(entry, dict):
+            continue
+        label = str(entry.get("label", "")).strip()
+        command = str(entry.get("command", "")).strip()
+        if not label or not command:
+            continue
+        commands.append(
+            {
+                "id": str(entry.get("id", "")).strip() or _build_unique_command_id(commands, label),
+                "label": label,
+                "command": command,
+                "description": str(entry.get("description", "")).strip(),
+                "confirm": bool(entry.get("confirm", False)),
+                "builtin": bool(entry.get("builtin", False)),
+            }
+        )
+
+    return commands or _default_technician_commands()
+
+
+def _save_technician_commands(config: dict[str, Any], commands: list[dict[str, Any]]) -> None:
+    commands_path = Path(config.get("TECHNICIAN_COMMANDS_FILE", BASE_DIR / "config" / "technician_commands.json"))
+    commands_path.parent.mkdir(parents=True, exist_ok=True)
+    commands_path.write_text(json.dumps(commands, indent=2), encoding="utf-8")
+
+
+def _read_technician_output(config: dict[str, Any]) -> dict[str, Any] | None:
+    output_path = Path(config.get("TECHNICIAN_OUTPUT_FILE", BASE_DIR / "technician-output.json"))
+    if not output_path.exists():
+        return None
+
+    try:
+        payload = json.loads(output_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+
+    return payload if isinstance(payload, dict) else None
+
+
+def _write_technician_output(config: dict[str, Any], payload: dict[str, Any]) -> None:
+    output_path = Path(config.get("TECHNICIAN_OUTPUT_FILE", BASE_DIR / "technician-output.json"))
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def _build_unique_command_id(commands: list[dict[str, Any]], label: str) -> str:
+    base_id = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-") or "custom-command"
+    existing_ids = {str(item.get("id", "")).strip() for item in commands}
+    if base_id not in existing_ids:
+        return base_id
+
+    suffix = 2
+    while f"{base_id}-{suffix}" in existing_ids:
+        suffix += 1
+    return f"{base_id}-{suffix}"
+
+
+def _default_technician_commands() -> list[dict[str, Any]]:
+    if _is_linux_target():
+        return [
+            {
+                "id": "show-ip-addresses",
+                "label": "Show IP addresses",
+                "command": "hostname -I",
+                "description": "Display the current IP addresses for the device.",
+                "confirm": False,
+                "builtin": True,
+            },
+            {
+                "id": "check-disk-usage",
+                "label": "Check disk usage",
+                "command": "df -h /",
+                "description": "Review available space on the root filesystem.",
+                "confirm": False,
+                "builtin": True,
+            },
+            {
+                "id": "show-uptime",
+                "label": "Show uptime",
+                "command": "uptime",
+                "description": "Display uptime and recent load information.",
+                "confirm": False,
+                "builtin": True,
+            },
+        ]
+
+    return [
+        {
+            "id": "show-hostname",
+            "label": "Show hostname",
+            "command": "hostname",
+            "description": "Display the current machine hostname.",
+            "confirm": False,
+            "builtin": True,
+        },
+        {
+            "id": "show-user",
+            "label": "Show current user",
+            "command": "whoami",
+            "description": "Confirm which account the app is running under.",
+            "confirm": False,
+            "builtin": True,
+        },
+        {
+            "id": "show-ipconfig",
+            "label": "Show network config",
+            "command": "ipconfig",
+            "description": "Display current adapter and IP information.",
+            "confirm": False,
+            "builtin": True,
+        },
+    ]

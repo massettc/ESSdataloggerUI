@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero panel">
+    <div>
+        <p class="eyebrow">Technician workflow</p>
+        <h2>Technician Tools</h2>
+        <p>Run non-admin maintenance commands, keep reusable quick buttons, and review the latest terminal output.</p>
+    </div>
+    <div class="hero-actions">
+        <span class="status-pill status-neutral">
+            <span class="status-dot"></span>
+            Runs as app user
+        </span>
+    </div>
+</section>
+
+<section class="technician-grid">
+    <article class="panel">
+        <div class="section-heading">
+            <div>
+                <h3>Quick actions</h3>
+                <p>One-click commands for common technician checks.</p>
+            </div>
+        </div>
+
+        <div class="command-button-grid">
+            {% for item in tools_state.commands %}
+            <div class="command-card">
+                <div class="saved-command-header">
+                    <h4>{{ item.label }}</h4>
+                    {% if item.builtin %}
+                    <span class="mini-badge">default</span>
+                    {% endif %}
+                </div>
+                <p>{{ item.description or 'Run this saved technician command.' }}</p>
+                <form method="post" {% if item.confirm %}data-confirm="Run {{ item.label }} now?"{% endif %} data-busy-label="Running {{ item.label }}...">
+                    <input type="hidden" name="action" value="run_command">
+                    <input type="hidden" name="command_id" value="{{ item.id }}">
+                    <button type="submit">Run</button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+    </article>
+
+    <article class="panel">
+        <div class="section-heading">
+            <div>
+                <h3>Terminal output</h3>
+                <p>Most recent command result from this page.</p>
+            </div>
+        </div>
+
+        <div class="terminal-shell" aria-label="Terminal output">
+            {% if tools_state.last_result %}
+            <div class="terminal-meta">
+                <span><strong>Action:</strong> {{ tools_state.last_result.command_label }}</span>
+                <span><strong>Exit:</strong> {{ tools_state.last_result.exit_code }}</span>
+                {% if tools_state.last_result.ran_at %}
+                <span><strong>Time:</strong> {{ tools_state.last_result.ran_at }}</span>
+                {% endif %}
+            </div>
+            <pre class="terminal-output">$ {{ tools_state.last_result.command }}
+{{ tools_state.last_result.output }}</pre>
+            {% else %}
+            <pre class="terminal-output terminal-placeholder">No command has been run yet.
+Use a quick action or the custom command field below.</pre>
+            {% endif %}
+        </div>
+    </article>
+</section>
+
+<section class="two-column system-layout">
+    <article class="panel">
+        <div class="section-heading">
+            <div>
+                <h3>Run a one-time command</h3>
+                <p>Use this for ad-hoc checks without saving a button.</p>
+            </div>
+        </div>
+        <form method="post" class="stack-form" data-busy-label="Running custom command...">
+            <input type="hidden" name="action" value="run_custom">
+            <label for="custom_label">Display name</label>
+            <input id="custom_label" name="custom_label" placeholder="Quick check">
+            <label for="custom_command">Command</label>
+            <textarea id="custom_command" name="custom_command" placeholder="echo hello from the Pi"></textarea>
+            <button type="submit">Run now</button>
+        </form>
+        <p class="muted-note">Commands run without sudo or admin elevation.</p>
+    </article>
+
+    <article class="panel">
+        <div class="section-heading">
+            <div>
+                <h3>Add new button</h3>
+                <p>Create technician-friendly actions without editing code.</p>
+            </div>
+        </div>
+        <form method="post" class="stack-form">
+            <input type="hidden" name="action" value="add_command">
+            <label for="label">Button label</label>
+            <input id="label" name="label" placeholder="Check logger folder" required>
+            <label for="description">Description</label>
+            <input id="description" name="description" placeholder="Optional note shown under the button">
+            <label for="command">Command</label>
+            <textarea id="command" name="command" placeholder="ls -lah /opt/logger" required></textarea>
+            <label class="checkbox-row" for="confirm">
+                <input id="confirm" type="checkbox" name="confirm">
+                Ask for confirmation before running
+            </label>
+            <button type="submit">Add new button</button>
+        </form>
+    </article>
+</section>
+
+<section class="panel">
+    <div class="section-heading">
+        <div>
+            <h3>Saved buttons</h3>
+            <p>Run or remove the command buttons currently available on this device.</p>
+        </div>
+    </div>
+
+    <div class="saved-command-list">
+        {% for item in tools_state.commands %}
+        <div class="saved-command-row">
+            <div class="saved-command-header">
+                <div>
+                    <strong>{{ item.label }}</strong>
+                    <p class="muted-note">{{ item.description or 'No description provided.' }}</p>
+                </div>
+                <span class="mini-badge">{{ 'default' if item.builtin else 'custom' }}</span>
+            </div>
+            <div class="terminal-shell">
+                <pre class="terminal-output">$ {{ item.command }}</pre>
+            </div>
+            <div class="saved-command-actions">
+                <form method="post" class="inline-form" {% if item.confirm %}data-confirm="Run {{ item.label }} now?"{% endif %} data-busy-label="Running {{ item.label }}...">
+                    <input type="hidden" name="action" value="run_command">
+                    <input type="hidden" name="command_id" value="{{ item.id }}">
+                    <button type="submit">Run</button>
+                </form>
+                {% if not item.builtin %}
+                <form method="post" class="inline-form" data-confirm="Remove {{ item.label }} from the saved buttons?">
+                    <input type="hidden" name="action" value="delete_command">
+                    <input type="hidden" name="command_id" value="{{ item.id }}">
+                    <button class="secondary" type="submit">Delete</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

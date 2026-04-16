@@ -16,10 +16,15 @@ from app.services.network_manager import (
 )
 from app.services.system_manager import (
     SystemManagerError,
+    add_technician_command,
+    delete_technician_command,
     get_system_summary,
+    get_technician_tools_state,
     get_update_status,
     request_system_reboot,
+    run_custom_technician_command,
     run_system_update,
+    run_technician_command,
     set_system_hostname,
 )
 
@@ -231,6 +236,51 @@ def system_settings():
     return render_template("system.html", system=system, update_status=update_status)
 
 
+@network_bp.route("/tools", methods=["GET", "POST"])
+@login_required
+def technician_tools():
+    if request.method == "POST":
+        action = request.form.get("action", "").strip()
+
+        try:
+            if action == "run_command":
+                result = run_technician_command(current_app.config, request.form.get("command_id", ""))
+            elif action == "run_custom":
+                result = run_custom_technician_command(
+                    current_app.config,
+                    request.form.get("custom_label", "Custom command"),
+                    request.form.get("custom_command", ""),
+                )
+            elif action == "add_command":
+                result = add_technician_command(
+                    current_app.config,
+                    request.form.get("label", ""),
+                    request.form.get("command", ""),
+                    request.form.get("description", ""),
+                    request.form.get("confirm") == "on",
+                )
+            elif action == "delete_command":
+                result = delete_technician_command(current_app.config, request.form.get("command_id", ""))
+            else:
+                result = {"success": False, "message": "Unknown technician action."}
+        except SystemManagerError as exc:
+            current_app.logger.exception("technician tools action error")
+            flash(str(exc), "error")
+            return redirect(url_for("network.technician_tools"))
+
+        flash(result["message"], "success" if result["success"] else "error")
+        return redirect(url_for("network.technician_tools"))
+
+    try:
+        tools_state = get_technician_tools_state(current_app.config)
+    except SystemManagerError as exc:
+        current_app.logger.exception("technician tools view error")
+        flash(str(exc), "error")
+        tools_state = _default_technician_tools_state()
+
+    return render_template("technician_tools.html", tools_state=tools_state)
+
+
 def _default_state() -> dict[str, object]:
     return {"hostname": "unavailable", "interfaces": [], "wifi_networks": [], "internet_access": False}
 
@@ -254,6 +304,10 @@ def _default_update_status() -> dict[str, object]:
         "message": "No recent update activity.",
         "log_excerpt": "",
     }
+
+
+def _default_technician_tools_state() -> dict[str, object]:
+    return {"commands": [], "last_result": None, "error": ""}
 
 
 def _default_datalogger_status() -> dict[str, object]:
