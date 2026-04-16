@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 
 from app.services import system_manager
@@ -8,6 +9,69 @@ class DummyResult:
         self.returncode = returncode
         self.stdout = stdout
         self.stderr = stderr
+
+
+class DummyProcess:
+    def __init__(self):
+        self.pid = 4242
+        self.stdout = ["Downloading layer 1\n", "Download complete\n"]
+
+    def wait(self):
+        return 0
+
+
+def test_start_custom_technician_command_creates_running_state(monkeypatch, tmp_path: Path):
+    captured = {}
+
+    def fake_popen(args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return DummyProcess()
+
+    class ImmediateThread:
+        def __init__(self, target=None, args=(), kwargs=None, daemon=None):
+            self._target = target
+            self._args = args
+            self._kwargs = kwargs or {}
+
+        def start(self):
+            if self._target:
+                self._target(*self._args, **self._kwargs)
+
+    class DummyTimer:
+        def __init__(self, interval, function, args=None, kwargs=None):
+            self.interval = interval
+            self.function = function
+            self.args = args or ()
+            self.kwargs = kwargs or {}
+            self.daemon = False
+
+        def start(self):
+            return None
+
+        def cancel(self):
+            return None
+
+    monkeypatch.setattr(system_manager, "_is_linux_target", lambda: True)
+    monkeypatch.setattr(system_manager.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(system_manager.threading, "Thread", ImmediateThread)
+    monkeypatch.setattr(system_manager.threading, "Timer", DummyTimer)
+
+    config = {
+        "TECHNICIAN_OUTPUT_FILE": str(tmp_path / "technician-output.json"),
+        "TECHNICIAN_COMMAND_TIMEOUT_SECONDS": 300,
+    }
+
+    result = system_manager.start_custom_technician_command(config, "Download image", "docker pull sample")
+    saved = (tmp_path / "technician-output.json").read_text(encoding="utf-8")
+
+    assert result["success"] is True
+    assert "started" in result["message"].lower()
+    assert captured["args"][0] == "/bin/bash"
+    assert captured["args"][1] == "-lc"
+    assert captured["kwargs"]["stdout"] == subprocess.PIPE
+    assert "Download complete" in saved
+
 
 
 def test_run_custom_technician_command_uses_linux_shell_env(monkeypatch, tmp_path: Path):

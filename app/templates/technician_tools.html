@@ -5,7 +5,7 @@
     <div>
         <p class="eyebrow">Technician workflow</p>
         <h2>Technician Tools</h2>
-        <p>Run non-admin maintenance commands, keep reusable quick buttons, and review the latest terminal output.</p>
+        <p>Run non-admin maintenance commands, keep reusable quick buttons, and follow live terminal output while they run.</p>
     </div>
     <div class="hero-actions">
         <span class="status-pill status-neutral">
@@ -55,25 +55,25 @@
         <div class="section-heading">
             <div>
                 <h3>Terminal output</h3>
-                <p>Most recent command result from this page.</p>
+                <p>Live output refreshes automatically while a command is running.</p>
             </div>
         </div>
 
-        <div class="terminal-shell" aria-label="Terminal output">
-            {% if tools_state.last_result %}
+        {% set terminal = tools_state.last_result or {} %}
+        {% set terminal_status = terminal.get('status', 'idle') %}
+        <div class="terminal-shell" aria-label="Terminal output" data-tools-status-url="{{ url_for('network.technician_tools_status') }}">
             <div class="terminal-meta">
-                <span><strong>Action:</strong> {{ tools_state.last_result.command_label }}</span>
-                <span><strong>Exit:</strong> {{ tools_state.last_result.exit_code }}</span>
-                {% if tools_state.last_result.ran_at %}
-                <span><strong>Time:</strong> {{ tools_state.last_result.ran_at }}</span>
-                {% endif %}
+                <span class="status-pill {{ 'status-neutral' if terminal_status == 'running' else ('status-online' if terminal_status == 'success' else ('status-offline' if terminal_status == 'error' else 'status-neutral')) }}">
+                    <span class="status-dot"></span>
+                    <span data-terminal-status>{{ 'Running' if terminal_status == 'running' else ('Complete' if terminal_status == 'success' else ('Error' if terminal_status == 'error' else 'Idle')) }}</span>
+                </span>
+                <span><strong>Action:</strong> <span data-terminal-action>{{ terminal.get('command_label', 'Idle') }}</span></span>
+                <span><strong>Exit:</strong> <span data-terminal-exit>{{ terminal.get('exit_code', '—') if terminal.get('exit_code') is not none else '—' }}</span></span>
+                <span><strong>Time:</strong> <span data-terminal-time>{{ terminal.get('ran_at', '—') }}</span></span>
             </div>
-            <pre class="terminal-output">$ {{ tools_state.last_result.command }}
-{{ tools_state.last_result.output }}</pre>
-            {% else %}
-            <pre class="terminal-output terminal-placeholder">No command has been run yet.
-Use a quick action or the custom command field below.</pre>
-            {% endif %}
+            <pre class="terminal-output{% if not terminal %} terminal-placeholder{% endif %}" data-terminal-output>{% if terminal %}$ {{ terminal.get('command', '') }}
+{{ terminal.get('output', '(no output)') }}{% else %}No command has been run yet.
+Use a quick action or the custom command field below.{% endif %}</pre>
         </div>
     </article>
 </section>
@@ -158,4 +158,54 @@ Use a quick action or the custom command field below.</pre>
         {% endfor %}
     </div>
 </section>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const terminalShell = document.querySelector('[data-tools-status-url]');
+    if (!terminalShell) return;
+
+    const statusUrl = terminalShell.getAttribute('data-tools-status-url');
+    const statusText = terminalShell.querySelector('[data-terminal-status]');
+    const actionText = terminalShell.querySelector('[data-terminal-action]');
+    const exitText = terminalShell.querySelector('[data-terminal-exit]');
+    const timeText = terminalShell.querySelector('[data-terminal-time]');
+    const outputText = terminalShell.querySelector('[data-terminal-output]');
+
+    function applyTerminalState(lastResult) {
+        const status = lastResult && lastResult.status ? lastResult.status : 'idle';
+        const statusLabel = status === 'running' ? 'Running' : (status === 'success' ? 'Complete' : (status === 'error' ? 'Error' : 'Idle'));
+        const statusClass = status === 'running' ? 'status-neutral' : (status === 'success' ? 'status-online' : (status === 'error' ? 'status-offline' : 'status-neutral'));
+        const pill = statusText ? statusText.closest('.status-pill') : null;
+
+        if (statusText) statusText.textContent = statusLabel;
+        if (pill) pill.className = 'status-pill ' + statusClass;
+        if (actionText) actionText.textContent = lastResult && lastResult.command_label ? lastResult.command_label : 'Idle';
+        if (exitText) exitText.textContent = lastResult && lastResult.exit_code !== null && lastResult.exit_code !== undefined ? String(lastResult.exit_code) : '—';
+        if (timeText) timeText.textContent = lastResult && lastResult.ran_at ? lastResult.ran_at : '—';
+        if (outputText) {
+            if (lastResult && lastResult.command) {
+                outputText.textContent = '$ ' + lastResult.command + '\n' + (lastResult.output || '(no output)');
+                outputText.classList.remove('terminal-placeholder');
+            } else {
+                outputText.textContent = 'No command has been run yet.\nUse a quick action or the custom command field below.';
+                outputText.classList.add('terminal-placeholder');
+            }
+            outputText.scrollTop = outputText.scrollHeight;
+        }
+    }
+
+    async function refreshTerminal() {
+        try {
+            const response = await fetch(statusUrl, { headers: { 'Accept': 'application/json' } });
+            if (!response.ok) return;
+            const data = await response.json();
+            applyTerminalState(data.last_result || null);
+        } catch (error) {
+            console.warn('terminal status refresh failed', error);
+        }
+    }
+
+    refreshTerminal();
+    window.setInterval(refreshTerminal, 2000);
+});
+</script>
 {% endblock %}

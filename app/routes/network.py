@@ -26,6 +26,8 @@ from app.services.system_manager import (
     run_system_update,
     run_technician_command,
     set_system_hostname,
+    start_custom_technician_command,
+    start_technician_command,
 )
 
 
@@ -265,9 +267,9 @@ def technician_tools():
 
         try:
             if action == "run_command":
-                result = run_technician_command(current_app.config, request.form.get("command_id", ""))
+                result = start_technician_command(current_app.config, request.form.get("command_id", ""))
             elif action == "run_custom":
-                result = run_custom_technician_command(
+                result = start_custom_technician_command(
                     current_app.config,
                     request.form.get("custom_label", "Custom command"),
                     request.form.get("custom_command", ""),
@@ -300,6 +302,16 @@ def technician_tools():
         tools_state = _default_technician_tools_state()
 
     return render_template("technician_tools.html", tools_state=tools_state)
+
+
+@network_bp.route("/tools/status")
+@login_required
+def technician_tools_status():
+    try:
+        return get_technician_tools_state(current_app.config)
+    except SystemManagerError as exc:
+        current_app.logger.exception("technician tools status error")
+        return _default_technician_tools_state()
 
 
 def _default_state() -> dict[str, object]:

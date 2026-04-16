@@ -6,6 +6,7 @@ import re
 import shutil
 import socket
 import subprocess
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -152,9 +153,23 @@ def run_system_update(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def get_technician_tools_state(config: dict[str, Any]) -> dict[str, Any]:
+    last_result = _read_technician_output(config)
+    if last_result and last_result.get("status") == "running" and not _is_process_running(last_result.get("pid")):
+        output = str(last_result.get("output", "")).strip()
+        if "timed out" not in output.lower():
+            output = f"{output}\n\nProcess ended unexpectedly.".strip()
+            last_result = {
+                **last_result,
+                "status": "error",
+                "exit_code": -1,
+                "output": output,
+                "finished_at": last_result.get("finished_at") or datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            }
+            _write_technician_output(config, last_result)
+
     return {
         "commands": _load_technician_commands(config),
-        "last_result": _read_technician_output(config),
+        "last_result": last_result,
         "error": "",
     }
 
@@ -199,6 +214,93 @@ def delete_technician_command(config: dict[str, Any], command_id: str) -> dict[s
 
     _save_technician_commands(config, remaining)
     return {"success": True, "message": "Saved button removed."}
+
+
+def start_technician_command(config: dict[str, Any], command_id: str) -> dict[str, Any]:
+    command_id = command_id.strip()
+    commands = _load_technician_commands(config)
+    selected = next((item for item in commands if item.get("id") == command_id), None)
+    if not selected:
+        return {"success": False, "message": "Saved button was not found."}
+
+    return start_custom_technician_command(config, selected.get("label", "Saved command"), selected.get("command", ""))
+
+
+def start_custom_technician_command(config: dict[str, Any], label: str, command: str) -> dict[str, Any]:
+    label = label.strip() or "Custom command"
+    command = command.strip()
+    if not command:
+        return {"success": False, "message": "A command is required."}
+
+    if command.startswith("sudo "):
+        _write_technician_output(
+            config,
+            {
+                "command_label": label,
+                "command": command,
+                "status": "error",
+                "exit_code": 1,
+                "output": "This page runs commands without sudo. Remove sudo from the saved button and use a full binary path like /usr/bin/docker.",
+                "ran_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            },
+        )
+        return {"success": False, "message": "This page runs commands without sudo. Remove sudo from the button."}
+
+    active = _read_technician_output(config)
+    if active and active.get("status") == "running" and _is_process_running(active.get("pid")):
+        return {"success": False, "message": "Another command is already running. Wait for it to finish first."}
+
+    working_directory = str(config.get("REPO_PATH", BASE_DIR))
+    command_env = _build_technician_command_env(config)
+    timeout = int(config.get("TECHNICIAN_COMMAND_TIMEOUT_SECONDS", 300))
+
+    if _is_linux_target():
+        bash_bin = str(config.get("BASH_BIN", "/bin/bash") or "/bin/bash")
+        run_args: Any = [bash_bin, "-lc", command]
+        popen_kwargs: dict[str, Any] = {
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.STDOUT,
+            "text": True,
+            "cwd": working_directory,
+            "env": command_env,
+            "bufsize": 1,
+        }
+    else:
+        run_args = command
+        popen_kwargs = {
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.STDOUT,
+            "text": True,
+            "cwd": working_directory,
+            "env": command_env,
+            "bufsize": 1,
+            "shell": True,
+        }
+
+    process = subprocess.Popen(run_args, **popen_kwargs)
+    payload = {
+        "command_label": label,
+        "command": command,
+        "status": "running",
+        "exit_code": None,
+        "output": "",
+        "ran_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "finished_at": "",
+        "pid": process.pid,
+    }
+    _write_technician_output(config, payload)
+
+    timeout_timer = threading.Timer(timeout, _terminate_technician_process, args=(config, process, payload, timeout))
+    timeout_timer.daemon = True
+    timeout_timer.start()
+    threading.Thread(
+        target=_stream_technician_process,
+        args=(config, process, payload, timeout_timer),
+        daemon=True,
+    ).start()
+
+    return {"success": True, "message": f"Started {label}. Live output is shown below."}
 
 
 def run_technician_command(config: dict[str, Any], command_id: str) -> dict[str, Any]:
@@ -260,27 +362,7 @@ def run_custom_technician_command(config: dict[str, Any], label: str, command: s
     try:
         result = subprocess.run(run_args, **run_kwargs)
         combined_output = "\n".join(part.strip() for part in [result.stdout or "", result.stderr or ""] if part.strip())
-        lower_output = combined_output.lower()
-        docker_permission_denied = "permission denied" in lower_output and "docker.sock" in lower_output
-
-        if result.returncode == 127:
-            combined_output = "\n".join(
-                part
-                for part in [
-                    combined_output or "Command returned code 127.",
-                    "Hint: the command was not found for the app user. Try a full path such as /usr/bin/docker and avoid sudo in this page.",
-                ]
-                if part
-            )
-        elif docker_permission_denied:
-            combined_output = "\n".join(
-                part
-                for part in [
-                    combined_output or "Docker access was denied.",
-                    "Hint: add pi-network-admin to the docker group and restart the pi-network-admin service.",
-                ]
-                if part
-            )
+        combined_output, docker_permission_denied = _decorate_technician_output(command, combined_output, result.returncode)
 
         payload = {
             "command_label": label,
@@ -306,17 +388,17 @@ def run_custom_technician_command(config: dict[str, Any], label: str, command: s
             ]
             if part and part.strip()
         )
-        timeout_note = f"Command timed out after {timeout} seconds."
-        if "docker" in command.lower():
-            timeout_note += " Large image pulls may need a higher technician timeout or a separate docker pull step."
+        timeout_note = _build_technician_timeout_note(command, timeout)
         _write_technician_output(
             config,
             {
                 "command_label": label,
                 "command": command,
+                "status": "error",
                 "exit_code": -1,
                 "output": timed_output or timeout_note,
                 "ran_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             },
         )
         return {"success": False, "message": f"{label} timed out after {timeout} seconds."}
@@ -324,6 +406,16 @@ def run_custom_technician_command(config: dict[str, Any], label: str, command: s
 
 def _is_linux_target() -> bool:
     return os.name == "posix" and os.uname().sysname.lower() == "linux"
+
+
+def _is_process_running(pid: Any) -> bool:
+    if not pid:
+        return False
+    try:
+        os.kill(int(pid), 0)
+    except (OSError, ValueError, TypeError):
+        return False
+    return True
 
 
 def _format_bytes(value: int) -> str:
@@ -407,6 +499,108 @@ def _build_technician_command_env(config: dict[str, Any]) -> dict[str, str]:
     return env
 
 
+def _stream_technician_process(
+    config: dict[str, Any],
+    process: subprocess.Popen[str],
+    payload: dict[str, Any],
+    timeout_timer: threading.Timer,
+) -> None:
+    output = str(payload.get("output", ""))
+    try:
+        if process.stdout is not None:
+            for line in process.stdout:
+                output = _append_technician_output(output, line)
+                _write_technician_output(config, {**payload, "status": "running", "exit_code": None, "output": output})
+
+        exit_code = process.wait()
+    finally:
+        timeout_timer.cancel()
+
+    latest = _read_technician_output(config) or payload
+    if latest.get("status") == "error" and latest.get("exit_code") == -1 and "timed out" in str(latest.get("output", "")).lower():
+        return
+
+    final_output, _ = _decorate_technician_output(str(payload.get("command", "")), output.strip(), exit_code)
+    _write_technician_output(
+        config,
+        {
+            **payload,
+            "status": "success" if exit_code == 0 else "error",
+            "exit_code": exit_code,
+            "output": final_output or "(no output)",
+            "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        },
+    )
+
+
+def _terminate_technician_process(
+    config: dict[str, Any],
+    process: subprocess.Popen[str],
+    payload: dict[str, Any],
+    timeout: int,
+) -> None:
+    if process.poll() is not None:
+        return
+
+    try:
+        process.kill()
+    except OSError:
+        pass
+
+    current = _read_technician_output(config) or payload
+    output = _append_technician_output(str(current.get("output", "")), "\n" + _build_technician_timeout_note(str(payload.get("command", "")), timeout))
+    _write_technician_output(
+        config,
+        {
+            **current,
+            "status": "error",
+            "exit_code": -1,
+            "output": output,
+            "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        },
+    )
+
+
+def _append_technician_output(existing: str, chunk: str, max_chars: int = 60000) -> str:
+    combined = f"{existing}{chunk.replace(chr(13), '')}"
+    if len(combined) > max_chars:
+        combined = combined[-max_chars:]
+    return combined
+
+
+def _build_technician_timeout_note(command: str, timeout: int) -> str:
+    note = f"Command timed out after {timeout} seconds."
+    if "docker" in command.lower():
+        note += " Large image pulls may need a higher technician timeout or a separate docker pull step."
+    return note
+
+
+def _decorate_technician_output(command: str, output: str, exit_code: int) -> tuple[str, bool]:
+    lower_output = output.lower()
+    docker_permission_denied = "permission denied" in lower_output and "docker.sock" in lower_output
+
+    if exit_code == 127:
+        output = "\n".join(
+            part
+            for part in [
+                output or "Command returned code 127.",
+                "Hint: the command was not found for the app user. Try a full path such as /usr/bin/docker and avoid sudo in this page.",
+            ]
+            if part
+        )
+    elif docker_permission_denied:
+        output = "\n".join(
+            part
+            for part in [
+                output or "Docker access was denied.",
+                "Hint: add pi-network-admin to the docker group and restart the pi-network-admin service.",
+            ]
+            if part
+        )
+
+    return output, docker_permission_denied
+
+
 def _load_technician_commands(config: dict[str, Any]) -> list[dict[str, Any]]:
     commands_path = Path(config.get("TECHNICIAN_COMMANDS_FILE", BASE_DIR / "config" / "technician_commands.json"))
     if not commands_path.exists():
@@ -464,7 +658,9 @@ def _read_technician_output(config: dict[str, Any]) -> dict[str, Any] | None:
 def _write_technician_output(config: dict[str, Any], payload: dict[str, Any]) -> None:
     output_path = Path(config.get("TECHNICIAN_OUTPUT_FILE", BASE_DIR / "technician-output.json"))
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    temp_path = output_path.with_suffix(output_path.suffix + ".tmp")
+    temp_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    temp_path.replace(output_path)
 
 
 def _build_unique_command_id(commands: list[dict[str, Any]], label: str) -> str:

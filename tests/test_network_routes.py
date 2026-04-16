@@ -263,8 +263,8 @@ def test_technician_tools_post_can_run_saved_button(client, monkeypatch):
     calls = []
     monkeypatch.setattr(
         network_routes,
-        "run_technician_command",
-        lambda config, command_id: calls.append(command_id) or {"success": True, "message": "Ran command."},
+        "start_technician_command",
+        lambda config, command_id: calls.append(command_id) or {"success": True, "message": "Started command."},
     )
     monkeypatch.setattr(
         network_routes,
@@ -277,6 +277,33 @@ def test_technician_tools_post_can_run_saved_button(client, monkeypatch):
 
     assert response.status_code == 302
     assert calls == ["show-date"]
+
+
+
+def test_technician_tools_status_api_returns_live_terminal_state(client, monkeypatch):
+    monkeypatch.setattr(
+        network_routes,
+        "get_technician_tools_state",
+        lambda config: {
+            "commands": [],
+            "last_result": {
+                "command_label": "Download plcreader",
+                "command": "docker pull sample",
+                "status": "running",
+                "exit_code": None,
+                "output": "Pulling fs layer",
+                "ran_at": "2026-04-16 17:30:00",
+            },
+            "error": "",
+        },
+    )
+
+    _login(client)
+    response = client.get("/tools/status")
+
+    assert response.status_code == 200
+    assert response.is_json
+    assert response.get_json()["last_result"]["status"] == "running"
 
 
 
