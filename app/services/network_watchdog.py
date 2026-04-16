@@ -30,14 +30,17 @@ class FailoverWatchdog:
             logger.info("watchdog disabled by configuration")
             return
 
-        self._configure_route_metrics()
-        self.using_backup = self._is_backup_active()
+        primary_name = self._configured_connection_name(self.config["PRIMARY_INTERFACE"])
+        primary_healthy = self._interface_is_healthy(self.config["PRIMARY_INTERFACE"], primary_name)
+        self.using_backup = self._is_backup_active() and not primary_healthy
+        self._configure_route_metrics(prefer_backup=self.using_backup)
         logger.info(
-            "watchdog started primary=%s backup=%s target=%s interval=%s",
+            "watchdog started primary=%s backup=%s target=%s interval=%s using_backup=%s",
             self.config["PRIMARY_INTERFACE"],
             self.config["BACKUP_INTERFACE"],
             self.config["WATCHDOG_TARGET_HOST"],
             self.config["WATCHDOG_INTERVAL_SECONDS"],
+            self.using_backup,
         )
 
         while True:
@@ -55,6 +58,7 @@ class FailoverWatchdog:
                 if self.primary_recoveries >= self.config["WATCHDOG_RECOVERY_THRESHOLD"]:
                     switched = self._activate_interface(self.config["PRIMARY_INTERFACE"], primary_name)
                     if switched:
+                        self._configure_route_metrics(prefer_backup=False)
                         self.using_backup = False
                         self.primary_recoveries = 0
                         logger.info("restored primary interface=%s", self.config["PRIMARY_INTERFACE"])
@@ -78,6 +82,7 @@ class FailoverWatchdog:
         backup_name = self._configured_connection_name(self.config["BACKUP_INTERFACE"])
         switched = self._activate_interface(self.config["BACKUP_INTERFACE"], backup_name)
         if switched:
+            self._configure_route_metrics(prefer_backup=True)
             self.using_backup = True
             logger.warning("failed over to backup interface=%s", self.config["BACKUP_INTERFACE"])
             return {"status": "failed-over"}
@@ -85,14 +90,20 @@ class FailoverWatchdog:
         logger.error("backup activation failed interface=%s", self.config["BACKUP_INTERFACE"])
         return {"status": "backup-unavailable"}
 
-    def _configure_route_metrics(self) -> None:
-        for interface_name, metric in (
-            (self.config["PRIMARY_INTERFACE"], self.config["PRIMARY_ROUTE_METRIC"]),
-            (self.config["BACKUP_INTERFACE"], self.config["BACKUP_ROUTE_METRIC"]),
-        ):
+    def _configure_route_metrics(self, prefer_backup: bool = False) -> None:
+        primary_metric = self.config["PRIMARY_ROUTE_METRIC"]
+        backup_metric = self.config["BACKUP_ROUTE_METRIC"]
+        metric_by_interface = {
+            self.config["PRIMARY_INTERFACE"]: backup_metric if prefer_backup else primary_metric,
+            self.config["BACKUP_INTERFACE"]: primary_metric if prefer_backup else backup_metric,
+        }
+
+        for interface_name in (self.config["PRIMARY_INTERFACE"], self.config["BACKUP_INTERFACE"]):
             connection_name = self._configured_connection_name(interface_name)
             if not connection_name:
                 continue
+
+            metric = metric_by_interface[interface_name]
             try:
                 set_connection_metric(self.config, connection_name, metric)
             except NetworkManagerError as exc:

@@ -27,6 +27,7 @@ def test_watchdog_fails_over_after_threshold(monkeypatch):
 
     monkeypatch.setattr(watchdog, "_interface_is_healthy", lambda interface_name, connection_name: next(health_checks))
     monkeypatch.setattr(watchdog, "_activate_interface", lambda interface_name, connection_name: activations.append((interface_name, connection_name)) or True)
+    monkeypatch.setattr(network_watchdog, "set_connection_metric", lambda config, connection_name, route_metric: None)
 
     first = watchdog.run_once()
     second = watchdog.run_once()
@@ -44,6 +45,7 @@ def test_watchdog_restores_primary_after_recovery_threshold(monkeypatch):
 
     monkeypatch.setattr(watchdog, "_interface_is_healthy", lambda interface_name, connection_name: True)
     monkeypatch.setattr(watchdog, "_activate_interface", lambda interface_name, connection_name: activations.append((interface_name, connection_name)) or True)
+    monkeypatch.setattr(network_watchdog, "set_connection_metric", lambda config, connection_name, route_metric: None)
 
     first = watchdog.run_once()
     second = watchdog.run_once()
@@ -52,6 +54,46 @@ def test_watchdog_restores_primary_after_recovery_threshold(monkeypatch):
     assert second["status"] == "restored-primary"
     assert activations == [("eth0", "Wired connection 1")]
     assert watchdog.using_backup is False
+
+
+def test_watchdog_prefers_backup_routes_after_failover(monkeypatch):
+    watchdog = network_watchdog.FailoverWatchdog(dict(BASE_CONFIG))
+    health_checks = iter([False, False])
+    route_metrics = []
+
+    monkeypatch.setattr(watchdog, "_interface_is_healthy", lambda interface_name, connection_name: next(health_checks))
+    monkeypatch.setattr(watchdog, "_activate_interface", lambda interface_name, connection_name: True)
+    monkeypatch.setattr(
+        network_watchdog,
+        "set_connection_metric",
+        lambda config, connection_name, route_metric: route_metrics.append((connection_name, route_metric)),
+    )
+
+    watchdog.run_once()
+    result = watchdog.run_once()
+
+    assert result["status"] == "failed-over"
+    assert route_metrics == [("Wired connection 1", 200), ("PlantWiFi", 100)]
+
+
+def test_watchdog_restores_primary_route_priority_after_recovery(monkeypatch):
+    watchdog = network_watchdog.FailoverWatchdog(dict(BASE_CONFIG))
+    watchdog.using_backup = True
+    route_metrics = []
+
+    monkeypatch.setattr(watchdog, "_interface_is_healthy", lambda interface_name, connection_name: True)
+    monkeypatch.setattr(watchdog, "_activate_interface", lambda interface_name, connection_name: True)
+    monkeypatch.setattr(
+        network_watchdog,
+        "set_connection_metric",
+        lambda config, connection_name, route_metric: route_metrics.append((connection_name, route_metric)),
+    )
+
+    watchdog.run_once()
+    result = watchdog.run_once()
+
+    assert result["status"] == "restored-primary"
+    assert route_metrics == [("Wired connection 1", 100), ("PlantWiFi", 200)]
 
 
 def test_watchdog_uses_active_connection_name_when_not_configured(monkeypatch):
