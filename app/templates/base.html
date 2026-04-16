@@ -12,14 +12,14 @@
         {% if is_authenticated %}
         <aside class="sidebar">
             <div class="sidebar-brand">
-                <p class="eyebrow">Local technician access</p>
-                <h1>{{ config.APP_NAME }}</h1>
+                <p class="eyebrow">Host name</p>
+                <h1>{{ request.host.split(':')[0] }}</h1>
+                <p class="muted-note sidebar-subtitle">{{ config.APP_NAME }}</p>
             </div>
             <nav class="sidebar-nav">
-                <a class="{{ 'active' if request.endpoint == 'network.dashboard' else '' }}" href="{{ url_for('network.dashboard') }}">Dashboard</a>
+                <a class="{{ 'active' if request.endpoint == 'network.datalogger' else '' }}" href="{{ url_for('network.datalogger') }}">Datalogger</a>
                 <a class="{{ 'active' if request.endpoint == 'network.wifi_settings' else '' }}" href="{{ url_for('network.wifi_settings') }}">WiFi client</a>
                 <a class="{{ 'active' if request.endpoint == 'network.ethernet_settings' else '' }}" href="{{ url_for('network.ethernet_settings') }}">Ethernet</a>
-                <a class="{{ 'active' if request.endpoint == 'network.datalogger' else '' }}" href="{{ url_for('network.datalogger') }}">Datalogger</a>
                 <a class="{{ 'active' if request.endpoint == 'network.system_settings' else '' }}" href="{{ url_for('network.system_settings') }}">System</a>
                 <a class="{{ 'active' if request.endpoint == 'network.technician_tools' else '' }}" href="{{ url_for('network.technician_tools') }}">Tech tools</a>
             </nav>
@@ -35,8 +35,9 @@
             {% if not is_authenticated %}
             <header class="site-header">
                 <div>
-                    <p class="eyebrow">Local technician access</p>
-                    <h1>{{ config.APP_NAME }}</h1>
+                    <p class="eyebrow">Host name</p>
+                    <h1>{{ request.host.split(':')[0] }}</h1>
+                    <p class="muted-note">{{ config.APP_NAME }}</p>
                 </div>
             </header>
             {% endif %}

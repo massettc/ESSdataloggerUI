@@ -44,20 +44,48 @@ def test_wifi_page_prefills_selected_network_from_query(client, monkeypatch):
     assert b"Offline" in response.data
 
 
-def test_sidebar_includes_datalogger_system_and_tools_links(client, monkeypatch):
+def test_sidebar_prioritizes_datalogger_and_hides_dashboard_link(client, monkeypatch):
+    monkeypatch.setattr(
+        network_routes,
+        "get_datalogger_status",
+        lambda config, host=None: {
+            "docker_available": True,
+            "docker_running": True,
+            "portainer_installed": True,
+            "portainer_running": True,
+            "portainer_url": "http://ess-pi:9000",
+            "mqtt_ui_url": "http://ess-pi:8080",
+            "active_logger": "MQTT Logger",
+            "warnings": [],
+            "mqtt_logger": {},
+            "plc_logger": {},
+            "containers": [],
+            "error": "",
+        },
+    )
     monkeypatch.setattr(
         network_routes,
         "get_dashboard_state",
-        lambda config: {"hostname": "pi", "interfaces": [], "wifi_networks": [], "internet_access": True},
+        lambda config: {
+            "hostname": "ess-pi",
+            "interfaces": [{"device": "wlan0", "type": "wifi", "state": "connected", "connection": "PlantWiFi"}],
+            "wifi_networks": [],
+            "internet_access": True,
+        },
     )
 
     _login(client)
-    response = client.get("/dashboard")
+    response = client.get("/datalogger")
 
     assert response.status_code == 200
     assert b"Datalogger" in response.data
     assert b"System" in response.data
     assert b"Tech tools" in response.data
+    assert b'href="/dashboard"' not in response.data
+    assert b"localhost" in response.data
+    assert b"Internet status" in response.data
+    assert b"WiFi status" in response.data
+    assert b"PlantWiFi" in response.data
 
 
 def test_datalogger_page_shows_portainer_status(client, monkeypatch):

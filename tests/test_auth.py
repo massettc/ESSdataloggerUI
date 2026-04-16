@@ -7,7 +7,7 @@ def test_dashboard_is_accessible_without_login_by_default(client):
     response = client.get("/dashboard")
 
     assert response.status_code == 200
-    assert b"Dashboard" in response.data
+    assert b"Interface Status" in response.data
 
 
 def test_login_logout_flow_when_auth_is_enabled(tmp_path):
@@ -36,8 +36,15 @@ def test_login_logout_flow_when_auth_is_enabled(tmp_path):
 
     response = client.post("/login", data={"password": "secret123"})
     assert response.status_code == 302
-    assert "/dashboard" in response.headers["Location"]
+    assert "/datalogger" in response.headers["Location"]
 
     response = client.post("/logout", follow_redirects=True)
     assert response.status_code == 200
     assert b"Logged out." in response.data
+
+
+def test_root_redirects_to_datalogger(client):
+    response = client.get("/", follow_redirects=False)
+
+    assert response.status_code == 302
+    assert "/datalogger" in response.headers["Location"]

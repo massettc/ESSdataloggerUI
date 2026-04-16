@@ -45,6 +45,11 @@ body {
 
 .sidebar-brand h1 {
     font-size: 1.4rem;
+    margin-bottom: 0.25rem;
+}
+
+.sidebar-subtitle {
+    margin: 0;
 }
 
 .sidebar-nav {
@@ -133,6 +138,26 @@ p {
 .hero-actions {
     display: flex;
     gap: 0.75rem;
+}
+
+.hero-status-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin: 0 0 0.9rem;
+}
+
+.hero-status-chip {
+    display: grid;
+    gap: 0.35rem;
+}
+
+.hero-status-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
 }
 
 .auth-panel {

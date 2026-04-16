@@ -7,6 +7,16 @@
     <div>
         <p class="eyebrow">Data collection</p>
         <h2>Datalogger</h2>
+        <div class="hero-status-row">
+            <div class="hero-status-chip">
+                <span class="hero-status-label">Internet status</span>
+                <span id="internet-pill" class="status-pill {{ connectivity.get('internet_class', 'status-neutral') }}"><span class="status-dot"></span>{{ connectivity.get('internet_label', 'Unknown') }}</span>
+            </div>
+            <div class="hero-status-chip">
+                <span class="hero-status-label">WiFi status</span>
+                <span id="wifi-pill" class="status-pill {{ connectivity.get('wifi_class', 'status-neutral') }}"><span class="status-dot"></span>{{ connectivity.get('wifi_label', 'Unknown') }}</span>
+            </div>
+        </div>
         <p>Use this page as the technician-friendly entry point to confirm which logger is active and whether data is still flowing.</p>
     </div>
     <div class="hero-actions">

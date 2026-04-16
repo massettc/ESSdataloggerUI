@@ -12,17 +12,17 @@ auth_bp = Blueprint("auth", __name__)
 def login():
     if not _auth_enabled():
         session["authenticated"] = True
-        return redirect(url_for("network.dashboard"))
+        return redirect(url_for("network.datalogger"))
 
     if session.get("authenticated"):
-        return redirect(url_for("network.dashboard"))
+        return redirect(url_for("network.datalogger"))
 
     if request.method == "POST":
         password = request.form.get("password", "")
         if _is_valid_password(password):
             session["authenticated"] = True
             current_app.logger.info("successful login")
-            return redirect(url_for("network.dashboard"))
+            return redirect(url_for("network.datalogger"))
 
         current_app.logger.warning("failed login")
         flash("Invalid password.", "error")
@@ -36,7 +36,7 @@ def logout():
     if _auth_enabled():
         flash("Logged out.", "info")
         return redirect(url_for("auth.login"))
-    return redirect(url_for("network.dashboard"))
+    return redirect(url_for("network.datalogger"))
 
 
 @auth_bp.route("/health")

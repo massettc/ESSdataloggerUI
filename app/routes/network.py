@@ -185,7 +185,15 @@ def datalogger():
         datalogger_status = _default_datalogger_status()
         datalogger_status["error"] = str(exc)
 
-    return render_template("datalogger.html", datalogger_status=datalogger_status)
+    try:
+        state = get_dashboard_state(current_app.config)
+    except NetworkManagerError as exc:
+        current_app.logger.exception("datalogger connectivity state error")
+        flash(str(exc), "error")
+        state = _default_state()
+
+    connectivity = _build_connectivity_badges(state, current_app.config)
+    return render_template("datalogger.html", datalogger_status=datalogger_status, state=state, connectivity=connectivity)
 
 
 @network_bp.route("/datalogger/status")
@@ -296,6 +304,37 @@ def technician_tools():
 
 def _default_state() -> dict[str, object]:
     return {"hostname": "unavailable", "interfaces": [], "wifi_networks": [], "internet_access": False}
+
+
+def _build_connectivity_badges(state: dict[str, object], config: dict[str, object]) -> dict[str, str]:
+    interfaces = state.get("interfaces", []) if isinstance(state, dict) else []
+    wifi_device = str(config.get("WIFI_INTERFACE", "wlan0"))
+    wifi_interface = next(
+        (item for item in interfaces if isinstance(item, dict) and item.get("device") == wifi_device),
+        None,
+    )
+
+    internet_access = bool(state.get("internet_access")) if isinstance(state, dict) else False
+    internet_label = "Online" if internet_access else "Offline"
+    internet_class = "status-online" if internet_access else "status-offline"
+
+    wifi_state = str((wifi_interface or {}).get("state", "")).lower()
+    wifi_connected = "connected" in wifi_state
+    wifi_connection = str((wifi_interface or {}).get("connection", "")).strip()
+    if wifi_connected and wifi_connection and wifi_connection != "-":
+        wifi_label = wifi_connection
+    elif wifi_connected:
+        wifi_label = "Connected"
+    else:
+        wifi_label = "Offline"
+    wifi_class = "status-online" if wifi_connected else "status-offline"
+
+    return {
+        "internet_label": internet_label,
+        "internet_class": internet_class,
+        "wifi_label": wifi_label,
+        "wifi_class": wifi_class,
+    }
 
 
 def _default_ipv4_config() -> dict[str, str]:

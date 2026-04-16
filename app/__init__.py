@@ -24,7 +24,7 @@ def create_app(config_overrides: dict[str, Any] | None = None) -> Flask:
 
     @app.route("/")
     def index():
-        return redirect(url_for("network.dashboard"))
+        return redirect(url_for("network.datalogger"))
 
     return app
 
