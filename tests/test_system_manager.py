@@ -142,3 +142,24 @@ def test_run_custom_technician_command_adds_docker_permission_hint(monkeypatch, 
     assert result["success"] is False
     assert "docker access denied" in result["message"].lower()
     assert "docker group" in saved.lower()
+
+
+
+def test_start_custom_technician_command_handles_launch_error(monkeypatch, tmp_path: Path):
+    def fake_popen(args, **kwargs):
+        raise PermissionError("launch failed")
+
+    monkeypatch.setattr(system_manager, "_is_linux_target", lambda: True)
+    monkeypatch.setattr(system_manager.subprocess, "Popen", fake_popen)
+
+    config = {
+        "TECHNICIAN_OUTPUT_FILE": str(tmp_path / "technician-output.json"),
+        "TECHNICIAN_COMMAND_TIMEOUT_SECONDS": 300,
+    }
+
+    result = system_manager.start_custom_technician_command(config, "Broken command", "docker pull sample")
+    saved = (tmp_path / "technician-output.json").read_text(encoding="utf-8")
+
+    assert result["success"] is False
+    assert "unable to start" in result["message"].lower()
+    assert "launch failed" in saved.lower()

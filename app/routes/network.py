@@ -286,7 +286,7 @@ def technician_tools():
                 result = delete_technician_command(current_app.config, request.form.get("command_id", ""))
             else:
                 result = {"success": False, "message": "Unknown technician action."}
-        except SystemManagerError as exc:
+        except Exception as exc:
             current_app.logger.exception("technician tools action error")
             flash(str(exc), "error")
             return redirect(url_for("network.technician_tools"))
@@ -296,7 +296,7 @@ def technician_tools():
 
     try:
         tools_state = get_technician_tools_state(current_app.config)
-    except SystemManagerError as exc:
+    except Exception as exc:
         current_app.logger.exception("technician tools view error")
         flash(str(exc), "error")
         tools_state = _default_technician_tools_state()
@@ -309,7 +309,7 @@ def technician_tools():
 def technician_tools_status():
     try:
         return get_technician_tools_state(current_app.config)
-    except SystemManagerError as exc:
+    except Exception as exc:
         current_app.logger.exception("technician tools status error")
         return _default_technician_tools_state()
 

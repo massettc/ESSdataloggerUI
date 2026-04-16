@@ -278,7 +278,22 @@ def start_custom_technician_command(config: dict[str, Any], label: str, command:
             "shell": True,
         }
 
-    process = subprocess.Popen(run_args, **popen_kwargs)
+    try:
+        process = subprocess.Popen(run_args, **popen_kwargs)
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        payload = {
+            "command_label": label,
+            "command": command,
+            "status": "error",
+            "exit_code": 1,
+            "output": f"Unable to start the command: {exc}",
+            "ran_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "pid": None,
+        }
+        _write_technician_output(config, payload)
+        return {"success": False, "message": f"Unable to start {label}."}
+
     payload = {
         "command_label": label,
         "command": command,
