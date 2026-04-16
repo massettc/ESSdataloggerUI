@@ -33,6 +33,7 @@ def test_run_custom_technician_command_uses_linux_shell_env(monkeypatch, tmp_pat
     assert captured["args"][1] == "-lc"
     assert captured["args"][2] == "docker ps"
     assert "/usr/bin" in captured["kwargs"]["env"]["PATH"]
+    assert captured["kwargs"]["timeout"] == 300
 
 
 def test_run_custom_technician_command_adds_helpful_127_hint(monkeypatch, tmp_path: Path):

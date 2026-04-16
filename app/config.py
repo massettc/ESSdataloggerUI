@@ -47,6 +47,7 @@ class Config:
     TECHNICIAN_COMMAND_PATH = os.getenv(
         "PI_ADMIN_TECHNICIAN_COMMAND_PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
     )
+    TECHNICIAN_COMMAND_TIMEOUT_SECONDS = int(os.getenv("PI_ADMIN_TECHNICIAN_COMMAND_TIMEOUT_SECONDS", "300"))
     DISK_USAGE_PATH = os.getenv("PI_ADMIN_DISK_USAGE_PATH", "/")
     PING_BIN = os.getenv("PI_ADMIN_PING_BIN", "ping")
     COMMAND_TIMEOUT_SECONDS = int(os.getenv("PI_ADMIN_COMMAND_TIMEOUT_SECONDS", "15"))

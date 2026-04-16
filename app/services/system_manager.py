@@ -230,7 +230,7 @@ def run_custom_technician_command(config: dict[str, Any], label: str, command: s
         )
         return {"success": False, "message": "This page runs commands without sudo. Remove sudo from the button."}
 
-    timeout = int(config.get("COMMAND_TIMEOUT_SECONDS", 15))
+    timeout = int(config.get("TECHNICIAN_COMMAND_TIMEOUT_SECONDS", 300))
     working_directory = str(config.get("REPO_PATH", BASE_DIR))
     command_env = _build_technician_command_env(config)
 
@@ -306,13 +306,16 @@ def run_custom_technician_command(config: dict[str, Any], label: str, command: s
             ]
             if part and part.strip()
         )
+        timeout_note = f"Command timed out after {timeout} seconds."
+        if "docker" in command.lower():
+            timeout_note += " Large image pulls may need a higher technician timeout or a separate docker pull step."
         _write_technician_output(
             config,
             {
                 "command_label": label,
                 "command": command,
                 "exit_code": -1,
-                "output": timed_output or f"Command timed out after {timeout} seconds.",
+                "output": timed_output or timeout_note,
                 "ran_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             },
         )
