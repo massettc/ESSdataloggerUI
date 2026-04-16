@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import socket
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,11 @@ def create_app(config_overrides: dict[str, Any] | None = None) -> Flask:
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(network_bp)
+
+    @app.context_processor
+    def inject_shell_context() -> dict[str, str]:
+        configured_hostname = str(app.config.get("DEVICE_HOSTNAME", "")).strip()
+        return {"device_hostname": configured_hostname or socket.gethostname()}
 
     @app.route("/")
     def index():

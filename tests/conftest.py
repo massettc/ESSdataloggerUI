@@ -16,6 +16,7 @@ def app(tmp_path: Path):
         {
             "TESTING": True,
             "SECRET_KEY": "test-secret",
+            "DEVICE_HOSTNAME": "ess-pi",
             "PASSWORD_HASH_FILE": str(password_file),
             "LOG_PATH": str(log_file),
         }

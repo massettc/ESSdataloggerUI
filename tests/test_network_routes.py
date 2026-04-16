@@ -82,7 +82,7 @@ def test_sidebar_prioritizes_datalogger_and_hides_dashboard_link(client, monkeyp
     assert b"System" in response.data
     assert b"Tech tools" in response.data
     assert b'href="/dashboard"' not in response.data
-    assert b"localhost" in response.data
+    assert b"<h1>ess-pi</h1>" in response.data
     assert b"Internet status" in response.data
     assert b"WiFi status" in response.data
     assert b"PlantWiFi" in response.data

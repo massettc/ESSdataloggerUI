@@ -13,7 +13,7 @@
         <aside class="sidebar">
             <div class="sidebar-brand">
                 <p class="eyebrow">Host name</p>
-                <h1>{{ request.host.split(':')[0] }}</h1>
+                <h1>{{ device_hostname }}</h1>
                 <p class="muted-note sidebar-subtitle">{{ config.APP_NAME }}</p>
             </div>
             <nav class="sidebar-nav">
@@ -36,7 +36,7 @@
             <header class="site-header">
                 <div>
                     <p class="eyebrow">Host name</p>
-                    <h1>{{ request.host.split(':')[0] }}</h1>
+                    <h1>{{ device_hostname }}</h1>
                     <p class="muted-note">{{ config.APP_NAME }}</p>
                 </div>
             </header>
