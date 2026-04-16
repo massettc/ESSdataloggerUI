@@ -105,6 +105,24 @@ def test_set_connection_ipv4_config_uses_nmcli_modify(monkeypatch):
     ]]
 
 
+def test_set_connection_never_default_uses_nmcli_modify(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(network_manager, "_run_nmcli", lambda config, arguments: calls.append(arguments) or "")
+
+    network_manager.set_connection_never_default({}, "Wired connection 1", enabled=True)
+
+    assert calls == [[
+        "connection",
+        "modify",
+        "Wired connection 1",
+        "ipv4.never-default",
+        "yes",
+        "ipv6.never-default",
+        "yes",
+    ]]
+
+
 def test_build_nmcli_command_uses_sudo_for_mutating_commands():
     command = network_manager._build_nmcli_command(
         {"NMCLI_BIN": "nmcli", "USE_SUDO_FOR_NMCLI": True},

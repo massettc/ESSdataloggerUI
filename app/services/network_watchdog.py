@@ -11,7 +11,9 @@ from app.services.network_manager import (
     bring_up_connection,
     connect_device,
     get_active_connection,
+    reapply_device,
     set_connection_metric,
+    set_connection_never_default,
 )
 
 
@@ -115,14 +117,27 @@ class FailoverWatchdog:
             metric = metric_by_interface[interface_name]
             try:
                 set_connection_metric(self.config, connection_name, metric)
+                set_connection_never_default(
+                    self.config,
+                    connection_name,
+                    enabled=self._should_never_default(interface_name, prefer_backup),
+                )
+                reapply_device(self.config, interface_name)
             except NetworkManagerError as exc:
                 logger.warning(
-                    "unable to set route metric interface=%s connection=%s metric=%s error=%s",
+                    "unable to apply routing policy interface=%s connection=%s metric=%s error=%s",
                     interface_name,
                     connection_name,
                     metric,
                     exc,
                 )
+
+    def _should_never_default(self, interface_name: str, prefer_backup: bool) -> bool:
+        if self.config.get("PREFER_WLAN_FOR_INTERNET", False):
+            return interface_name == self.config["ETHERNET_INTERFACE"]
+        if prefer_backup:
+            return interface_name == self.config["PRIMARY_INTERFACE"]
+        return interface_name == self.config["BACKUP_INTERFACE"]
 
     def _configured_connection_name(self, interface_name: str) -> str | None:
         if interface_name == self.config["PRIMARY_INTERFACE"]:

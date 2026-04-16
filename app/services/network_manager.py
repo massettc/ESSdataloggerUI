@@ -205,6 +205,25 @@ def set_connection_metric(config: dict[str, Any], connection_name: str, route_me
     )
 
 
+def set_connection_never_default(config: dict[str, Any], connection_name: str, enabled: bool) -> None:
+    _run_nmcli(
+        config,
+        [
+            "connection",
+            "modify",
+            connection_name,
+            "ipv4.never-default",
+            "yes" if enabled else "no",
+            "ipv6.never-default",
+            "yes" if enabled else "no",
+        ],
+    )
+
+
+def reapply_device(config: dict[str, Any], interface_name: str) -> None:
+    _run_nmcli(config, ["device", "reapply", interface_name])
+
+
 def connect_wifi(config: dict[str, Any], ssid: str, password: str, hidden: bool) -> None:
     command = [
         "device",
@@ -444,6 +463,7 @@ def _is_mutating_nmcli_command(arguments: list[str]) -> bool:
         ("connection", "modify"),
         ("connection", "up"),
         ("device", "connect"),
+        ("device", "reapply"),
         ("device", "wifi", "connect"),
         ("device", "wifi", "rescan"),
     }

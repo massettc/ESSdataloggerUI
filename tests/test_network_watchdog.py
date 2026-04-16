@@ -36,6 +36,8 @@ def test_watchdog_fails_over_after_threshold(monkeypatch):
     monkeypatch.setattr(watchdog, "_interface_is_healthy", lambda interface_name, connection_name: next(health_checks))
     monkeypatch.setattr(watchdog, "_activate_interface", lambda interface_name, connection_name: activations.append((interface_name, connection_name)) or True)
     monkeypatch.setattr(network_watchdog, "set_connection_metric", lambda config, connection_name, route_metric: None)
+    monkeypatch.setattr(network_watchdog, "set_connection_never_default", lambda config, connection_name, enabled: None)
+    monkeypatch.setattr(network_watchdog, "reapply_device", lambda config, interface_name: None)
 
     first = watchdog.run_once()
     second = watchdog.run_once()
@@ -54,6 +56,8 @@ def test_watchdog_restores_primary_after_recovery_threshold(monkeypatch):
     monkeypatch.setattr(watchdog, "_interface_is_healthy", lambda interface_name, connection_name: True)
     monkeypatch.setattr(watchdog, "_activate_interface", lambda interface_name, connection_name: activations.append((interface_name, connection_name)) or True)
     monkeypatch.setattr(network_watchdog, "set_connection_metric", lambda config, connection_name, route_metric: None)
+    monkeypatch.setattr(network_watchdog, "set_connection_never_default", lambda config, connection_name, enabled: None)
+    monkeypatch.setattr(network_watchdog, "reapply_device", lambda config, interface_name: None)
 
     first = watchdog.run_once()
     second = watchdog.run_once()
@@ -68,6 +72,7 @@ def test_watchdog_prefers_backup_routes_after_failover(monkeypatch):
     watchdog = network_watchdog.FailoverWatchdog(dict(BASE_CONFIG))
     health_checks = iter([False, False])
     route_metrics = []
+    default_route_flags = []
 
     monkeypatch.setattr(watchdog, "_interface_is_healthy", lambda interface_name, connection_name: next(health_checks))
     monkeypatch.setattr(watchdog, "_activate_interface", lambda interface_name, connection_name: True)
@@ -76,18 +81,26 @@ def test_watchdog_prefers_backup_routes_after_failover(monkeypatch):
         "set_connection_metric",
         lambda config, connection_name, route_metric: route_metrics.append((connection_name, route_metric)),
     )
+    monkeypatch.setattr(
+        network_watchdog,
+        "set_connection_never_default",
+        lambda config, connection_name, enabled: default_route_flags.append((connection_name, enabled)),
+    )
+    monkeypatch.setattr(network_watchdog, "reapply_device", lambda config, interface_name: None)
 
     watchdog.run_once()
     result = watchdog.run_once()
 
     assert result["status"] == "failed-over"
     assert route_metrics == [("Wired connection 1", 200), ("PlantWiFi", 100)]
+    assert default_route_flags == [("Wired connection 1", True), ("PlantWiFi", False)]
 
 
 def test_watchdog_restores_primary_route_priority_after_recovery(monkeypatch):
     watchdog = network_watchdog.FailoverWatchdog(dict(BASE_CONFIG))
     watchdog.using_backup = True
     route_metrics = []
+    default_route_flags = []
 
     monkeypatch.setattr(watchdog, "_interface_is_healthy", lambda interface_name, connection_name: True)
     monkeypatch.setattr(watchdog, "_activate_interface", lambda interface_name, connection_name: True)
@@ -96,12 +109,19 @@ def test_watchdog_restores_primary_route_priority_after_recovery(monkeypatch):
         "set_connection_metric",
         lambda config, connection_name, route_metric: route_metrics.append((connection_name, route_metric)),
     )
+    monkeypatch.setattr(
+        network_watchdog,
+        "set_connection_never_default",
+        lambda config, connection_name, enabled: default_route_flags.append((connection_name, enabled)),
+    )
+    monkeypatch.setattr(network_watchdog, "reapply_device", lambda config, interface_name: None)
 
     watchdog.run_once()
     result = watchdog.run_once()
 
     assert result["status"] == "restored-primary"
     assert route_metrics == [("PlantWiFi", 100), ("Wired connection 1", 200)]
+    assert default_route_flags == [("PlantWiFi", False), ("Wired connection 1", True)]
 
 
 def test_watchdog_uses_active_connection_name_when_not_configured(monkeypatch):

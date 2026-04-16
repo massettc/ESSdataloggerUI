@@ -19,6 +19,7 @@ from app.services.network_manager import (
     is_ethernet_connected,
     is_wifi_connected,
     set_connection_ipv4_config,
+    set_connection_never_default,
 )
 
 
@@ -79,6 +80,9 @@ def apply_ethernet_settings(
                 gateway=gateway,
                 dns=dns,
             )
+
+        if target_connection and config.get("PREFER_WLAN_FOR_INTERNET", False):
+            set_connection_never_default(config, target_connection, True)
 
         if target_connection:
             bring_up_connection(config, target_connection)

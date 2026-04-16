@@ -55,6 +55,23 @@ def test_apply_ethernet_settings_reconnects_device(monkeypatch):
     assert calls == [("connect", "eth0")]
 
 
+def test_apply_ethernet_settings_marks_ethernet_non_default_when_wifi_preferred(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(network_apply, "get_active_ethernet_connection", lambda config: {"name": "Wired connection 1", "device": "eth0"})
+    monkeypatch.setattr(network_apply, "set_connection_never_default", lambda config, connection_name, enabled: calls.append((connection_name, enabled)))
+    monkeypatch.setattr(network_apply, "bring_up_connection", lambda config, name: None)
+    monkeypatch.setattr(network_apply, "_verify_connection", lambda config, interface_name, connection_type, expected_name=None: True)
+
+    result = network_apply.apply_ethernet_settings(
+        {"ETHERNET_INTERFACE": "eth0", "VERIFY_TIMEOUT_SECONDS": 1, "VERIFY_POLL_SECONDS": 0.01, "PREFER_WLAN_FOR_INTERNET": True},
+        connection_name="Wired connection 1",
+    )
+
+    assert result["success"] is True
+    assert calls == [("Wired connection 1", True)]
+
+
 def test_apply_ethernet_settings_rolls_back_on_failure(monkeypatch):
     calls = []
 
