@@ -1,13 +1,18 @@
 {% extends "base.html" %}
 
 {% block content %}
+{% set mqtt_logger = datalogger_status.get('mqtt_logger', {}) %}
+{% set plc_logger = datalogger_status.get('plc_logger', {}) %}
 <section class="hero panel">
     <div>
         <p class="eyebrow">Data collection</p>
         <h2>Datalogger</h2>
-        <p>Use Portainer for Docker container management, and keep this page as the technician-friendly entry point.</p>
+        <p>Use this page as the technician-friendly entry point to confirm which logger is active and whether data is still flowing.</p>
     </div>
     <div class="hero-actions">
+        {% if datalogger_status.mqtt_ui_url %}
+        <a class="button-link secondary-link" href="{{ datalogger_status.mqtt_ui_url }}" target="_blank" rel="noopener noreferrer">Open MQTT UI</a>
+        {% endif %}
         {% if datalogger_status.portainer_url %}
         <a class="button-link secondary-link" href="{{ datalogger_status.portainer_url }}" target="_blank" rel="noopener noreferrer">Open Portainer</a>
         {% endif %}
@@ -25,6 +30,10 @@
 
         <div class="system-stats-grid datalogger-stats-grid">
             <div class="stat-card">
+                <span>Active logger</span>
+                <strong>{{ datalogger_status.get('active_logger', 'Unknown') }}</strong>
+            </div>
+            <div class="stat-card">
                 <span>Docker</span>
                 <strong>{{ 'Ready' if datalogger_status.docker_available else 'Unavailable' }}</strong>
             </div>
@@ -37,6 +46,14 @@
                 <strong>{{ datalogger_status.containers|length }}</strong>
             </div>
         </div>
+
+        {% if datalogger_status.get('warnings') %}
+        <ul class="interface-list">
+            {% for warning in datalogger_status.get('warnings', []) %}
+            <li>{{ warning }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
 
         {% if datalogger_status.error %}
         <p class="update-error-note">{{ datalogger_status.error }}</p>
@@ -60,15 +77,34 @@
     <article class="panel">
         <div class="section-heading">
             <div>
-                <h3>Next step</h3>
-                <p>This page can also expose approved JSON config files after the container workflow is in place.</p>
+                <h3>Logger health</h3>
+                <p>These summaries translate the recent logger output into a quick technician view.</p>
             </div>
         </div>
-        <ul class="interface-list">
-            <li>Container restart and health checks through Portainer</li>
-            <li>Logger service summary and last-seen heartbeat</li>
-            <li>Safe JSON editor for selected configuration files</li>
-        </ul>
+
+        <div class="stack-form">
+            <div>
+                <strong>MQTT logger</strong>
+                <p>{{ mqtt_logger.get('summary', 'No recent activity') }}</p>
+                <p class="muted-note">Container: {{ mqtt_logger.get('name', 'opsviewer2-edge') }} | Last activity: {{ mqtt_logger.get('last_activity_text', 'Unknown') }}</p>
+                {% if mqtt_logger.get('device_id') %}
+                <p class="muted-note">Device: {{ mqtt_logger.get('device_id') }}{% if mqtt_logger.get('channel_count') %} | Channels in sample: {{ mqtt_logger.get('channel_count') }}{% endif %}</p>
+                {% endif %}
+                {% if mqtt_logger.get('error') %}
+                <p class="update-error-note">{{ mqtt_logger.get('error') }}</p>
+                {% endif %}
+            </div>
+
+            <div>
+                <strong>PLC logger</strong>
+                <p>{{ plc_logger.get('summary', 'No recent activity') }}</p>
+                <p class="muted-note">Container: {{ plc_logger.get('name', 'plcreader') }} | Last activity: {{ plc_logger.get('last_activity_text', 'Unknown') }}</p>
+                <p class="muted-note">{% if plc_logger.get('measurements') is not none %}Measurements: {{ plc_logger.get('measurements') }}{% else %}Measurements: n/a{% endif %} | {% if plc_logger.get('queue_size') is not none %}Queue: {{ plc_logger.get('queue_size') }}{% else %}Queue: n/a{% endif %}</p>
+                {% if plc_logger.get('error') %}
+                <p class="update-error-note">{{ plc_logger.get('error') }}</p>
+                {% endif %}
+            </div>
+        </div>
     </article>
 </section>
 
