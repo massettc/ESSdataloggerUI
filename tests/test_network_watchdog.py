@@ -129,6 +129,7 @@ def test_activate_interface_skips_reconnect_when_already_active(monkeypatch):
     calls = []
 
     monkeypatch.setattr(network_watchdog, "ensure_connection_active", lambda config, interface_name, connection_name=None: True)
+    monkeypatch.setattr(watchdog, "_interface_is_healthy", lambda interface_name, connection_name: True)
     monkeypatch.setattr(network_watchdog, "bring_up_connection", lambda config, connection_name: calls.append(("up", connection_name)))
     monkeypatch.setattr(network_watchdog, "connect_device", lambda config, interface_name: calls.append(("connect", interface_name)))
 
@@ -136,6 +137,39 @@ def test_activate_interface_skips_reconnect_when_already_active(monkeypatch):
 
     assert result is True
     assert calls == []
+
+
+def test_activate_interface_rejects_active_link_without_internet(monkeypatch):
+    watchdog = network_watchdog.FailoverWatchdog(dict(BASE_CONFIG))
+    calls = []
+
+    monkeypatch.setattr(network_watchdog, "ensure_connection_active", lambda config, interface_name, connection_name=None: True)
+    monkeypatch.setattr(watchdog, "_interface_is_healthy", lambda interface_name, connection_name: False)
+    monkeypatch.setattr(network_watchdog, "bring_up_connection", lambda config, connection_name: calls.append(("up", connection_name)))
+    monkeypatch.setattr(network_watchdog, "connect_device", lambda config, interface_name: calls.append(("connect", interface_name)))
+
+    result = watchdog._activate_interface("eth0", "Wired connection 1")
+
+    assert result is False
+    assert calls == []
+
+
+def test_watchdog_does_not_fail_over_to_backup_without_internet(monkeypatch):
+    watchdog = network_watchdog.FailoverWatchdog(dict(BASE_CONFIG))
+    health_checks = iter([False, False, False])
+
+    monkeypatch.setattr(watchdog, "_interface_is_healthy", lambda interface_name, connection_name: next(health_checks))
+    monkeypatch.setattr(network_watchdog, "ensure_connection_active", lambda config, interface_name, connection_name=None: True)
+    monkeypatch.setattr(network_watchdog, "set_connection_metric", lambda config, connection_name, route_metric: None)
+    monkeypatch.setattr(network_watchdog, "set_connection_never_default", lambda config, connection_name, enabled: None)
+    monkeypatch.setattr(network_watchdog, "reapply_device", lambda config, interface_name: None)
+
+    first = watchdog.run_once()
+    second = watchdog.run_once()
+
+    assert first["status"] == "primary-degraded"
+    assert second["status"] == "backup-unavailable"
+    assert watchdog.using_backup is False
 
 
 def test_watchdog_uses_active_connection_name_when_not_configured(monkeypatch):

@@ -188,7 +188,7 @@ class FailoverWatchdog:
 
     def _activate_interface(self, interface_name: str, connection_name: str | None) -> bool:
         if ensure_connection_active(self.config, interface_name, connection_name):
-            return True
+            return self._interface_is_healthy(interface_name, connection_name)
 
         try:
             if connection_name:
@@ -204,7 +204,7 @@ class FailoverWatchdog:
             )
             return False
 
-        return ensure_connection_active(self.config, interface_name, connection_name)
+        return self._interface_is_healthy(interface_name, connection_name)
 
     def _is_backup_active(self) -> bool:
         backup_name = self._configured_connection_name(self.config["BACKUP_INTERFACE"])
