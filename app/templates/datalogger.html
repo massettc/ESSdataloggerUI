@@ -59,6 +59,20 @@
             {% else %}
             <p id="mqtt-device" class="muted-note">Device: not detected yet</p>
             {% endif %}
+            <div class="logger-metrics-grid">
+                <div class="logger-metric logger-metric-highlight">
+                    <span>Queue backlog</span>
+                    <strong id="mqtt-queue-value">{% if mqtt_logger.get('queue_size') is not none %}{{ mqtt_logger.get('queue_size') }} buffered{% else %}n/a{% endif %}</strong>
+                </div>
+                <div class="logger-metric">
+                    <span>Success</span>
+                    <strong id="mqtt-success-value">{% if mqtt_logger.get('success_rate') is not none %}{{ '%.2f'|format(mqtt_logger.get('success_rate')) }}/s{% else %}n/a{% endif %}</strong>
+                </div>
+                <div class="logger-metric">
+                    <span>Failure</span>
+                    <strong id="mqtt-failure-value">{% if mqtt_logger.get('failure_rate') is not none %}{{ '%.2f'|format(mqtt_logger.get('failure_rate')) }}/s{% else %}n/a{% endif %}</strong>
+                </div>
+            </div>
             <p id="mqtt-metrics" class="muted-note">Queue: {% if mqtt_logger.get('queue_size') is not none %}{{ mqtt_logger.get('queue_size') }}{% else %}n/a{% endif %} | Success: {% if mqtt_logger.get('success_rate') is not none %}{{ '%.2f'|format(mqtt_logger.get('success_rate')) }}/s{% else %}n/a{% endif %} | Failure: {% if mqtt_logger.get('failure_rate') is not none %}{{ '%.2f'|format(mqtt_logger.get('failure_rate')) }}/s{% else %}n/a{% endif %}</p>
             {% if mqtt_logger.get('error') %}
             <p id="mqtt-error" class="update-error-note">{{ mqtt_logger.get('error') }}</p>
@@ -212,6 +226,9 @@ document.addEventListener('DOMContentLoaded', function () {
             const success = logger.success_rate !== null && logger.success_rate !== undefined ? Number(logger.success_rate).toFixed(2) + '/s' : 'n/a';
             const failure = logger.failure_rate !== null && logger.failure_rate !== undefined ? Number(logger.failure_rate).toFixed(2) + '/s' : 'n/a';
             setText('mqtt-device', deviceText);
+            setText('mqtt-queue-value', queue === 'n/a' ? queue : queue + ' buffered');
+            setText('mqtt-success-value', success);
+            setText('mqtt-failure-value', failure);
             setText('mqtt-metrics', 'Queue: ' + queue + ' | Success: ' + success + ' | Failure: ' + failure);
         }
 

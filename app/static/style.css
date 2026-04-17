@@ -543,6 +543,35 @@ td {
     margin-bottom: 0;
 }
 
+.logger-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.65rem;
+}
+
+.logger-metric {
+    background: #fffdf8;
+    border: 1px solid #e4dcca;
+    border-radius: 12px;
+    padding: 0.7rem 0.8rem;
+    display: grid;
+    gap: 0.2rem;
+}
+
+.logger-metric span {
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
+.logger-metric strong {
+    font-size: 1rem;
+}
+
+.logger-metric-highlight {
+    background: #fff8e8;
+    border-color: #f0dea8;
+}
+
 .datalogger-stats-grid {
     margin-bottom: 1rem;
 }

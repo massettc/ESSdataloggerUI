@@ -279,7 +279,7 @@ def _finalize_logger_state(logger: dict[str, Any]) -> dict[str, Any]:
 
     queue_size = logger.get("queue_size")
     if isinstance(queue_size, int) and queue_size > 0 and logger.get("label") == "MQTT Logger":
-        logger["summary"] = "Buffering data locally"
+        logger["summary"] = f"Buffering {queue_size} records locally"
         logger["status_class"] = "status-warning"
 
     timestamp = _parse_activity_timestamp(logger.get("last_activity_text", ""))

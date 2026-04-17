@@ -103,7 +103,7 @@ def test_datalogger_page_shows_portainer_status(client, monkeypatch):
             "warnings": ["PLC logger stopped"],
             "mqtt_logger": {
                 "name": "opsviewer2-edge",
-                "summary": "Buffering data locally",
+                "summary": "Buffering 1089 records locally",
                 "last_activity_text": "2026-04-16T17:39:10Z",
                 "last_push_age_seconds": 3,
                 "last_push_label": "Last pushed 3 sec ago",
@@ -140,8 +140,9 @@ def test_datalogger_page_shows_portainer_status(client, monkeypatch):
     assert b"Logger health" in response.data
     assert b"Open MQTT UI" in response.data
     assert b"Last pushed 3 sec ago" in response.data
-    assert b"Buffering data locally" in response.data
-    assert b"Queue: 1089" in response.data
+    assert b"Buffering 1089 records locally" in response.data
+    assert b"Queue backlog" in response.data
+    assert b"1089 buffered" in response.data
     assert b"Success: 0.18/s" in response.data
     assert b"Failure: 1.31/s" in response.data
     assert b"Portainer" in response.data
