@@ -29,6 +29,23 @@ def test_get_datalogger_status_parses_logger_roles_and_health(monkeypatch):
                 ),
                 stderr="",
             ),
+        (
+            "docker",
+            "exec",
+            "opsviewer2-edge",
+            "sh",
+            "-lc",
+            "wget -qO- http://127.0.0.1/tools/queue || wget -qO- http://localhost/tools/queue || curl -fsS http://127.0.0.1/tools/queue || curl -fsS http://localhost/tools/queue",
+        ):
+            subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout=(
+                    "<section><div>LENGTH</div><div>7</div><div>SUCCESS RATE (SEC)</div><div>0.92</div>"
+                    "<div>FAILURE RATE (SEC)</div><div>0.03</div><div>FAILURE SAMPLES</div><div>101</div></section>"
+                ),
+                stderr="",
+            ),
         ("docker", "port", "opsviewer2-edge"):
             subprocess.CompletedProcess(
                 args=[],
@@ -53,6 +70,7 @@ def test_get_datalogger_status_parses_logger_roles_and_health(monkeypatch):
         return outputs.get(key, subprocess.CompletedProcess(args=args, returncode=1, stdout="", stderr="missing"))
 
     monkeypatch.setattr(datalogger_manager, "_run_docker_command", fake_run)
+    monkeypatch.setattr(datalogger_manager, "urlopen", lambda *args, **kwargs: (_ for _ in ()).throw(datalogger_manager.URLError("offline")))
 
     status = datalogger_manager.get_datalogger_status(
         {
@@ -67,8 +85,11 @@ def test_get_datalogger_status_parses_logger_roles_and_health(monkeypatch):
     assert status["active_logger"] == "MQTT Logger"
     assert status["mqtt_logger"]["running"] is True
     assert status["mqtt_logger"]["device_id"] == "ESS-UNIT-81"
-    assert status["mqtt_logger"]["summary"] == "Data pushed successfully"
+    assert status["mqtt_logger"]["summary"] == "Buffering 7 records locally"
     assert status["mqtt_logger"]["mqtt_ui_url"] == "http://ess-pi:5055"
+    assert status["mqtt_logger"]["queue_size"] == 7
+    assert status["mqtt_logger"]["success_rate"] == 0.92
+    assert status["mqtt_logger"]["queue_source_url"] == "container://opsviewer2-edge/tools/queue"
     assert "push" in status["mqtt_logger"]["last_push_label"].lower()
     assert status["plc_logger"]["running"] is False
     assert status["plc_logger"]["measurements"] == 43

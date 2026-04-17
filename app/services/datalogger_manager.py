@@ -77,7 +77,14 @@ def get_datalogger_status(config: dict[str, Any], host: str | None = None) -> di
             status["mqtt_logger"]["mqtt_ui_url"] = status["mqtt_ui_url"]
             log_output = _read_container_logs(config, docker_bin, mqtt_container_name)
             status["mqtt_logger"].update(_parse_mqtt_logger_logs(log_output))
-            status["mqtt_logger"].update(_read_mqtt_queue_metrics(config, status["mqtt_ui_url"]))
+            status["mqtt_logger"].update(
+                _read_mqtt_queue_metrics(
+                    config,
+                    status["mqtt_ui_url"],
+                    docker_bin=docker_bin,
+                    container_name=mqtt_container_name,
+                )
+            )
             status["mqtt_logger"] = _finalize_logger_state(status["mqtt_logger"])
 
         if name == plc_container_name:
@@ -401,79 +408,93 @@ def _build_logger_warnings(mqtt_logger: dict[str, Any], plc_logger: dict[str, An
     return warnings
 
 
-def _read_mqtt_queue_metrics(config: dict[str, Any], mqtt_ui_url: str) -> dict[str, Any]:
-    if not mqtt_ui_url:
-        return {}
+def _read_mqtt_queue_metrics(
+    config: dict[str, Any],
+    mqtt_ui_url: str,
+    docker_bin: str | None = None,
+    container_name: str | None = None,
+) -> dict[str, Any]:
+    if mqtt_ui_url:
+        base_url = mqtt_ui_url.rstrip("/")
+        parsed_base = urlparse(base_url)
+        scheme = parsed_base.scheme or "http"
+        port = parsed_base.port or 8080
+        base_urls = [
+            f"{scheme}://localhost:{port}",
+            f"{scheme}://127.0.0.1:{port}",
+            base_url,
+        ]
+        if parsed_base.hostname:
+            base_urls.append(f"{scheme}://{parsed_base.hostname}:{port}")
 
-    base_url = mqtt_ui_url.rstrip("/")
-    parsed_base = urlparse(base_url)
-    scheme = parsed_base.scheme or "http"
-    port = parsed_base.port or 8080
-    base_urls = [
-        f"{scheme}://localhost:{port}",
-        f"{scheme}://127.0.0.1:{port}",
-        base_url,
-    ]
-    if parsed_base.hostname:
-        base_urls.append(f"{scheme}://{parsed_base.hostname}:{port}")
+        candidate_urls: list[str] = []
+        for root in dict.fromkeys(base_urls):
+            candidate_urls.extend(
+                [
+                    f"{root}/tools/queue",
+                    f"{root}/tools/queue/",
+                    f"{root}/tools/Queue",
+                    f"{root}/tools/queue-status",
+                    f"{root}/tools/QueueStatus",
+                    f"{root}/queue-status",
+                    f"{root}/QueueStatus",
+                    f"{root}/queuestatus",
+                    f"{root}/api/queue-status",
+                    f"{root}/api/QueueStatus",
+                    f"{root}/queue",
+                    f"{root}/status",
+                    f"{root}/",
+                ]
+            )
 
-    candidate_urls: list[str] = []
-    for root in dict.fromkeys(base_urls):
-        candidate_urls.extend(
-            [
-                f"{root}/tools/queue",
-                f"{root}/tools/queue/",
-                f"{root}/tools/Queue",
-                f"{root}/tools/queue-status",
-                f"{root}/tools/QueueStatus",
-                f"{root}/queue-status",
-                f"{root}/QueueStatus",
-                f"{root}/queuestatus",
-                f"{root}/api/queue-status",
-                f"{root}/api/QueueStatus",
-                f"{root}/queue",
-                f"{root}/status",
-                f"{root}/",
-            ]
-        )
+        timeout = max(0.5, min(1.0, float(config.get("VERIFY_POLL_SECONDS", 2))))
+        original_netloc = parsed_base.netloc
+        headers = {"User-Agent": "ESS-Datalogger-UI/1.0", "Accept": "text/html,application/json"}
+        pending_urls = list(dict.fromkeys(candidate_urls))
+        seen_urls: set[str] = set()
 
-    timeout = max(0.5, min(1.0, float(config.get("VERIFY_POLL_SECONDS", 2))))
-    original_netloc = parsed_base.netloc
-    headers = {"User-Agent": "ESS-Datalogger-UI/1.0", "Accept": "text/html,application/json"}
-    pending_urls = list(dict.fromkeys(candidate_urls))
-    seen_urls: set[str] = set()
+        last_error = ""
+        last_url = ""
 
-    last_error = ""
-    last_url = ""
+        while pending_urls:
+            url = pending_urls.pop(0)
+            if url in seen_urls:
+                continue
+            seen_urls.add(url)
+            last_url = url
 
-    while pending_urls:
-        url = pending_urls.pop(0)
-        if url in seen_urls:
-            continue
-        seen_urls.add(url)
-        last_url = url
+            try:
+                request_headers = dict(headers)
+                url_parts = urlparse(url)
+                if original_netloc and url_parts.hostname in {"localhost", "127.0.0.1"}:
+                    request_headers["Host"] = original_netloc
+                request = Request(url, headers=request_headers)
+                with urlopen(request, timeout=timeout) as response:
+                    payload = response.read().decode("utf-8", errors="ignore")
+            except (HTTPError, URLError, TimeoutError, ValueError, OSError) as exc:
+                last_error = str(exc)
+                continue
 
-        try:
-            request_headers = dict(headers)
-            url_parts = urlparse(url)
-            if original_netloc and url_parts.hostname in {"localhost", "127.0.0.1"}:
-                request_headers["Host"] = original_netloc
-            request = Request(url, headers=request_headers)
-            with urlopen(request, timeout=timeout) as response:
-                payload = response.read().decode("utf-8", errors="ignore")
-        except (HTTPError, URLError, TimeoutError, ValueError, OSError) as exc:
-            last_error = str(exc)
-            continue
+            parsed = _extract_mqtt_queue_metrics(payload)
+            if any(parsed.get(key) is not None for key in ("queue_size", "success_rate", "failure_rate")):
+                parsed["queue_source_url"] = url
+                parsed["queue_fetch_error"] = ""
+                return parsed
 
-        parsed = _extract_mqtt_queue_metrics(payload)
-        if any(parsed.get(key) is not None for key in ("queue_size", "success_rate", "failure_rate")):
-            parsed["queue_source_url"] = url
-            parsed["queue_fetch_error"] = ""
-            return parsed
+            for discovered_url in _discover_mqtt_queue_urls(url, payload):
+                if discovered_url not in seen_urls:
+                    pending_urls.append(discovered_url)
+    else:
+        last_error = ""
+        last_url = ""
 
-        for discovered_url in _discover_mqtt_queue_urls(url, payload):
-            if discovered_url not in seen_urls:
-                pending_urls.append(discovered_url)
+    if docker_bin and container_name:
+        container_metrics = _read_mqtt_queue_metrics_from_container(config, docker_bin, container_name)
+        if any(container_metrics.get(key) is not None for key in ("queue_size", "success_rate", "failure_rate")):
+            return container_metrics
+        if container_metrics.get("queue_fetch_error"):
+            last_error = container_metrics.get("queue_fetch_error", last_error)
+            last_url = container_metrics.get("queue_source_url", last_url)
 
     return {
         "queue_size": None,
@@ -484,6 +505,34 @@ def _read_mqtt_queue_metrics(config: dict[str, Any], mqtt_ui_url: str) -> dict[s
         "queue_source_url": last_url,
         "queue_fetch_error": last_error,
     }
+
+
+def _read_mqtt_queue_metrics_from_container(config: dict[str, Any], docker_bin: str, container_name: str) -> dict[str, Any]:
+    command = [
+        docker_bin,
+        "exec",
+        container_name,
+        "sh",
+        "-lc",
+        "wget -qO- http://127.0.0.1/tools/queue || wget -qO- http://localhost/tools/queue || curl -fsS http://127.0.0.1/tools/queue || curl -fsS http://localhost/tools/queue",
+    ]
+    result = _run_docker_command(config, command, check=False)
+    queue_source = f"container://{container_name}/tools/queue"
+    if result.returncode != 0:
+        return {
+            "queue_size": None,
+            "success_rate": None,
+            "failure_rate": None,
+            "success_samples": None,
+            "failure_samples": None,
+            "queue_source_url": queue_source,
+            "queue_fetch_error": _command_error(result, "Unable to read MQTT queue page from container"),
+        }
+
+    parsed = _extract_mqtt_queue_metrics(result.stdout)
+    parsed["queue_source_url"] = queue_source
+    parsed["queue_fetch_error"] = ""
+    return parsed
 
 
 def _discover_mqtt_queue_urls(source_url: str, payload: str) -> list[str]:
