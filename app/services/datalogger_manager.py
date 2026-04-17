@@ -4,6 +4,7 @@ import json
 import os
 import re
 import subprocess
+import time
 from datetime import datetime, timezone
 from html import unescape
 from typing import Any
@@ -460,9 +461,16 @@ def _read_mqtt_queue_metrics(
 
     # Use wget/curl from the host OS — Python's urllib gets connection
     # drops from the .NET Kestrel server inside the container.
+    # Hard budget of 10 s so we never exceed gunicorn's 30 s worker timeout.
+    deadline = time.monotonic() + 10
     for url in candidate_urls:
+        if time.monotonic() >= deadline:
+            last_error = "time budget exceeded"
+            break
         last_url = url
-        payload, error = _fetch_url_via_cli(url)
+        remaining = max(1, int(deadline - time.monotonic()))
+        per_url_timeout = min(3, remaining)
+        payload, error = _fetch_url_via_cli(url, timeout=per_url_timeout)
         if error:
             last_error = error
             continue
