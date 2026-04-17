@@ -1,10 +1,13 @@
 import subprocess
+from datetime import datetime, timedelta, timezone
 
 from app.services import datalogger_manager
 
 
 def test_get_datalogger_status_parses_logger_roles_and_health(monkeypatch):
     queue_json = '{"Length": 7}'
+    mqtt_timestamp = (datetime.now(timezone.utc) - timedelta(seconds=5)).isoformat().replace('+00:00', 'Z')
+    plc_timestamp = (datetime.now() - timedelta(seconds=5)).strftime('%m/%d/%Y %H:%M:%S')
 
     outputs = {
         ("docker", "version", "--format", "{{.Server.Version}}"):
@@ -26,7 +29,7 @@ def test_get_datalogger_status_parses_logger_roles_and_health(monkeypatch):
                 returncode=0,
                 stdout=(
                     'info: Edge.Services.EventHubRelayHostService[0]\n'
-                    '[{"DeviceId":"ESS-UNIT-81","Timestamp":"2026-04-16T17:39:10.3038222Z","Name":"Pump Rate BPM"}]\n'
+                    f'[{{"DeviceId":"ESS-UNIT-81","Timestamp":"{mqtt_timestamp}","Name":"Pump Rate BPM"}}]\n'
                     "1776361151: Sending PUBLISH to relay-mqtt-client2 (d0, q0, r0, m0, 'outgoing', ... (264 bytes))\n"
                 ),
                 stderr="",
@@ -57,8 +60,8 @@ def test_get_datalogger_status_parses_logger_roles_and_health(monkeypatch):
                 args=[],
                 returncode=0,
                 stdout=(
-                    "Sent: Packet size: 1 - Measurements: 43 - Queue Size 0 04/16/2026 17:36:02\n"
-                    "Sending. 1-43 - 0 04/16/2026 17:36:03\n"
+                    f"Sent: Packet size: 1 - Measurements: 43 - Queue Size 0 {plc_timestamp}\n"
+                    f"Sending. 1-43 - 0 {plc_timestamp}\n"
                 ),
                 stderr="",
             ),
@@ -160,6 +163,44 @@ def test_parse_mqtt_logs_extracts_queue_metrics_from_edge_ui_html():
     )
 
     assert parsed["queue_size"] == 1089
+
+
+def test_stale_plc_data_marks_links_not_connected():
+    logger = datalogger_manager._decorate_plc_logger_state(
+        {
+            "running": True,
+            "measurements": 43,
+            "queue_size": 0,
+            "error": "",
+            "last_push_age_seconds": 180,
+            "last_push_label": "No push seen for 3 min",
+            "status_class": "status-offline",
+            "summary": "Last send OK",
+        }
+    )
+
+    assert logger["plc_link_label"] != "Connected"
+    assert logger["opsviewer_link_label"] != "Connected"
+    assert "No recent" in logger["summary"]
+
+
+def test_stale_mqtt_data_marks_plc_not_connected():
+    logger = datalogger_manager._decorate_mqtt_logger_state(
+        {
+            "running": True,
+            "device_id": "ESS-UNIT-81",
+            "queue_size": 0,
+            "error": "",
+            "last_push_age_seconds": 180,
+            "last_push_label": "No push seen for 3 min",
+            "status_class": "status-offline",
+            "summary": "Data pushed successfully",
+        }
+    )
+
+    assert logger["plc_link_label"] != "Connected"
+    assert logger["opsviewer_link_label"] != "Connected"
+    assert "No recent" in logger["summary"]
 
 
 def test_read_mqtt_queue_metrics_uses_container_bridge_ip(monkeypatch):
