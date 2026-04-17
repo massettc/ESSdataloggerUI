@@ -225,9 +225,10 @@ def _default_logger_state(label: str, container_name: str) -> dict[str, Any]:
         "last_push_age_seconds": None,
         "last_push_label": "Waiting for data",
         "status_class": "status-neutral",
-        "card_title": "Cloud delivery" if label == "MQTT Logger" else "PLC connection",
-        "connection_label": "Waiting",
-        "connection_class": "status-neutral",
+        "plc_link_label": "Waiting",
+        "plc_link_class": "status-neutral",
+        "opsviewer_link_label": "Waiting",
+        "opsviewer_link_class": "status-neutral",
         "error": "",
         "measurements": None,
         "queue_size": None,
@@ -383,67 +384,85 @@ def _finalize_logger_state(logger: dict[str, Any]) -> dict[str, Any]:
 
 def _decorate_mqtt_logger_state(logger: dict[str, Any]) -> dict[str, Any]:
     logger = dict(logger)
-    logger["card_title"] = "Cloud delivery"
-
-    if logger.get("error"):
-        logger["connection_label"] = "Send error"
-        logger["connection_class"] = "status-offline"
-        return logger
+    age_seconds = logger.get("last_push_age_seconds")
+    queue_size = logger.get("queue_size")
+    plc_connected = bool(logger.get("device_id")) or (isinstance(age_seconds, int) and age_seconds <= 60)
 
     if not logger.get("running"):
-        logger["connection_label"] = "Stopped"
-        logger["connection_class"] = "status-offline"
-        logger["summary"] = "Cloud delivery is not running"
+        logger["plc_link_label"] = "Not connected"
+        logger["plc_link_class"] = "status-offline"
+        logger["opsviewer_link_label"] = "Stopped"
+        logger["opsviewer_link_class"] = "status-offline"
+        logger["summary"] = "MQTT logger is stopped"
         return logger
 
-    queue_size = logger.get("queue_size")
-    age_seconds = logger.get("last_push_age_seconds")
-
-    if isinstance(queue_size, int) and queue_size > 0:
-        logger["connection_label"] = "Backlog detected"
-        logger["connection_class"] = "status-warning"
-        logger["summary"] = f"Buffering {queue_size} records locally"
-    elif isinstance(age_seconds, int) and age_seconds <= 60:
-        logger["connection_label"] = "Connected"
-        logger["connection_class"] = "status-online"
-        if logger.get("summary") in {"No recent activity", "Data pushed successfully"}:
-            logger["summary"] = "Sending data to cloud"
+    if plc_connected:
+        logger["plc_link_label"] = "Connected"
+        logger["plc_link_class"] = "status-online"
     else:
-        logger["connection_label"] = "Waiting"
-        logger["connection_class"] = "status-neutral"
+        logger["plc_link_label"] = "Waiting"
+        logger["plc_link_class"] = "status-neutral"
+
+    if logger.get("error"):
+        logger["opsviewer_link_label"] = "Error"
+        logger["opsviewer_link_class"] = "status-offline"
+        logger["summary"] = "PLC data present, but OpsViewer send has errors"
+    elif isinstance(queue_size, int) and queue_size > 0:
+        logger["opsviewer_link_label"] = "Backlog"
+        logger["opsviewer_link_class"] = "status-warning"
+        logger["summary"] = f"PLC connected; {queue_size} records buffered for OpsViewer"
+    elif isinstance(age_seconds, int) and age_seconds <= 60:
+        logger["opsviewer_link_label"] = "Connected"
+        logger["opsviewer_link_class"] = "status-online"
+        logger["summary"] = "Connected to PLC and sending to OpsViewer"
+    else:
+        logger["opsviewer_link_label"] = "Waiting"
+        logger["opsviewer_link_class"] = "status-neutral"
+        logger["summary"] = "Waiting for data to send to OpsViewer"
 
     return logger
 
 
 def _decorate_plc_logger_state(logger: dict[str, Any]) -> dict[str, Any]:
     logger = dict(logger)
-    logger["card_title"] = "PLC connection"
-
-    if logger.get("error"):
-        logger["connection_label"] = "PLC error"
-        logger["connection_class"] = "status-offline"
-        logger["summary"] = "PLC logging error detected"
-        return logger
+    age_seconds = logger.get("last_push_age_seconds")
+    queue_size = logger.get("queue_size")
+    measurements = logger.get("measurements")
+    plc_connected = measurements is not None or (isinstance(age_seconds, int) and age_seconds <= 60)
 
     if not logger.get("running"):
-        logger["connection_label"] = "Not connected"
-        logger["connection_class"] = "status-offline"
-        logger["summary"] = "PLC logger is stopped"
+        logger["plc_link_label"] = "Not connected"
+        logger["plc_link_class"] = "status-offline"
+        logger["opsviewer_link_label"] = "Stopped"
+        logger["opsviewer_link_class"] = "status-offline"
+        logger["summary"] = "PLC reader is stopped"
         return logger
 
-    age_seconds = logger.get("last_push_age_seconds")
-    measurements = logger.get("measurements")
-
-    if (isinstance(age_seconds, int) and age_seconds <= 60) or measurements is not None:
-        logger["connection_label"] = "Connected"
-        logger["connection_class"] = "status-online"
-        if measurements is not None:
-            logger["summary"] = f"Logging from PLC ({measurements} measurements)"
-        else:
-            logger["summary"] = "Logging from PLC"
+    if plc_connected:
+        logger["plc_link_label"] = "Connected"
+        logger["plc_link_class"] = "status-online"
     else:
-        logger["connection_label"] = "Waiting"
-        logger["connection_class"] = "status-neutral"
+        logger["plc_link_label"] = "Waiting"
+        logger["plc_link_class"] = "status-neutral"
+
+    if logger.get("error"):
+        logger["opsviewer_link_label"] = "Error"
+        logger["opsviewer_link_class"] = "status-offline"
+        logger["summary"] = "PLC data present, but OpsViewer send has errors"
+    elif isinstance(queue_size, int) and queue_size > 0:
+        logger["opsviewer_link_label"] = "Backlog"
+        logger["opsviewer_link_class"] = "status-warning"
+        logger["summary"] = f"PLC connected; {queue_size} records buffered for OpsViewer"
+    elif plc_connected:
+        logger["opsviewer_link_label"] = "Connected"
+        logger["opsviewer_link_class"] = "status-online"
+        if measurements is not None:
+            logger["summary"] = f"Connected to PLC and sending to OpsViewer ({measurements} measurements)"
+        else:
+            logger["summary"] = "Connected to PLC and sending to OpsViewer"
+    else:
+        logger["opsviewer_link_label"] = "Waiting"
+        logger["opsviewer_link_class"] = "status-neutral"
         logger["summary"] = "Waiting for PLC data"
 
     return logger
@@ -462,33 +481,26 @@ def _build_system_status(
             "system_status_detail": detail,
         }
 
-    queue_size = mqtt_logger.get("queue_size")
-    if not plc_logger.get("running"):
+    mqtt_queue = mqtt_logger.get("queue_size")
+    plc_queue = plc_logger.get("queue_size")
+    if isinstance(mqtt_queue, int) and mqtt_queue > 0:
         return {
-            "system_status_label": "PLC disconnected",
-            "system_status_class": "status-offline",
-            "system_status_detail": "The PLC logger is not currently running.",
-        }
-
-    if not mqtt_logger.get("running"):
-        return {
-            "system_status_label": "Cloud send stopped",
-            "system_status_class": "status-offline",
-            "system_status_detail": "Cloud delivery is not currently running.",
-        }
-
-    if isinstance(queue_size, int) and queue_size > 0:
-        return {
-            "system_status_label": "Backlog building",
+            "system_status_label": "OpsViewer backlog",
             "system_status_class": "status-warning",
-            "system_status_detail": f"Cloud send is active, but {queue_size} records are buffered locally.",
+            "system_status_detail": f"MQTT logger has {mqtt_queue} records buffered for OpsViewer.",
+        }
+    if isinstance(plc_queue, int) and plc_queue > 0:
+        return {
+            "system_status_label": "OpsViewer backlog",
+            "system_status_class": "status-warning",
+            "system_status_detail": f"PLC reader has {plc_queue} records buffered for OpsViewer.",
         }
 
-    if mqtt_logger.get("running") and plc_logger.get("running"):
+    if mqtt_logger.get("running") or plc_logger.get("running"):
         return {
             "system_status_label": "System healthy",
             "system_status_class": "status-online",
-            "system_status_detail": "PLC logging and cloud delivery are both active.",
+            "system_status_detail": "At least one logger is connected to the PLC and sending to OpsViewer.",
         }
 
     if warnings:

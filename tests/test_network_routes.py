@@ -101,19 +101,20 @@ def test_datalogger_page_shows_portainer_status(client, monkeypatch):
             "mqtt_ui_url": "http://ess-pi:8080",
             "active_logger": "MQTT Logger",
             "warnings": ["Cloud backlog: 1089 buffered"],
-            "system_status_label": "Backlog building",
+            "system_status_label": "OpsViewer backlog",
             "system_status_class": "status-warning",
-            "system_status_detail": "Cloud send is active, but 1089 records are buffered locally.",
+            "system_status_detail": "MQTT logger has 1089 records buffered for OpsViewer.",
             "mqtt_logger": {
                 "name": "opsviewer2-edge",
-                "card_title": "Cloud delivery",
-                "connection_label": "Backlog detected",
-                "connection_class": "status-warning",
-                "summary": "Buffering 1089 records locally",
+                "summary": "PLC connected; 1089 records buffered for OpsViewer",
                 "last_activity_text": "2026-04-16T17:39:10Z",
                 "last_push_age_seconds": 3,
                 "last_push_label": "Last pushed 3 sec ago",
                 "status_class": "status-warning",
+                "plc_link_label": "Connected",
+                "plc_link_class": "status-online",
+                "opsviewer_link_label": "Backlog",
+                "opsviewer_link_class": "status-warning",
                 "device_id": "ESS-UNIT-81",
                 "channel_count": 10,
                 "queue_size": 1089,
@@ -122,14 +123,15 @@ def test_datalogger_page_shows_portainer_status(client, monkeypatch):
             },
             "plc_logger": {
                 "name": "plcreader",
-                "card_title": "PLC connection",
-                "connection_label": "Connected",
-                "connection_class": "status-online",
-                "summary": "Logging from PLC (43 measurements)",
+                "summary": "Connected to PLC and sending to OpsViewer (43 measurements)",
                 "last_activity_text": "04/16/2026 17:36:03",
                 "last_push_age_seconds": 12,
                 "last_push_label": "Last pushed 12 sec ago",
                 "status_class": "status-online",
+                "plc_link_label": "Connected",
+                "plc_link_class": "status-online",
+                "opsviewer_link_label": "Connected",
+                "opsviewer_link_class": "status-online",
                 "measurements": 43,
                 "queue_size": 0,
                 "error": "",
@@ -145,14 +147,15 @@ def test_datalogger_page_shows_portainer_status(client, monkeypatch):
     assert response.status_code == 200
     assert b"Logger health" in response.data
     assert b"Open MQTT UI" in response.data
-    assert b"Backlog building" in response.data
-    assert b"Cloud delivery" in response.data
-    assert b"PLC connection" in response.data
-    assert b"Buffering 1089 records locally" in response.data
-    assert b"Logging from PLC (43 measurements)" in response.data
+    assert b"OpsViewer backlog" in response.data
+    assert b"MQTT logger" in response.data
+    assert b"PLC logger" in response.data
+    assert b"PLC connected; 1089 records buffered for OpsViewer" in response.data
+    assert b"Connected to PLC and sending to OpsViewer (43 measurements)" in response.data
     assert b"Queue backlog" in response.data
     assert b"1089 buffered" in response.data
     assert b"Last pushed 3 sec ago" in response.data
+    assert b"OpsViewer" in response.data
     assert b"Portainer" in response.data
     assert b"http://ess-pi:9000" in response.data
     assert b"logger" in response.data
