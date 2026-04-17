@@ -218,6 +218,64 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    function extractQueueMetrics(text) {
+        if (!text) return null;
+        const normalized = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        const queueMatch = normalized.match(/LENGTH\s+(\d+)/i);
+        const successMatch = normalized.match(/SUCCESS RATE \(SEC\)\s+([0-9]*\.?[0-9]+)/i);
+        const failureMatch = normalized.match(/FAILURE RATE \(SEC\)\s+([0-9]*\.?[0-9]+)/i);
+
+        if (!queueMatch && !successMatch && !failureMatch) return null;
+        return {
+            queue_size: queueMatch ? Number(queueMatch[1]) : null,
+            success_rate: successMatch ? Number(successMatch[1]) : null,
+            failure_rate: failureMatch ? Number(failureMatch[1]) : null,
+        };
+    }
+
+    function updateMqttQueueMetrics(metrics, sourceUrl) {
+        if (!metrics) return;
+        const queue = metrics.queue_size !== null && metrics.queue_size !== undefined ? metrics.queue_size : 'n/a';
+        const success = metrics.success_rate !== null && metrics.success_rate !== undefined ? Number(metrics.success_rate).toFixed(2) + '/s' : 'n/a';
+        const failure = metrics.failure_rate !== null && metrics.failure_rate !== undefined ? Number(metrics.failure_rate).toFixed(2) + '/s' : 'n/a';
+        setText('mqtt-queue-value', queue === 'n/a' ? queue : queue + ' buffered');
+        setText('mqtt-success-value', success);
+        setText('mqtt-failure-value', failure);
+        setText('mqtt-metrics', 'Queue: ' + queue + ' | Success: ' + success + ' | Failure: ' + failure);
+        setText('mqtt-source', 'Queue source: ' + (sourceUrl || 'browser fetch'));
+        setError('mqtt-fetch-error', '');
+        if (typeof queue === 'number' && queue > 0) {
+            setText('mqtt-summary', 'Buffering ' + queue + ' records locally');
+            setPill('mqtt-push-pill', 'Queue building', 'status-warning');
+        }
+    }
+
+    async function refreshMqttQueueFromBrowser(baseUrl) {
+        if (!baseUrl) return;
+        const normalizedBase = baseUrl.replace(/\/$/, '');
+        const candidateUrls = [
+            normalizedBase + '/tools/queue',
+            normalizedBase + '/tools/queue/',
+            normalizedBase + '/QueueStatus',
+            normalizedBase + '/queue-status',
+        ];
+
+        for (const url of candidateUrls) {
+            try {
+                const response = await fetch(url, { cache: 'no-store' });
+                if (!response.ok) continue;
+                const text = await response.text();
+                const metrics = extractQueueMetrics(text);
+                if (metrics) {
+                    updateMqttQueueMetrics(metrics, url);
+                    return;
+                }
+            } catch (error) {
+                // keep trying fallbacks
+            }
+        }
+    }
+
     function updateLoggerSection(prefix, logger) {
         if (!logger) return;
         setPill(prefix + '-push-pill', logger.last_push_label, logger.status_class);
@@ -260,6 +318,8 @@ document.addEventListener('DOMContentLoaded', function () {
             const status = await response.json();
             updateLoggerSection('mqtt', status.mqtt_logger || {});
             updateLoggerSection('plc', status.plc_logger || {});
+            const mqttBaseUrl = (status.mqtt_logger && status.mqtt_logger.mqtt_ui_url) || status.mqtt_ui_url || '';
+            refreshMqttQueueFromBrowser(mqttBaseUrl);
         } catch (error) {
             // keep the last rendered values if polling fails
         }
