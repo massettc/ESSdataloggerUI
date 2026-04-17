@@ -407,10 +407,15 @@ def _read_mqtt_queue_metrics(config: dict[str, Any], mqtt_ui_url: str) -> dict[s
 
     base_url = mqtt_ui_url.rstrip("/")
     parsed_base = urlparse(base_url)
-    base_urls = [base_url]
-    if parsed_base.port and parsed_base.hostname not in {"localhost", "127.0.0.1"}:
-        base_urls.append(f"{parsed_base.scheme or 'http'}://localhost:{parsed_base.port}")
-        base_urls.append(f"{parsed_base.scheme or 'http'}://127.0.0.1:{parsed_base.port}")
+    scheme = parsed_base.scheme or "http"
+    port = parsed_base.port or 8080
+    base_urls = [
+        f"{scheme}://localhost:{port}",
+        f"{scheme}://127.0.0.1:{port}",
+        base_url,
+    ]
+    if parsed_base.hostname:
+        base_urls.append(f"{scheme}://{parsed_base.hostname}:{port}")
 
     candidate_urls: list[str] = []
     for root in dict.fromkeys(base_urls):
@@ -420,6 +425,7 @@ def _read_mqtt_queue_metrics(config: dict[str, Any], mqtt_ui_url: str) -> dict[s
                 f"{root}/tools/queue/",
                 f"{root}/tools/Queue",
                 f"{root}/tools/queue-status",
+                f"{root}/tools/QueueStatus",
                 f"{root}/queue-status",
                 f"{root}/QueueStatus",
                 f"{root}/queuestatus",
