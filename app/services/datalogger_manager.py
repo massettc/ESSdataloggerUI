@@ -471,8 +471,32 @@ def _read_mqtt_queue_metrics(
                     parsed["queue_fetch_error"] = ""
                     return parsed
             debug_notes.append(f"mapped_port_error={last_error}")
+        else:
+            debug_notes.append("mapped_port=none")
 
-    # Strategy 3: Fall back to the public mqtt_ui_url (for non-Docker setups).
+    # Strategy 3: Try well-known host port (8080) on loopback directly.
+    if mqtt_ui_url:
+        parsed_base = urlparse(mqtt_ui_url)
+        port = parsed_base.port or 8080
+        for path in candidate_paths:
+            url = f"http://127.0.0.1:{port}{path}"
+            last_url = url
+            try:
+                request = Request(url, headers=headers)
+                with urlopen(request, timeout=timeout) as response:
+                    payload = response.read().decode("utf-8", errors="ignore")
+            except (HTTPError, URLError, TimeoutError, ValueError, OSError) as exc:
+                last_error = str(exc)
+                continue
+
+            parsed = _extract_mqtt_queue_metrics(payload)
+            if any(parsed.get(key) is not None for key in ("queue_size", "success_rate", "failure_rate")):
+                parsed["queue_source_url"] = url
+                parsed["queue_fetch_error"] = ""
+                return parsed
+        debug_notes.append(f"loopback_port={port}_error={last_error}")
+
+    # Strategy 4: Fall back to the public mqtt_ui_url (for non-Docker setups).
     if mqtt_ui_url:
         url = mqtt_ui_url.rstrip("/") + "/tools/queue"
         last_url = url
@@ -519,15 +543,16 @@ def _get_container_ip(config: dict[str, Any], docker_bin: str, container_name: s
 
 def _get_container_host_port(config: dict[str, Any], docker_bin: str, container_name: str) -> str:
     """Return the host port mapped to port 80 in the container, or ''."""
-    result = _run_docker_command(
-        config,
-        [docker_bin, "port", container_name, "80"],
-        check=False,
-    )
-    if result.returncode == 0:
-        match = re.search(r":(\d+)\s*$", result.stdout.strip())
-        if match:
-            return match.group(1)
+    # Try specific port 80 first, then fall back to any port mapping.
+    for port_arg in ["80", "80/tcp", None]:
+        cmd = [docker_bin, "port", container_name]
+        if port_arg:
+            cmd.append(port_arg)
+        result = _run_docker_command(config, cmd, check=False)
+        if result.returncode == 0 and result.stdout.strip():
+            match = re.search(r":(\d+)\s*$", result.stdout.strip())
+            if match:
+                return match.group(1)
     return ""
 
 
