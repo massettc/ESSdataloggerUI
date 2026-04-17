@@ -418,7 +418,17 @@ def _read_mqtt_queue_metrics(
     last_url = ""
     debug_notes: list[str] = []
 
-    candidate_paths = ["/tools/queue", "/tools/queue/", "/QueueStatus", "/"]
+    candidate_paths = [
+        # .NET API endpoints (Angular SPA loads data from these)
+        "/api/queue",
+        "/api/queue-status",
+        "/api/tools/queue",
+        "/api/queueStatus",
+        "/api/QueueStatus",
+        "/api/mqtt/queue",
+        "/api/status/queue",
+        "/api/status",
+    ]
 
     # Ports that are definitely NOT HTTP — skip them to save time.
     _NON_HTTP_PORTS = {"1883", "8883", "9001"}  # MQTT, MQTT-TLS, WebSocket
@@ -488,9 +498,8 @@ def _read_mqtt_queue_metrics(
             parsed["queue_source_url"] = url
             parsed["queue_fetch_error"] = ""
             return parsed
-        # Show a snippet of the response to help diagnose parsing failures.
-        snippet = payload[:300].replace("\n", " ").replace("\r", "")
-        attempt_errors.append(f"{url} => no metrics in response ({len(payload)} bytes) snippet: {snippet!r}")
+        # Show a compact summary for parse failures.
+        attempt_errors.append(f"{url} => no metrics ({len(payload)}B)")
 
     diag = "; ".join(debug_notes) if debug_notes else ""
     attempts = " | ".join(attempt_errors) if attempt_errors else "no attempts"
@@ -518,13 +527,16 @@ def _fetch_url(url: str, timeout: int = 2) -> tuple[str, str]:
         conn = http.client.HTTPConnection(host, port, timeout=timeout)
         conn._http_vsn = 10
         conn._http_vsn_str = "HTTP/1.0"
-        conn.request("GET", path, headers={"Connection": "close"})
+        conn.request("GET", path, headers={"Connection": "close", "Accept": "application/json, text/html"})
         resp = conn.getresponse()
         body = resp.read().decode("utf-8", errors="replace")
         conn.close()
-        if resp.status == 200:
-            return body, ""
-        return "", f"HTTP {resp.status} from {host}:{port}{path}"
+        if resp.status >= 400:
+            return "", f"HTTP {resp.status}"
+        # Skip SPA shell responses (Angular/Blazor) — metrics won't be in there.
+        if body.strip().startswith("<!doctype") or body.strip().startswith("<!DOCTYPE"):
+            return "", f"SPA shell ({len(body)}B)"
+        return body, ""
     except Exception as exc:
         return "", f"{host}:{port}: {exc}"
 
