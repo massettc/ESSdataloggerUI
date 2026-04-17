@@ -407,6 +407,9 @@ def _read_mqtt_queue_metrics(config: dict[str, Any], mqtt_ui_url: str) -> dict[s
 
     base_url = mqtt_ui_url.rstrip("/")
     candidate_urls = [
+        f"{base_url}/tools/queue",
+        f"{base_url}/tools/Queue",
+        f"{base_url}/tools/queue-status",
         f"{base_url}/queue-status",
         f"{base_url}/QueueStatus",
         f"{base_url}/queuestatus",

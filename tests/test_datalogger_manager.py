@@ -175,3 +175,40 @@ def test_read_mqtt_queue_metrics_follows_queue_status_link_from_root_page(monkey
     assert parsed["success_rate"] == 0.18
     assert parsed["failure_rate"] == 1.31
     assert parsed["queue_source_url"] == "http://ess-pi:8080/QueueStatus"
+
+
+def test_read_mqtt_queue_metrics_supports_tools_queue_route(monkeypatch):
+    responses = {
+        "http://ess-pi:8080/tools/queue": (
+            "<section><div>LENGTH</div><div>7</div><div>SUCCESS RATE (SEC)</div><div>0.92</div>"
+            "<div>FAILURE RATE (SEC)</div><div>0.03</div><div>FAILURE SAMPLES</div><div>101</div></section>"
+        )
+    }
+
+    class FakeResponse:
+        def __init__(self, text):
+            self._text = text
+
+        def read(self):
+            return self._text.encode("utf-8")
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    def fake_urlopen(request, timeout=0):
+        url = request.full_url if hasattr(request, "full_url") else str(request)
+        if url in responses:
+            return FakeResponse(responses[url])
+        raise datalogger_manager.URLError(f"unexpected URL: {url}")
+
+    monkeypatch.setattr(datalogger_manager, "urlopen", fake_urlopen)
+
+    parsed = datalogger_manager._read_mqtt_queue_metrics({}, "http://ess-pi:8080")
+
+    assert parsed["queue_size"] == 7
+    assert parsed["success_rate"] == 0.92
+    assert parsed["failure_rate"] == 0.03
+    assert parsed["queue_source_url"] == "http://ess-pi:8080/tools/queue"
