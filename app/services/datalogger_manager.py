@@ -508,17 +508,38 @@ def _read_mqtt_queue_metrics(
 
 
 def _read_mqtt_queue_metrics_from_container(config: dict[str, Any], docker_bin: str, container_name: str) -> dict[str, Any]:
-    command = [
-        docker_bin,
-        "exec",
-        container_name,
-        "sh",
-        "-lc",
-        "wget -qO- http://127.0.0.1/tools/queue || wget -qO- http://localhost/tools/queue || curl -fsS http://127.0.0.1/tools/queue || curl -fsS http://localhost/tools/queue",
-    ]
-    result = _run_docker_command(config, command, check=False)
     queue_source = f"container://{container_name}/tools/queue"
-    if result.returncode != 0:
+    commands = [
+        [
+            docker_bin,
+            "exec",
+            container_name,
+            "python3",
+            "-c",
+            "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1/tools/queue', timeout=2).read().decode('utf-8', 'ignore'))",
+        ],
+        [
+            docker_bin,
+            "exec",
+            container_name,
+            "python",
+            "-c",
+            "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1/tools/queue', timeout=2).read().decode('utf-8', 'ignore'))",
+        ],
+    ]
+
+    last_result = None
+    for command in commands:
+        result = _run_docker_command(config, command, check=False)
+        last_result = result
+        if result.returncode == 0 and result.stdout.strip():
+            parsed = _extract_mqtt_queue_metrics(result.stdout)
+            parsed["queue_source_url"] = queue_source
+            parsed["queue_fetch_error"] = ""
+            return parsed
+
+    result = last_result
+    if result is None:
         return {
             "queue_size": None,
             "success_rate": None,
@@ -526,7 +547,7 @@ def _read_mqtt_queue_metrics_from_container(config: dict[str, Any], docker_bin: 
             "success_samples": None,
             "failure_samples": None,
             "queue_source_url": queue_source,
-            "queue_fetch_error": _command_error(result, "Unable to read MQTT queue page from container"),
+            "queue_fetch_error": "Unable to run container queue probe",
         }
 
     parsed = _extract_mqtt_queue_metrics(result.stdout)

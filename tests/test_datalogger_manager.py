@@ -33,9 +33,9 @@ def test_get_datalogger_status_parses_logger_roles_and_health(monkeypatch):
             "docker",
             "exec",
             "opsviewer2-edge",
-            "sh",
-            "-lc",
-            "wget -qO- http://127.0.0.1/tools/queue || wget -qO- http://localhost/tools/queue || curl -fsS http://127.0.0.1/tools/queue || curl -fsS http://localhost/tools/queue",
+            "python3",
+            "-c",
+            "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1/tools/queue', timeout=2).read().decode('utf-8', 'ignore'))",
         ):
             subprocess.CompletedProcess(
                 args=[],
