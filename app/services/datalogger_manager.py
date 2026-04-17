@@ -416,16 +416,19 @@ def _read_mqtt_queue_metrics(
 ) -> dict[str, Any]:
     last_error = ""
     last_url = ""
+    debug_notes: list[str] = []
+
+    timeout = max(0.5, min(2.0, float(config.get("VERIFY_POLL_SECONDS", 2))))
+    headers = {"User-Agent": "ESS-Datalogger-UI/1.0", "Accept": "text/html,application/json"}
+    candidate_paths = ["/tools/queue", "/tools/queue/", "/tools/Queue",
+                       "/QueueStatus", "/queue-status", "/"]
 
     # Strategy 1: Use Docker container's internal bridge IP to bypass any
     # host port conflicts (the Flask app and Edge UI may share port 8080).
     if docker_bin and container_name:
         container_ip = _get_container_ip(config, docker_bin, container_name)
         if container_ip:
-            candidate_paths = ["/tools/queue", "/tools/queue/", "/tools/Queue",
-                               "/QueueStatus", "/queue-status", "/"]
-            timeout = max(0.5, min(1.0, float(config.get("VERIFY_POLL_SECONDS", 2))))
-            headers = {"User-Agent": "ESS-Datalogger-UI/1.0", "Accept": "text/html,application/json"}
+            debug_notes.append(f"container_ip={container_ip}")
             for path in candidate_paths:
                 url = f"http://{container_ip}{path}"
                 last_url = url
@@ -442,13 +445,37 @@ def _read_mqtt_queue_metrics(
                     parsed["queue_source_url"] = url
                     parsed["queue_fetch_error"] = ""
                     return parsed
+            debug_notes.append(f"container_ip_error={last_error}")
+        else:
+            debug_notes.append("container_ip=none")
 
-    # Strategy 2: Fall back to the public mqtt_ui_url (for non-Docker setups).
+    # Strategy 2: Use the actual mapped host port from `docker port`.
+    if docker_bin and container_name:
+        host_port = _get_container_host_port(config, docker_bin, container_name)
+        if host_port:
+            debug_notes.append(f"mapped_port={host_port}")
+            for path in candidate_paths:
+                url = f"http://127.0.0.1:{host_port}{path}"
+                last_url = url
+                try:
+                    request = Request(url, headers=headers)
+                    with urlopen(request, timeout=timeout) as response:
+                        payload = response.read().decode("utf-8", errors="ignore")
+                except (HTTPError, URLError, TimeoutError, ValueError, OSError) as exc:
+                    last_error = str(exc)
+                    continue
+
+                parsed = _extract_mqtt_queue_metrics(payload)
+                if any(parsed.get(key) is not None for key in ("queue_size", "success_rate", "failure_rate")):
+                    parsed["queue_source_url"] = url
+                    parsed["queue_fetch_error"] = ""
+                    return parsed
+            debug_notes.append(f"mapped_port_error={last_error}")
+
+    # Strategy 3: Fall back to the public mqtt_ui_url (for non-Docker setups).
     if mqtt_ui_url:
         url = mqtt_ui_url.rstrip("/") + "/tools/queue"
         last_url = url
-        timeout = max(0.5, min(1.0, float(config.get("VERIFY_POLL_SECONDS", 2))))
-        headers = {"User-Agent": "ESS-Datalogger-UI/1.0", "Accept": "text/html,application/json"}
         try:
             request = Request(url, headers=headers)
             with urlopen(request, timeout=timeout) as response:
@@ -461,6 +488,8 @@ def _read_mqtt_queue_metrics(
         except (HTTPError, URLError, TimeoutError, ValueError, OSError) as exc:
             last_error = str(exc)
 
+    diag = "; ".join(debug_notes) if debug_notes else ""
+    full_error = f"{last_error} [{diag}]" if diag else last_error
     return {
         "queue_size": None,
         "success_rate": None,
@@ -468,7 +497,7 @@ def _read_mqtt_queue_metrics(
         "success_samples": None,
         "failure_samples": None,
         "queue_source_url": last_url,
-        "queue_fetch_error": last_error,
+        "queue_fetch_error": full_error,
     }
 
 
@@ -485,6 +514,20 @@ def _get_container_ip(config: dict[str, Any], docker_bin: str, container_name: s
         ip = result.stdout.strip()
         if ip and re.match(r"^\d{1,3}(\.\d{1,3}){3}$", ip):
             return ip
+    return ""
+
+
+def _get_container_host_port(config: dict[str, Any], docker_bin: str, container_name: str) -> str:
+    """Return the host port mapped to port 80 in the container, or ''."""
+    result = _run_docker_command(
+        config,
+        [docker_bin, "port", container_name, "80"],
+        check=False,
+    )
+    if result.returncode == 0:
+        match = re.search(r":(\d+)\s*$", result.stdout.strip())
+        if match:
+            return match.group(1)
     return ""
 
 
