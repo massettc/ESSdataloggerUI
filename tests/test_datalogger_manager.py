@@ -65,7 +65,7 @@ def test_get_datalogger_status_parses_logger_roles_and_health(monkeypatch):
         return outputs.get(key, subprocess.CompletedProcess(args=args, returncode=1, stdout="", stderr="missing"))
 
     def fake_fetch(url, timeout=5):
-        if "172.17.0.3" in url and "/tools/queue" in url:
+        if "172.17.0.3" in url and "/api/Queue" in url:
             return queue_html, ""
         return "", f"failed: {url}"
 
@@ -177,7 +177,7 @@ def test_read_mqtt_queue_metrics_uses_container_bridge_ip(monkeypatch):
         return subprocess.CompletedProcess(args=args, returncode=1, stdout="", stderr="")
 
     def fake_fetch(url, timeout=5):
-        if "172.17.0.3" in url and "/tools/queue" in url:
+        if "172.17.0.3" in url and "/api/Queue" in url:
             return queue_html, ""
         return "", f"failed: {url}"
 
@@ -193,7 +193,7 @@ def test_read_mqtt_queue_metrics_uses_container_bridge_ip(monkeypatch):
     assert parsed["success_rate"] == 0.92
     assert parsed["failure_rate"] == 0.03
     assert "172.17.0.3" in parsed["queue_source_url"]
-    assert "/tools/queue" in parsed["queue_source_url"]
+    assert "/api/Queue" in parsed["queue_source_url"]
 
 
 def test_read_mqtt_queue_metrics_falls_back_to_public_url(monkeypatch):
@@ -207,7 +207,7 @@ def test_read_mqtt_queue_metrics_falls_back_to_public_url(monkeypatch):
         return subprocess.CompletedProcess(args=args, returncode=1, stdout="", stderr="")
 
     def fake_fetch(url, timeout=5):
-        if "ess-pi" in url and "/tools/queue" in url:
+        if "ess-pi" in url and "/api/Queue" in url:
             return queue_html, ""
         return "", f"failed: {url}"
 
@@ -223,4 +223,4 @@ def test_read_mqtt_queue_metrics_falls_back_to_public_url(monkeypatch):
     assert parsed["success_rate"] == 0.55
     assert parsed["failure_rate"] == 0.02
     assert "ess-pi" in parsed["queue_source_url"]
-    assert "/tools/queue" in parsed["queue_source_url"]
+    assert "/api/Queue" in parsed["queue_source_url"]

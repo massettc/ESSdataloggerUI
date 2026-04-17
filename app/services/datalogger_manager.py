@@ -419,15 +419,8 @@ def _read_mqtt_queue_metrics(
     debug_notes: list[str] = []
 
     candidate_paths = [
-        # .NET API endpoints (Angular SPA loads data from these)
+        "/api/Queue",
         "/api/queue",
-        "/api/queue-status",
-        "/api/tools/queue",
-        "/api/queueStatus",
-        "/api/QueueStatus",
-        "/api/mqtt/queue",
-        "/api/status/queue",
-        "/api/status",
     ]
 
     # Ports that are definitely NOT HTTP — skip them to save time.
