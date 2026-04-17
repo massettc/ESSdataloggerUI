@@ -494,6 +494,7 @@ def _fetch_url_via_cli(url: str, timeout: int = 5) -> tuple[str, str]:
         ["wget", "-q", "-O", "-", "--timeout", str(timeout), url],
         ["curl", "-s", "-m", str(timeout), url],
     ]
+    last_error = ""
     for cmd in commands:
         try:
             result = subprocess.run(
@@ -501,11 +502,14 @@ def _fetch_url_via_cli(url: str, timeout: int = 5) -> tuple[str, str]:
             )
             if result.returncode == 0 and result.stdout.strip():
                 return result.stdout, ""
+            last_error = result.stderr.strip() or f"{cmd[0]} exit {result.returncode}"
         except FileNotFoundError:
+            last_error = f"{cmd[0]} not found"
             continue
-        except subprocess.TimeoutExpired:
-            return "", f"timeout fetching {url}"
-    return "", f"wget/curl unavailable or failed for {url}"
+        except Exception as exc:
+            last_error = f"{cmd[0]}: {exc}"
+            continue
+    return "", last_error or f"wget/curl failed for {url}"
 
 
 def _get_container_ip(config: dict[str, Any], docker_bin: str, container_name: str) -> str:
