@@ -419,6 +419,9 @@ def _read_mqtt_queue_metrics(
 
     candidate_paths = ["/tools/queue", "/tools/queue/", "/QueueStatus", "/"]
 
+    # Ports that are definitely NOT HTTP — skip them to save time.
+    _NON_HTTP_PORTS = {"1883", "8883", "9001"}  # MQTT, MQTT-TLS, WebSocket
+
     # Collect all base URLs to try.
     base_urls: list[str] = []
 
@@ -429,14 +432,13 @@ def _read_mqtt_queue_metrics(
         if container_ip:
             debug_notes.append(f"container_ip={container_ip}")
             for container_port, host_port in port_mappings:
-                base_urls.append(f"http://{container_ip}:{container_port}")
+                if container_port not in _NON_HTTP_PORTS:
+                    base_urls.append(f"http://{container_ip}:{container_port}")
         else:
             debug_notes.append("container_ip=none")
 
         if port_mappings:
             debug_notes.append(f"ports={','.join(f'{c}->{h}' for c, h in port_mappings)}")
-            for container_port, host_port in port_mappings:
-                base_urls.append(f"http://127.0.0.1:{host_port}")
 
     if mqtt_ui_url:
         parsed_base = urlparse(mqtt_ui_url)
@@ -461,15 +463,15 @@ def _read_mqtt_queue_metrics(
 
     # Use wget/curl from the host OS — Python's urllib gets connection
     # drops from the .NET Kestrel server inside the container.
-    # Hard budget of 10 s so we never exceed gunicorn's 30 s worker timeout.
-    deadline = time.monotonic() + 10
+    # Hard budget of 12 s so we never exceed gunicorn's 30 s worker timeout.
+    deadline = time.monotonic() + 12
     for url in candidate_urls:
         if time.monotonic() >= deadline:
             last_error = "time budget exceeded"
             break
         last_url = url
         remaining = max(1, int(deadline - time.monotonic()))
-        per_url_timeout = min(3, remaining)
+        per_url_timeout = min(2, remaining)
         payload, error = _fetch_url_via_cli(url, timeout=per_url_timeout)
         if error:
             last_error = error
