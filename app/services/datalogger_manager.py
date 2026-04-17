@@ -466,6 +466,7 @@ def _read_mqtt_queue_metrics(
     # drops from the .NET Kestrel server inside the container.
     # Hard budget of 12 s so we never exceed gunicorn's 30 s worker timeout.
     deadline = time.monotonic() + 12
+    attempt_errors: list[str] = []
     for url in candidate_urls:
         if time.monotonic() >= deadline:
             last_error = "time budget exceeded"
@@ -476,8 +477,10 @@ def _read_mqtt_queue_metrics(
         payload, error = _fetch_url(url, timeout=per_url_timeout)
         if error:
             last_error = error
+            attempt_errors.append(f"{url} => {error}")
             continue
         if not payload:
+            attempt_errors.append(f"{url} => empty response")
             continue
 
         parsed = _extract_mqtt_queue_metrics(payload)
@@ -485,9 +488,11 @@ def _read_mqtt_queue_metrics(
             parsed["queue_source_url"] = url
             parsed["queue_fetch_error"] = ""
             return parsed
+        attempt_errors.append(f"{url} => no metrics in response ({len(payload)} bytes)")
 
     diag = "; ".join(debug_notes) if debug_notes else ""
-    full_error = f"{last_error} [{diag}]" if diag else last_error
+    attempts = " | ".join(attempt_errors) if attempt_errors else "no attempts"
+    full_error = f"{last_error} [{diag}] attempts: {attempts}"
     return {
         "queue_size": None,
         "success_rate": None,
