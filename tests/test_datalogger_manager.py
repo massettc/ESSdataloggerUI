@@ -90,15 +90,20 @@ def test_get_datalogger_status_parses_logger_roles_and_health(monkeypatch):
     assert status["mqtt_logger"]["running"] is True
     assert status["mqtt_logger"]["device_id"] == "ESS-UNIT-81"
     assert status["mqtt_logger"]["summary"] == "Buffering 7 records locally"
+    assert status["mqtt_logger"]["card_title"] == "Cloud delivery"
+    assert status["mqtt_logger"]["connection_label"] == "Backlog detected"
     assert status["mqtt_logger"]["mqtt_ui_url"] == "http://ess-pi:8080"
     assert status["mqtt_logger"]["queue_size"] == 7
     assert status["mqtt_logger"]["broker_clients_connected"] == 7
     assert "172.17.0.3" in status["mqtt_logger"]["queue_source_url"]
     assert "push" in status["mqtt_logger"]["last_push_label"].lower()
     assert status["plc_logger"]["running"] is False
+    assert status["plc_logger"]["card_title"] == "PLC connection"
+    assert status["plc_logger"]["connection_label"] == "Not connected"
     assert status["plc_logger"]["measurements"] == 43
     assert status["plc_logger"]["queue_size"] == 0
-    assert status["plc_logger"]["summary"] == "Last send OK"
+    assert status["plc_logger"]["summary"] == "PLC logger is stopped"
+    assert status["system_status_label"] == "PLC disconnected"
     assert "PLC logger stopped" in status["warnings"]
 
 

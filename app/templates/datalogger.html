@@ -16,8 +16,13 @@
                 <span class="hero-status-label">WiFi status</span>
                 <span id="wifi-pill" class="status-pill {{ connectivity.get('wifi_class', 'status-neutral') }}"><span class="status-dot"></span>{{ connectivity.get('wifi_label', 'Unknown') }}</span>
             </div>
+            <div class="hero-status-chip">
+                <span class="hero-status-label">System status</span>
+                <span id="system-pill" class="status-pill {{ datalogger_status.get('system_status_class', 'status-neutral') }}"><span class="status-dot"></span>{{ datalogger_status.get('system_status_label', 'Checking status') }}</span>
+            </div>
         </div>
-        <p>Use this page as the technician-friendly entry point to confirm which logger is active and whether data is still flowing.</p>
+        <p id="system-status-note" class="muted-note">{{ datalogger_status.get('system_status_detail', 'Waiting for live logger data.') }}</p>
+        <p>Use this page as the technician-friendly entry point to confirm PLC logging and cloud delivery at a glance.</p>
     </div>
     <div class="hero-actions">
         {% if datalogger_status.mqtt_ui_url %}
@@ -35,7 +40,7 @@
             <h3>Logger health</h3>
             <p>Live technician view of recent push activity. This section refreshes every second while the page is open.</p>
         </div>
-        <span class="status-pill status-neutral" id="logger-live-pill"><span class="status-dot"></span>Live updating</span>
+        <span class="status-pill {{ datalogger_status.get('system_status_class', 'status-neutral') }}" id="logger-live-pill"><span class="status-dot"></span>{{ datalogger_status.get('system_status_label', 'Checking status') }}</span>
     </div>
 
     {% if datalogger_status.get('warnings') %}
@@ -49,8 +54,8 @@
     <div class="logger-health-grid">
         <article class="stat-card logger-health-card">
             <div class="logger-card-header">
-                <strong>MQTT logger</strong>
-                <span id="mqtt-push-pill" class="status-pill {{ mqtt_logger.get('status_class', 'status-neutral') }}"><span class="status-dot"></span>{{ mqtt_logger.get('last_push_label', 'Waiting for data') }}</span>
+                <strong id="mqtt-card-title">{{ mqtt_logger.get('card_title', 'Cloud delivery') }}</strong>
+                <span id="mqtt-push-pill" class="status-pill {{ mqtt_logger.get('connection_class', mqtt_logger.get('status_class', 'status-neutral')) }}"><span class="status-dot"></span>{{ mqtt_logger.get('connection_label', mqtt_logger.get('last_push_label', 'Waiting for data')) }}</span>
             </div>
             <p id="mqtt-summary" class="logger-summary">{{ mqtt_logger.get('summary', 'No recent activity') }}</p>
             <p id="mqtt-activity" class="muted-note">Container: {{ mqtt_logger.get('name', 'opsviewer2-edge') }} | Last activity: {{ mqtt_logger.get('last_activity_text', 'Unknown') }}</p>
@@ -65,11 +70,11 @@
                     <strong id="mqtt-queue-value">{% if mqtt_logger.get('queue_size') is not none %}{{ mqtt_logger.get('queue_size') }} buffered{% else %}n/a{% endif %}</strong>
                 </div>
                 <div class="logger-metric">
-                    <span>Broker clients</span>
-                    <strong id="mqtt-broker-value">{% if mqtt_logger.get('broker_clients_connected') is not none %}{{ mqtt_logger.get('broker_clients_connected') }} connected{% else %}n/a{% endif %}</strong>
+                    <span>Last pushed</span>
+                    <strong id="mqtt-last-push-value">{{ mqtt_logger.get('last_push_label', 'Waiting for data') }}</strong>
                 </div>
             </div>
-            <p id="mqtt-metrics" class="muted-note">Queue: {% if mqtt_logger.get('queue_size') is not none %}{{ mqtt_logger.get('queue_size') }}{% else %}n/a{% endif %} | Broker clients: {% if mqtt_logger.get('broker_clients_connected') is not none %}{{ mqtt_logger.get('broker_clients_connected') }}{% else %}n/a{% endif %}</p>
+            <p id="mqtt-metrics" class="muted-note">Queue: {% if mqtt_logger.get('queue_size') is not none %}{{ mqtt_logger.get('queue_size') }}{% else %}n/a{% endif %} | Status: {{ mqtt_logger.get('connection_label', 'Waiting for data') }}</p>
             {% if mqtt_logger.get('queue_source_url') %}
             <p id="mqtt-source" class="muted-note">Queue source: {{ mqtt_logger.get('queue_source_url') }}</p>
             {% else %}
@@ -89,8 +94,8 @@
 
         <article class="stat-card logger-health-card">
             <div class="logger-card-header">
-                <strong>PLC logger</strong>
-                <span id="plc-push-pill" class="status-pill {{ plc_logger.get('status_class', 'status-neutral') }}"><span class="status-dot"></span>{{ plc_logger.get('last_push_label', 'Waiting for data') }}</span>
+                <strong id="plc-card-title">{{ plc_logger.get('card_title', 'PLC connection') }}</strong>
+                <span id="plc-push-pill" class="status-pill {{ plc_logger.get('connection_class', plc_logger.get('status_class', 'status-neutral')) }}"><span class="status-dot"></span>{{ plc_logger.get('connection_label', plc_logger.get('last_push_label', 'Waiting for data')) }}</span>
             </div>
             <p id="plc-summary" class="logger-summary">{{ plc_logger.get('summary', 'No recent activity') }}</p>
             <p id="plc-activity" class="muted-note">Container: {{ plc_logger.get('name', 'plcreader') }} | Last activity: {{ plc_logger.get('last_activity_text', 'Unknown') }}</p>
@@ -236,7 +241,8 @@ document.addEventListener('DOMContentLoaded', function () {
         setError('mqtt-fetch-error', '');
         if (typeof queue === 'number' && queue > 0) {
             setText('mqtt-summary', 'Buffering ' + queue + ' records locally');
-            setPill('mqtt-push-pill', 'Queue building', 'status-warning');
+            setPill('mqtt-push-pill', 'Backlog detected', 'status-warning');
+            setText('mqtt-metrics', 'Queue: ' + queue + ' | Status: Backlog detected');
         }
     }
 
@@ -266,7 +272,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function updateLoggerSection(prefix, logger) {
         if (!logger) return;
-        setPill(prefix + '-push-pill', logger.last_push_label, logger.status_class);
+        setPill(prefix + '-push-pill', logger.connection_label || logger.last_push_label, logger.connection_class || logger.status_class);
         setText(prefix + '-summary', logger.summary || 'No recent activity');
         setText(prefix + '-activity', 'Container: ' + (logger.name || 'unknown') + ' | Last activity: ' + (logger.last_activity_text || 'Unknown'));
 
@@ -279,11 +285,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             }
             const queue = logger.queue_size !== null && logger.queue_size !== undefined ? logger.queue_size : 'n/a';
-            const brokerClients = logger.broker_clients_connected !== null && logger.broker_clients_connected !== undefined ? logger.broker_clients_connected : 'n/a';
+            const linkStatus = logger.connection_label || 'Waiting for data';
+            setText('mqtt-card-title', logger.card_title || 'Cloud delivery');
             setText('mqtt-device', deviceText);
             setText('mqtt-queue-value', queue === 'n/a' ? queue : queue + ' buffered');
-            setText('mqtt-broker-value', brokerClients === 'n/a' ? brokerClients : brokerClients + ' connected');
-            setText('mqtt-metrics', 'Queue: ' + queue + ' | Broker clients: ' + brokerClients);
+            setText('mqtt-last-push-value', logger.last_push_label || 'Waiting for data');
+            setText('mqtt-metrics', 'Queue: ' + queue + ' | Status: ' + linkStatus);
             setText('mqtt-source', 'Queue source: ' + (logger.queue_source_url || 'not detected yet'));
             setError('mqtt-fetch-error', logger.queue_fetch_error || '');
         }
@@ -291,6 +298,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (prefix === 'plc') {
             const measurements = logger.measurements !== null && logger.measurements !== undefined ? logger.measurements : 'n/a';
             const queue = logger.queue_size !== null && logger.queue_size !== undefined ? logger.queue_size : 'n/a';
+            setText('plc-card-title', logger.card_title || 'PLC connection');
             setText('plc-metrics', 'Measurements: ' + measurements + ' | Queue: ' + queue);
         }
 
@@ -302,6 +310,9 @@ document.addEventListener('DOMContentLoaded', function () {
             const response = await fetch(endpoint, { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
             if (!response.ok) return;
             const status = await response.json();
+            setPill('system-pill', status.system_status_label || 'Checking status', status.system_status_class || 'status-neutral');
+            setPill('logger-live-pill', status.system_status_label || 'Checking status', status.system_status_class || 'status-neutral');
+            setText('system-status-note', status.system_status_detail || 'Waiting for live logger data.');
             updateLoggerSection('mqtt', status.mqtt_logger || {});
             updateLoggerSection('plc', status.plc_logger || {});
             const mqttBaseUrl = (status.mqtt_logger && status.mqtt_logger.mqtt_ui_url) || status.mqtt_ui_url || '';

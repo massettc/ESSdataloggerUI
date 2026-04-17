@@ -32,6 +32,9 @@ def get_datalogger_status(config: dict[str, Any], host: str | None = None) -> di
         "containers": [],
         "active_logger": "No Logger Running",
         "warnings": [],
+        "system_status_label": "Checking status",
+        "system_status_class": "status-neutral",
+        "system_status_detail": "Waiting for live logger data.",
         "mqtt_logger": _default_logger_state("MQTT Logger", mqtt_container_name),
         "plc_logger": _default_logger_state("PLC Logger", plc_container_name),
         "error": "",
@@ -98,10 +101,11 @@ def get_datalogger_status(config: dict[str, Any], host: str | None = None) -> di
             status["plc_logger"] = _finalize_logger_state(status["plc_logger"])
 
     status["containers"] = containers
-    status["mqtt_logger"] = _finalize_logger_state(status["mqtt_logger"])
-    status["plc_logger"] = _finalize_logger_state(status["plc_logger"])
+    status["mqtt_logger"] = _decorate_mqtt_logger_state(_finalize_logger_state(status["mqtt_logger"]))
+    status["plc_logger"] = _decorate_plc_logger_state(_finalize_logger_state(status["plc_logger"]))
     status["active_logger"] = _determine_active_logger(status["mqtt_logger"], status["plc_logger"])
     status["warnings"] = _build_logger_warnings(status["mqtt_logger"], status["plc_logger"])
+    status.update(_build_system_status(status["mqtt_logger"], status["plc_logger"], status["warnings"]))
     return status
 
 
@@ -221,6 +225,9 @@ def _default_logger_state(label: str, container_name: str) -> dict[str, Any]:
         "last_push_age_seconds": None,
         "last_push_label": "Waiting for data",
         "status_class": "status-neutral",
+        "card_title": "Cloud delivery" if label == "MQTT Logger" else "PLC connection",
+        "connection_label": "Waiting",
+        "connection_class": "status-neutral",
         "error": "",
         "measurements": None,
         "queue_size": None,
@@ -374,6 +381,130 @@ def _finalize_logger_state(logger: dict[str, Any]) -> dict[str, Any]:
     return logger
 
 
+def _decorate_mqtt_logger_state(logger: dict[str, Any]) -> dict[str, Any]:
+    logger = dict(logger)
+    logger["card_title"] = "Cloud delivery"
+
+    if logger.get("error"):
+        logger["connection_label"] = "Send error"
+        logger["connection_class"] = "status-offline"
+        return logger
+
+    if not logger.get("running"):
+        logger["connection_label"] = "Stopped"
+        logger["connection_class"] = "status-offline"
+        logger["summary"] = "Cloud delivery is not running"
+        return logger
+
+    queue_size = logger.get("queue_size")
+    age_seconds = logger.get("last_push_age_seconds")
+
+    if isinstance(queue_size, int) and queue_size > 0:
+        logger["connection_label"] = "Backlog detected"
+        logger["connection_class"] = "status-warning"
+        logger["summary"] = f"Buffering {queue_size} records locally"
+    elif isinstance(age_seconds, int) and age_seconds <= 60:
+        logger["connection_label"] = "Connected"
+        logger["connection_class"] = "status-online"
+        if logger.get("summary") in {"No recent activity", "Data pushed successfully"}:
+            logger["summary"] = "Sending data to cloud"
+    else:
+        logger["connection_label"] = "Waiting"
+        logger["connection_class"] = "status-neutral"
+
+    return logger
+
+
+def _decorate_plc_logger_state(logger: dict[str, Any]) -> dict[str, Any]:
+    logger = dict(logger)
+    logger["card_title"] = "PLC connection"
+
+    if logger.get("error"):
+        logger["connection_label"] = "PLC error"
+        logger["connection_class"] = "status-offline"
+        logger["summary"] = "PLC logging error detected"
+        return logger
+
+    if not logger.get("running"):
+        logger["connection_label"] = "Not connected"
+        logger["connection_class"] = "status-offline"
+        logger["summary"] = "PLC logger is stopped"
+        return logger
+
+    age_seconds = logger.get("last_push_age_seconds")
+    measurements = logger.get("measurements")
+
+    if (isinstance(age_seconds, int) and age_seconds <= 60) or measurements is not None:
+        logger["connection_label"] = "Connected"
+        logger["connection_class"] = "status-online"
+        if measurements is not None:
+            logger["summary"] = f"Logging from PLC ({measurements} measurements)"
+        else:
+            logger["summary"] = "Logging from PLC"
+    else:
+        logger["connection_label"] = "Waiting"
+        logger["connection_class"] = "status-neutral"
+        logger["summary"] = "Waiting for PLC data"
+
+    return logger
+
+
+def _build_system_status(
+    mqtt_logger: dict[str, Any],
+    plc_logger: dict[str, Any],
+    warnings: list[str],
+) -> dict[str, str]:
+    if mqtt_logger.get("error") or plc_logger.get("error"):
+        detail = mqtt_logger.get("error") or plc_logger.get("error") or "A logger reported an error."
+        return {
+            "system_status_label": "Action needed",
+            "system_status_class": "status-offline",
+            "system_status_detail": detail,
+        }
+
+    queue_size = mqtt_logger.get("queue_size")
+    if not plc_logger.get("running"):
+        return {
+            "system_status_label": "PLC disconnected",
+            "system_status_class": "status-offline",
+            "system_status_detail": "The PLC logger is not currently running.",
+        }
+
+    if not mqtt_logger.get("running"):
+        return {
+            "system_status_label": "Cloud send stopped",
+            "system_status_class": "status-offline",
+            "system_status_detail": "Cloud delivery is not currently running.",
+        }
+
+    if isinstance(queue_size, int) and queue_size > 0:
+        return {
+            "system_status_label": "Backlog building",
+            "system_status_class": "status-warning",
+            "system_status_detail": f"Cloud send is active, but {queue_size} records are buffered locally.",
+        }
+
+    if mqtt_logger.get("running") and plc_logger.get("running"):
+        return {
+            "system_status_label": "System healthy",
+            "system_status_class": "status-online",
+            "system_status_detail": "PLC logging and cloud delivery are both active.",
+        }
+
+    if warnings:
+        return {
+            "system_status_label": "Check system",
+            "system_status_class": "status-neutral",
+            "system_status_detail": warnings[0],
+        }
+
+    return {
+        "system_status_label": "Waiting for data",
+        "system_status_class": "status-neutral",
+        "system_status_detail": "Waiting for the next logger update.",
+    }
+
+
 def _parse_activity_timestamp(value: str) -> datetime | None:
     text = (value or "").strip()
     if not text or text == "Unknown":
@@ -412,17 +543,15 @@ def _determine_active_logger(mqtt_logger: dict[str, Any], plc_logger: dict[str, 
 
 def _build_logger_warnings(mqtt_logger: dict[str, Any], plc_logger: dict[str, Any]) -> list[str]:
     warnings = []
-    if mqtt_logger.get("running") and plc_logger.get("running"):
-        warnings.append("Both loggers are running")
     if not plc_logger.get("running"):
         warnings.append("PLC logger stopped")
-    if mqtt_logger.get("summary") == "Error detected":
-        warnings.append("MQTT logger error detected")
-    if plc_logger.get("summary") == "Error detected":
+    if mqtt_logger.get("summary") == "Error detected" or mqtt_logger.get("error"):
+        warnings.append("Cloud delivery error detected")
+    if plc_logger.get("summary") == "Error detected" or plc_logger.get("error"):
         warnings.append("PLC logger error detected")
     queue_size = mqtt_logger.get("queue_size")
     if isinstance(queue_size, int) and queue_size > 0:
-        warnings.append(f"MQTT queue building: {queue_size} buffered")
+        warnings.append(f"Cloud backlog: {queue_size} buffered")
     return warnings
 
 
