@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from html import unescape
 from typing import Any
 from urllib.error import HTTPError, URLError
+from urllib.parse import urljoin
 from urllib.request import Request, urlopen
 
 
@@ -365,17 +366,29 @@ def _read_mqtt_queue_metrics(config: dict[str, Any], mqtt_ui_url: str) -> dict[s
     if not mqtt_ui_url:
         return {}
 
+    base_url = mqtt_ui_url.rstrip("/")
     candidate_urls = [
-        f"{mqtt_ui_url.rstrip('/')}/queue-status",
-        f"{mqtt_ui_url.rstrip('/')}/api/queue-status",
-        f"{mqtt_ui_url.rstrip('/')}/queue",
-        mqtt_ui_url.rstrip('/'),
+        f"{base_url}/queue-status",
+        f"{base_url}/QueueStatus",
+        f"{base_url}/queuestatus",
+        f"{base_url}/api/queue-status",
+        f"{base_url}/api/QueueStatus",
+        f"{base_url}/queue",
+        f"{base_url}/status",
+        f"{base_url}/",
     ]
 
     timeout = max(0.5, min(1.0, float(config.get("VERIFY_POLL_SECONDS", 2))))
     headers = {"User-Agent": "ESS-Datalogger-UI/1.0", "Accept": "text/html,application/json"}
+    pending_urls = list(dict.fromkeys(candidate_urls))
+    seen_urls: set[str] = set()
 
-    for url in candidate_urls:
+    while pending_urls:
+        url = pending_urls.pop(0)
+        if url in seen_urls:
+            continue
+        seen_urls.add(url)
+
         try:
             request = Request(url, headers=headers)
             with urlopen(request, timeout=timeout) as response:
@@ -387,7 +400,33 @@ def _read_mqtt_queue_metrics(config: dict[str, Any], mqtt_ui_url: str) -> dict[s
         if any(parsed.get(key) is not None for key in ("queue_size", "success_rate", "failure_rate")):
             return parsed
 
+        for discovered_url in _discover_mqtt_queue_urls(url, payload):
+            if discovered_url not in seen_urls:
+                pending_urls.append(discovered_url)
+
     return {}
+
+
+def _discover_mqtt_queue_urls(source_url: str, payload: str) -> list[str]:
+    if not payload:
+        return []
+
+    discovered: list[str] = []
+    href_matches = re.findall(r'href=["\']([^"\']+)["\']', payload, re.IGNORECASE)
+    script_matches = re.findall(r'["\']([^"\']*(?:queue|status)[^"\']*)["\']', payload, re.IGNORECASE)
+
+    for raw_target in [*href_matches, *script_matches]:
+        candidate = (raw_target or "").strip()
+        lower_candidate = candidate.lower()
+        if not candidate:
+            continue
+        if "queue" not in lower_candidate and "status" not in lower_candidate:
+            continue
+        if lower_candidate.startswith("javascript:"):
+            continue
+        discovered.append(urljoin(source_url, candidate))
+
+    return list(dict.fromkeys(discovered))
 
 
 def _extract_mqtt_queue_metrics(text: str) -> dict[str, Any]:
