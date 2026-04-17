@@ -174,3 +174,4 @@ def test_read_mqtt_queue_metrics_follows_queue_status_link_from_root_page(monkey
     assert parsed["queue_size"] == 1089
     assert parsed["success_rate"] == 0.18
     assert parsed["failure_rate"] == 1.31
+    assert parsed["queue_source_url"] == "http://ess-pi:8080/QueueStatus"

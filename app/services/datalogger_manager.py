@@ -218,6 +218,8 @@ def _default_logger_state(label: str, container_name: str) -> dict[str, Any]:
         "failure_rate": None,
         "success_samples": None,
         "failure_samples": None,
+        "queue_source_url": "",
+        "queue_fetch_error": "",
         "device_id": "",
         "channel_count": None,
     }
@@ -269,6 +271,8 @@ def _parse_mqtt_logger_logs(log_text: str) -> dict[str, Any]:
         "failure_rate": None,
         "success_samples": None,
         "failure_samples": None,
+        "queue_source_url": "",
+        "queue_fetch_error": "",
         "error": "",
     }
     if not log_text:
@@ -418,28 +422,43 @@ def _read_mqtt_queue_metrics(config: dict[str, Any], mqtt_ui_url: str) -> dict[s
     pending_urls = list(dict.fromkeys(candidate_urls))
     seen_urls: set[str] = set()
 
+    last_error = ""
+    last_url = ""
+
     while pending_urls:
         url = pending_urls.pop(0)
         if url in seen_urls:
             continue
         seen_urls.add(url)
+        last_url = url
 
         try:
             request = Request(url, headers=headers)
             with urlopen(request, timeout=timeout) as response:
                 payload = response.read().decode("utf-8", errors="ignore")
-        except (HTTPError, URLError, TimeoutError, ValueError, OSError):
+        except (HTTPError, URLError, TimeoutError, ValueError, OSError) as exc:
+            last_error = str(exc)
             continue
 
         parsed = _extract_mqtt_queue_metrics(payload)
         if any(parsed.get(key) is not None for key in ("queue_size", "success_rate", "failure_rate")):
+            parsed["queue_source_url"] = url
+            parsed["queue_fetch_error"] = ""
             return parsed
 
         for discovered_url in _discover_mqtt_queue_urls(url, payload):
             if discovered_url not in seen_urls:
                 pending_urls.append(discovered_url)
 
-    return {}
+    return {
+        "queue_size": None,
+        "success_rate": None,
+        "failure_rate": None,
+        "success_samples": None,
+        "failure_samples": None,
+        "queue_source_url": last_url,
+        "queue_fetch_error": last_error,
+    }
 
 
 def _discover_mqtt_queue_urls(source_url: str, payload: str) -> list[str]:

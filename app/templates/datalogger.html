@@ -74,10 +74,20 @@
                 </div>
             </div>
             <p id="mqtt-metrics" class="muted-note">Queue: {% if mqtt_logger.get('queue_size') is not none %}{{ mqtt_logger.get('queue_size') }}{% else %}n/a{% endif %} | Success: {% if mqtt_logger.get('success_rate') is not none %}{{ '%.2f'|format(mqtt_logger.get('success_rate')) }}/s{% else %}n/a{% endif %} | Failure: {% if mqtt_logger.get('failure_rate') is not none %}{{ '%.2f'|format(mqtt_logger.get('failure_rate')) }}/s{% else %}n/a{% endif %}</p>
+            {% if mqtt_logger.get('queue_source_url') %}
+            <p id="mqtt-source" class="muted-note">Queue source: {{ mqtt_logger.get('queue_source_url') }}</p>
+            {% else %}
+            <p id="mqtt-source" class="muted-note">Queue source: not detected yet</p>
+            {% endif %}
             {% if mqtt_logger.get('error') %}
             <p id="mqtt-error" class="update-error-note">{{ mqtt_logger.get('error') }}</p>
             {% else %}
             <p id="mqtt-error" class="update-error-note" hidden></p>
+            {% endif %}
+            {% if mqtt_logger.get('queue_fetch_error') %}
+            <p id="mqtt-fetch-error" class="update-error-note">Queue read issue: {{ mqtt_logger.get('queue_fetch_error') }}</p>
+            {% else %}
+            <p id="mqtt-fetch-error" class="update-error-note" hidden></p>
             {% endif %}
         </article>
 
@@ -230,6 +240,8 @@ document.addEventListener('DOMContentLoaded', function () {
             setText('mqtt-success-value', success);
             setText('mqtt-failure-value', failure);
             setText('mqtt-metrics', 'Queue: ' + queue + ' | Success: ' + success + ' | Failure: ' + failure);
+            setText('mqtt-source', 'Queue source: ' + (logger.queue_source_url || 'not detected yet'));
+            setError('mqtt-fetch-error', logger.queue_fetch_error || '');
         }
 
         if (prefix === 'plc') {
