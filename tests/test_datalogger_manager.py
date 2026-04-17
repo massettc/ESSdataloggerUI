@@ -45,7 +45,7 @@ def test_get_datalogger_status_parses_logger_roles_and_health(monkeypatch):
             subprocess.CompletedProcess(
                 args=[],
                 returncode=0,
-                stdout="80/tcp -> 0.0.0.0:5055\n",
+                stdout="1883/tcp -> 0.0.0.0:1883\n8080/tcp -> 0.0.0.0:8080\n9001/tcp -> 0.0.0.0:9001\n",
                 stderr="",
             ),
         ("docker", "logs", "--tail", "50", "plcreader"):
@@ -100,7 +100,7 @@ def test_get_datalogger_status_parses_logger_roles_and_health(monkeypatch):
     assert status["mqtt_logger"]["running"] is True
     assert status["mqtt_logger"]["device_id"] == "ESS-UNIT-81"
     assert status["mqtt_logger"]["summary"] == "Buffering 7 records locally"
-    assert status["mqtt_logger"]["mqtt_ui_url"] == "http://ess-pi:5055"
+    assert status["mqtt_logger"]["mqtt_ui_url"] == "http://ess-pi:8080"
     assert status["mqtt_logger"]["queue_size"] == 7
     assert status["mqtt_logger"]["success_rate"] == 0.92
     assert "172.17.0.3" in status["mqtt_logger"]["queue_source_url"]

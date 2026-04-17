@@ -425,24 +425,29 @@ def _read_mqtt_queue_metrics(
     # Collect all (host, port) pairs to try.
     targets: list[tuple[str, str]] = []
 
-    # From docker inspect: the container's bridge IP on port 80.
+    # From docker inspect + docker port: get the container's bridge IP and
+    # the actual port mappings (container_port -> host_port).
     container_ip = ""
     if docker_bin and container_name:
         container_ip = _get_container_ip(config, docker_bin, container_name)
+        port_mappings = _get_container_port_mappings(config, docker_bin, container_name)
         if container_ip:
             debug_notes.append(f"container_ip={container_ip}")
-            targets.append((container_ip, "80"))
+            # Try bridge IP on each container port (e.g. 8080, 9001).
+            for container_port, host_port in port_mappings:
+                targets.append((container_ip, container_port))
+            if not port_mappings:
+                # Fallback: common web ports.
+                for p in ("8080", "80", "443"):
+                    targets.append((container_ip, p))
         else:
             debug_notes.append("container_ip=none")
 
-    # From docker port: the host-mapped port.
-    if docker_bin and container_name:
-        host_port = _get_container_host_port(config, docker_bin, container_name)
-        if host_port:
-            debug_notes.append(f"mapped_port={host_port}")
-            targets.append(("127.0.0.1", host_port))
-        else:
-            debug_notes.append("mapped_port=none")
+        # Also try loopback on each host-mapped port.
+        if port_mappings:
+            debug_notes.append(f"ports={','.join(f'{c}->{h}' for c, h in port_mappings)}")
+            for container_port, host_port in port_mappings:
+                targets.append(("127.0.0.1", host_port))
 
     # The mqtt_ui_url (e.g. http://192.168.0.11:8080).
     original_host = ""
@@ -528,19 +533,20 @@ def _get_container_ip(config: dict[str, Any], docker_bin: str, container_name: s
     return ""
 
 
-def _get_container_host_port(config: dict[str, Any], docker_bin: str, container_name: str) -> str:
-    """Return the host port mapped to port 80 in the container, or ''."""
-    # Try specific port 80 first, then fall back to any port mapping.
-    for port_arg in ["80", "80/tcp", None]:
-        cmd = [docker_bin, "port", container_name]
-        if port_arg:
-            cmd.append(port_arg)
-        result = _run_docker_command(config, cmd, check=False)
-        if result.returncode == 0 and result.stdout.strip():
-            match = re.search(r":(\d+)\s*$", result.stdout.strip())
-            if match:
-                return match.group(1)
-    return ""
+def _get_container_port_mappings(config: dict[str, Any], docker_bin: str, container_name: str) -> list[tuple[str, str]]:
+    """Return list of (container_port, host_port) tuples from ``docker port``."""
+    result = _run_docker_command(
+        config, [docker_bin, "port", container_name], check=False,
+    )
+    mappings: list[tuple[str, str]] = []
+    if result.returncode != 0:
+        return mappings
+    for line in result.stdout.splitlines():
+        # e.g. "8080/tcp -> 0.0.0.0:8080"
+        m = re.match(r"(\d+)/\w+\s+->\s+[\d.]+:(\d+)", line.strip())
+        if m:
+            mappings.append((m.group(1), m.group(2)))
+    return mappings
 
 
 def _extract_mqtt_queue_metrics(text: str) -> dict[str, Any]:
