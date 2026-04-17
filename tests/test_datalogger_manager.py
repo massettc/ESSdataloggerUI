@@ -70,7 +70,7 @@ def test_get_datalogger_status_parses_logger_roles_and_health(monkeypatch):
         return "", f"failed: {url}"
 
     monkeypatch.setattr(datalogger_manager, "_run_docker_command", fake_run)
-    monkeypatch.setattr(datalogger_manager, "_fetch_url_via_cli", fake_fetch)
+    monkeypatch.setattr(datalogger_manager, "_fetch_url", fake_fetch)
 
     status = datalogger_manager.get_datalogger_status(
         {
@@ -182,7 +182,7 @@ def test_read_mqtt_queue_metrics_uses_container_bridge_ip(monkeypatch):
         return "", f"failed: {url}"
 
     monkeypatch.setattr(datalogger_manager, "_run_docker_command", fake_run)
-    monkeypatch.setattr(datalogger_manager, "_fetch_url_via_cli", fake_fetch)
+    monkeypatch.setattr(datalogger_manager, "_fetch_url", fake_fetch)
 
     parsed = datalogger_manager._read_mqtt_queue_metrics(
         {}, "http://ess-pi:8080",
@@ -212,7 +212,7 @@ def test_read_mqtt_queue_metrics_falls_back_to_public_url(monkeypatch):
         return "", f"failed: {url}"
 
     monkeypatch.setattr(datalogger_manager, "_run_docker_command", fake_run)
-    monkeypatch.setattr(datalogger_manager, "_fetch_url_via_cli", fake_fetch)
+    monkeypatch.setattr(datalogger_manager, "_fetch_url", fake_fetch)
 
     parsed = datalogger_manager._read_mqtt_queue_metrics(
         {}, "http://ess-pi:8080",

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import re
@@ -472,7 +473,7 @@ def _read_mqtt_queue_metrics(
         last_url = url
         remaining = max(1, int(deadline - time.monotonic()))
         per_url_timeout = min(2, remaining)
-        payload, error = _fetch_url_via_cli(url, timeout=per_url_timeout)
+        payload, error = _fetch_url(url, timeout=per_url_timeout)
         if error:
             last_error = error
             continue
@@ -498,28 +499,27 @@ def _read_mqtt_queue_metrics(
     }
 
 
-def _fetch_url_via_cli(url: str, timeout: int = 5) -> tuple[str, str]:
-    """Fetch a URL using wget or curl on the host. Returns (body, error)."""
-    commands = [
-        ["wget", "-q", "-O", "-", "--timeout", str(timeout), url],
-        ["curl", "-s", "-m", str(timeout), url],
-    ]
-    last_error = ""
-    for cmd in commands:
-        try:
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, check=False, timeout=timeout + 2,
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                return result.stdout, ""
-            last_error = result.stderr.strip() or f"{cmd[0]} exit {result.returncode}"
-        except FileNotFoundError:
-            last_error = f"{cmd[0]} not found"
-            continue
-        except Exception as exc:
-            last_error = f"{cmd[0]}: {exc}"
-            continue
-    return "", last_error or f"wget/curl failed for {url}"
+def _fetch_url(url: str, timeout: int = 2) -> tuple[str, str]:
+    """Fetch a URL using HTTP/1.0 to avoid keep-alive issues with Kestrel."""
+    parsed = urlparse(url)
+    host = parsed.hostname or "127.0.0.1"
+    port = parsed.port or 80
+    path = parsed.path or "/"
+    if parsed.query:
+        path = f"{path}?{parsed.query}"
+    try:
+        conn = http.client.HTTPConnection(host, port, timeout=timeout)
+        conn._http_vsn = 10
+        conn._http_vsn_str = "HTTP/1.0"
+        conn.request("GET", path, headers={"Connection": "close"})
+        resp = conn.getresponse()
+        body = resp.read().decode("utf-8", errors="replace")
+        conn.close()
+        if resp.status == 200:
+            return body, ""
+        return "", f"HTTP {resp.status} from {host}:{port}{path}"
+    except Exception as exc:
+        return "", f"{host}:{port}: {exc}"
 
 
 def _get_container_ip(config: dict[str, Any], docker_bin: str, container_name: str) -> str:
