@@ -394,10 +394,7 @@ def _default_datalogger_status() -> dict[str, object]:
             "device_id": "",
             "channel_count": None,
             "queue_size": None,
-            "success_rate": None,
-            "failure_rate": None,
-            "success_samples": None,
-            "failure_samples": None,
+            "broker_clients_connected": None,
             "error": "",
         },
         "plc_logger": {

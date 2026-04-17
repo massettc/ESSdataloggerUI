@@ -111,10 +111,7 @@ def test_datalogger_page_shows_portainer_status(client, monkeypatch):
                 "device_id": "ESS-UNIT-81",
                 "channel_count": 10,
                 "queue_size": 1089,
-                "success_rate": 0.18,
-                "failure_rate": 1.31,
-                "success_samples": 275,
-                "failure_samples": 300,
+                "broker_clients_connected": 7,
                 "error": "",
             },
             "plc_logger": {
@@ -143,8 +140,7 @@ def test_datalogger_page_shows_portainer_status(client, monkeypatch):
     assert b"Buffering 1089 records locally" in response.data
     assert b"Queue backlog" in response.data
     assert b"1089 buffered" in response.data
-    assert b"Success: 0.18/s" in response.data
-    assert b"Failure: 1.31/s" in response.data
+    assert b"7 connected" in response.data
     assert b"Portainer" in response.data
     assert b"http://ess-pi:9000" in response.data
     assert b"logger" in response.data

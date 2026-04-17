@@ -65,15 +65,11 @@
                     <strong id="mqtt-queue-value">{% if mqtt_logger.get('queue_size') is not none %}{{ mqtt_logger.get('queue_size') }} buffered{% else %}n/a{% endif %}</strong>
                 </div>
                 <div class="logger-metric">
-                    <span>Success</span>
-                    <strong id="mqtt-success-value">{% if mqtt_logger.get('success_rate') is not none %}{{ '%.2f'|format(mqtt_logger.get('success_rate')) }}/s{% else %}n/a{% endif %}</strong>
-                </div>
-                <div class="logger-metric">
-                    <span>Failure</span>
-                    <strong id="mqtt-failure-value">{% if mqtt_logger.get('failure_rate') is not none %}{{ '%.2f'|format(mqtt_logger.get('failure_rate')) }}/s{% else %}n/a{% endif %}</strong>
+                    <span>Broker clients</span>
+                    <strong id="mqtt-broker-value">{% if mqtt_logger.get('broker_clients_connected') is not none %}{{ mqtt_logger.get('broker_clients_connected') }} connected{% else %}n/a{% endif %}</strong>
                 </div>
             </div>
-            <p id="mqtt-metrics" class="muted-note">Queue: {% if mqtt_logger.get('queue_size') is not none %}{{ mqtt_logger.get('queue_size') }}{% else %}n/a{% endif %} | Success: {% if mqtt_logger.get('success_rate') is not none %}{{ '%.2f'|format(mqtt_logger.get('success_rate')) }}/s{% else %}n/a{% endif %} | Failure: {% if mqtt_logger.get('failure_rate') is not none %}{{ '%.2f'|format(mqtt_logger.get('failure_rate')) }}/s{% else %}n/a{% endif %}</p>
+            <p id="mqtt-metrics" class="muted-note">Queue: {% if mqtt_logger.get('queue_size') is not none %}{{ mqtt_logger.get('queue_size') }}{% else %}n/a{% endif %} | Broker clients: {% if mqtt_logger.get('broker_clients_connected') is not none %}{{ mqtt_logger.get('broker_clients_connected') }}{% else %}n/a{% endif %}</p>
             {% if mqtt_logger.get('queue_source_url') %}
             <p id="mqtt-source" class="muted-note">Queue source: {{ mqtt_logger.get('queue_source_url') }}</p>
             {% else %}
@@ -220,28 +216,22 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function extractQueueMetrics(text) {
         if (!text) return null;
+        var parsed;
+        try { parsed = JSON.parse(text); } catch (e) { parsed = null; }
+        if (parsed && typeof parsed === 'object') {
+            var length = parsed.length !== undefined ? parsed.length : (parsed.Length !== undefined ? parsed.Length : null);
+            if (length !== null) return { queue_size: Number(length) };
+        }
         const normalized = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
         const queueMatch = normalized.match(/LENGTH\s+(\d+)/i);
-        const successMatch = normalized.match(/SUCCESS RATE \(SEC\)\s+([0-9]*\.?[0-9]+)/i);
-        const failureMatch = normalized.match(/FAILURE RATE \(SEC\)\s+([0-9]*\.?[0-9]+)/i);
-
-        if (!queueMatch && !successMatch && !failureMatch) return null;
-        return {
-            queue_size: queueMatch ? Number(queueMatch[1]) : null,
-            success_rate: successMatch ? Number(successMatch[1]) : null,
-            failure_rate: failureMatch ? Number(failureMatch[1]) : null,
-        };
+        if (!queueMatch) return null;
+        return { queue_size: Number(queueMatch[1]) };
     }
 
     function updateMqttQueueMetrics(metrics, sourceUrl) {
         if (!metrics) return;
         const queue = metrics.queue_size !== null && metrics.queue_size !== undefined ? metrics.queue_size : 'n/a';
-        const success = metrics.success_rate !== null && metrics.success_rate !== undefined ? Number(metrics.success_rate).toFixed(2) + '/s' : 'n/a';
-        const failure = metrics.failure_rate !== null && metrics.failure_rate !== undefined ? Number(metrics.failure_rate).toFixed(2) + '/s' : 'n/a';
         setText('mqtt-queue-value', queue === 'n/a' ? queue : queue + ' buffered');
-        setText('mqtt-success-value', success);
-        setText('mqtt-failure-value', failure);
-        setText('mqtt-metrics', 'Queue: ' + queue + ' | Success: ' + success + ' | Failure: ' + failure);
         setText('mqtt-source', 'Queue source: ' + (sourceUrl || 'browser fetch'));
         setError('mqtt-fetch-error', '');
         if (typeof queue === 'number' && queue > 0) {
@@ -254,10 +244,8 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!baseUrl) return;
         const normalizedBase = baseUrl.replace(/\/$/, '');
         const candidateUrls = [
-            normalizedBase + '/tools/queue',
-            normalizedBase + '/tools/queue/',
-            normalizedBase + '/QueueStatus',
-            normalizedBase + '/queue-status',
+            normalizedBase + '/api/Queue',
+            normalizedBase + '/api/queue',
         ];
 
         for (const url of candidateUrls) {
@@ -291,13 +279,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             }
             const queue = logger.queue_size !== null && logger.queue_size !== undefined ? logger.queue_size : 'n/a';
-            const success = logger.success_rate !== null && logger.success_rate !== undefined ? Number(logger.success_rate).toFixed(2) + '/s' : 'n/a';
-            const failure = logger.failure_rate !== null && logger.failure_rate !== undefined ? Number(logger.failure_rate).toFixed(2) + '/s' : 'n/a';
+            const brokerClients = logger.broker_clients_connected !== null && logger.broker_clients_connected !== undefined ? logger.broker_clients_connected : 'n/a';
             setText('mqtt-device', deviceText);
             setText('mqtt-queue-value', queue === 'n/a' ? queue : queue + ' buffered');
-            setText('mqtt-success-value', success);
-            setText('mqtt-failure-value', failure);
-            setText('mqtt-metrics', 'Queue: ' + queue + ' | Success: ' + success + ' | Failure: ' + failure);
+            setText('mqtt-broker-value', brokerClients === 'n/a' ? brokerClients : brokerClients + ' connected');
+            setText('mqtt-metrics', 'Queue: ' + queue + ' | Broker clients: ' + brokerClients);
             setText('mqtt-source', 'Queue source: ' + (logger.queue_source_url || 'not detected yet'));
             setError('mqtt-fetch-error', logger.queue_fetch_error || '');
         }

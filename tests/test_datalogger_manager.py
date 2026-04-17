@@ -4,10 +4,7 @@ from app.services import datalogger_manager
 
 
 def test_get_datalogger_status_parses_logger_roles_and_health(monkeypatch):
-    queue_html = (
-        "<section><div>LENGTH</div><div>7</div><div>SUCCESS RATE (SEC)</div><div>0.92</div>"
-        "<div>FAILURE RATE (SEC)</div><div>0.03</div><div>FAILURE SAMPLES</div><div>101</div></section>"
-    )
+    queue_json = '{"Length": 7}'
 
     outputs = {
         ("docker", "version", "--format", "{{.Server.Version}}"):
@@ -48,6 +45,13 @@ def test_get_datalogger_status_parses_logger_roles_and_health(monkeypatch):
                 stdout="1883/tcp -> 0.0.0.0:1883\n8080/tcp -> 0.0.0.0:8080\n9001/tcp -> 0.0.0.0:9001\n",
                 stderr="",
             ),
+        ("docker", "exec", "opsviewer2-edge", "mosquitto_sub", "-h", "127.0.0.1", "-p", "1883", "-t", "$SYS/broker/clients/connected", "-C", "1", "-W", "3"):
+            subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout="7\n",
+                stderr="",
+            ),
         ("docker", "logs", "--tail", "50", "plcreader"):
             subprocess.CompletedProcess(
                 args=[],
@@ -66,7 +70,7 @@ def test_get_datalogger_status_parses_logger_roles_and_health(monkeypatch):
 
     def fake_fetch(url, timeout=5):
         if "172.17.0.3" in url and "/api/Queue" in url:
-            return queue_html, ""
+            return queue_json, ""
         return "", f"failed: {url}"
 
     monkeypatch.setattr(datalogger_manager, "_run_docker_command", fake_run)
@@ -88,7 +92,7 @@ def test_get_datalogger_status_parses_logger_roles_and_health(monkeypatch):
     assert status["mqtt_logger"]["summary"] == "Buffering 7 records locally"
     assert status["mqtt_logger"]["mqtt_ui_url"] == "http://ess-pi:8080"
     assert status["mqtt_logger"]["queue_size"] == 7
-    assert status["mqtt_logger"]["success_rate"] == 0.92
+    assert status["mqtt_logger"]["broker_clients_connected"] == 7
     assert "172.17.0.3" in status["mqtt_logger"]["queue_source_url"]
     assert "push" in status["mqtt_logger"]["last_push_label"].lower()
     assert status["plc_logger"]["running"] is False
@@ -147,24 +151,15 @@ def test_parse_mqtt_logs_extracts_device_and_publish_state():
 
 def test_parse_mqtt_logs_extracts_queue_metrics_from_edge_ui_html():
     parsed = datalogger_manager._parse_mqtt_logger_logs(
-        "<section><div>LENGTH</div><div>1089</div><div>SUCCESS RATE (SEC)</div><div>0.18</div>"
-        "<div>SUCCESS SAMPLES</div><div>275</div><div>FAILURE RATE (SEC)</div><div>1.31</div>"
-        "<div>FAILURE SAMPLES</div><div>300</div></section>"
+        "<section><div>LENGTH</div><div>1089</div></section>"
     )
 
     assert parsed["queue_size"] == 1089
-    assert parsed["success_rate"] == 0.18
-    assert parsed["failure_rate"] == 1.31
-    assert parsed["success_samples"] == 275
-    assert parsed["failure_samples"] == 300
 
 
 def test_read_mqtt_queue_metrics_uses_container_bridge_ip(monkeypatch):
-    """Primary path: docker inspect gives the container IP, wget fetches /tools/queue."""
-    queue_html = (
-        "<section><div>LENGTH</div><div>7</div><div>SUCCESS RATE (SEC)</div><div>0.92</div>"
-        "<div>FAILURE RATE (SEC)</div><div>0.03</div><div>FAILURE SAMPLES</div><div>101</div></section>"
-    )
+    """Primary path: docker inspect gives the container IP, fetch /api/Queue."""
+    queue_json = '{"Length": 7}'
 
     def fake_run(config, args, check=True):
         key = tuple(arg for arg in args if arg not in {"sudo", "-n"})
@@ -178,7 +173,7 @@ def test_read_mqtt_queue_metrics_uses_container_bridge_ip(monkeypatch):
 
     def fake_fetch(url, timeout=5):
         if "172.17.0.3" in url and "/api/Queue" in url:
-            return queue_html, ""
+            return queue_json, ""
         return "", f"failed: {url}"
 
     monkeypatch.setattr(datalogger_manager, "_run_docker_command", fake_run)
@@ -190,25 +185,20 @@ def test_read_mqtt_queue_metrics_uses_container_bridge_ip(monkeypatch):
     )
 
     assert parsed["queue_size"] == 7
-    assert parsed["success_rate"] == 0.92
-    assert parsed["failure_rate"] == 0.03
     assert "172.17.0.3" in parsed["queue_source_url"]
     assert "/api/Queue" in parsed["queue_source_url"]
 
 
 def test_read_mqtt_queue_metrics_falls_back_to_public_url(monkeypatch):
     """When docker inspect fails, fall back to the public mqtt_ui_url."""
-    queue_html = (
-        "<section><div>LENGTH</div><div>11</div><div>SUCCESS RATE (SEC)</div><div>0.55</div>"
-        "<div>FAILURE RATE (SEC)</div><div>0.02</div><div>FAILURE SAMPLES</div><div>5</div></section>"
-    )
+    queue_json = '{"Length": 11}'
 
     def fake_run(config, args, check=True):
         return subprocess.CompletedProcess(args=args, returncode=1, stdout="", stderr="")
 
     def fake_fetch(url, timeout=5):
         if "ess-pi" in url and "/api/Queue" in url:
-            return queue_html, ""
+            return queue_json, ""
         return "", f"failed: {url}"
 
     monkeypatch.setattr(datalogger_manager, "_run_docker_command", fake_run)
@@ -220,7 +210,5 @@ def test_read_mqtt_queue_metrics_falls_back_to_public_url(monkeypatch):
     )
 
     assert parsed["queue_size"] == 11
-    assert parsed["success_rate"] == 0.55
-    assert parsed["failure_rate"] == 0.02
     assert "ess-pi" in parsed["queue_source_url"]
     assert "/api/Queue" in parsed["queue_source_url"]

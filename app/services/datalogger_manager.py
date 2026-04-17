@@ -85,6 +85,9 @@ def get_datalogger_status(config: dict[str, Any], host: str | None = None) -> di
                     container_name=mqtt_container_name,
                 )
             )
+            status["mqtt_logger"]["broker_clients_connected"] = _read_broker_clients(
+                config, docker_bin, mqtt_container_name,
+            )
             status["mqtt_logger"] = _finalize_logger_state(status["mqtt_logger"])
 
         if name == plc_container_name:
@@ -221,12 +224,9 @@ def _default_logger_state(label: str, container_name: str) -> dict[str, Any]:
         "error": "",
         "measurements": None,
         "queue_size": None,
-        "success_rate": None,
-        "failure_rate": None,
-        "success_samples": None,
-        "failure_samples": None,
         "queue_source_url": "",
         "queue_fetch_error": "",
+        "broker_clients_connected": None,
         "device_id": "",
         "channel_count": None,
     }
@@ -235,6 +235,27 @@ def _default_logger_state(label: str, container_name: str) -> dict[str, Any]:
 def _read_container_logs(config: dict[str, Any], docker_bin: str, container_name: str, tail_lines: int = 50) -> str:
     result = _run_docker_command(config, [docker_bin, "logs", "--tail", str(tail_lines), container_name], check=False)
     return result.stdout if result.returncode == 0 else ""
+
+
+def _read_broker_clients(config: dict[str, Any], docker_bin: str, container_name: str) -> int | None:
+    """Query mosquitto $SYS topic for connected client count via docker exec."""
+    result = _run_docker_command(
+        config,
+        [
+            docker_bin, "exec", container_name,
+            "mosquitto_sub", "-h", "127.0.0.1", "-p", "1883",
+            "-t", "$SYS/broker/clients/connected",
+            "-C", "1", "-W", "3",
+        ],
+        check=False,
+    )
+    if result.returncode == 0:
+        text = result.stdout.strip()
+        try:
+            return int(text)
+        except (ValueError, TypeError):
+            pass
+    return None
 
 
 def _parse_plc_logger_logs(log_text: str) -> dict[str, Any]:
@@ -274,12 +295,9 @@ def _parse_mqtt_logger_logs(log_text: str) -> dict[str, Any]:
         "device_id": "",
         "channel_count": None,
         "queue_size": None,
-        "success_rate": None,
-        "failure_rate": None,
-        "success_samples": None,
-        "failure_samples": None,
         "queue_source_url": "",
         "queue_fetch_error": "",
+        "broker_clients_connected": None,
         "error": "",
     }
     if not log_text:
@@ -487,7 +505,7 @@ def _read_mqtt_queue_metrics(
             continue
 
         parsed = _extract_mqtt_queue_metrics(payload)
-        if any(parsed.get(key) is not None for key in ("queue_size", "success_rate", "failure_rate")):
+        if parsed.get("queue_size") is not None:
             parsed["queue_source_url"] = url
             parsed["queue_fetch_error"] = ""
             return parsed
@@ -499,10 +517,6 @@ def _read_mqtt_queue_metrics(
     full_error = f"{last_error} [{diag}] attempts: {attempts}"
     return {
         "queue_size": None,
-        "success_rate": None,
-        "failure_rate": None,
-        "success_samples": None,
-        "failure_samples": None,
         "queue_source_url": last_url,
         "queue_fetch_error": full_error,
     }
@@ -567,13 +581,7 @@ def _get_container_port_mappings(config: dict[str, Any], docker_bin: str, contai
 
 
 def _extract_mqtt_queue_metrics(text: str) -> dict[str, Any]:
-    parsed = {
-        "queue_size": None,
-        "success_rate": None,
-        "failure_rate": None,
-        "success_samples": None,
-        "failure_samples": None,
-    }
+    parsed: dict[str, Any] = {"queue_size": None}
     if not text:
         return parsed
 
@@ -585,31 +593,14 @@ def _extract_mqtt_queue_metrics(text: str) -> dict[str, Any]:
     if isinstance(payload, dict):
         lower_payload = {str(key).lower(): value for key, value in payload.items()}
         parsed["queue_size"] = _safe_int(lower_payload.get("length", lower_payload.get("queue_size")))
-        parsed["success_rate"] = _safe_float(lower_payload.get("success rate (sec)", lower_payload.get("success_rate")))
-        parsed["failure_rate"] = _safe_float(lower_payload.get("failure rate (sec)", lower_payload.get("failure_rate")))
-        parsed["success_samples"] = _safe_int(lower_payload.get("success samples", lower_payload.get("success_samples")))
-        parsed["failure_samples"] = _safe_int(lower_payload.get("failure samples", lower_payload.get("failure_samples")))
         return parsed
 
     normalized = unescape(re.sub(r"<[^>]+>", " ", text))
     normalized = re.sub(r"\s+", " ", normalized).strip()
 
     queue_match = re.search(r"LENGTH\s+([0-9]+)", normalized, re.IGNORECASE)
-    success_rate_match = re.search(r"SUCCESS RATE \(SEC\)\s+([0-9]*\.?[0-9]+)", normalized, re.IGNORECASE)
-    success_samples_match = re.search(r"SUCCESS SAMPLES\s+([0-9]+)", normalized, re.IGNORECASE)
-    failure_rate_match = re.search(r"FAILURE RATE \(SEC\)\s+([0-9]*\.?[0-9]+)", normalized, re.IGNORECASE)
-    failure_samples_match = re.search(r"FAILURE SAMPLES\s+([0-9]+)", normalized, re.IGNORECASE)
-
     if queue_match:
         parsed["queue_size"] = int(queue_match.group(1))
-    if success_rate_match:
-        parsed["success_rate"] = float(success_rate_match.group(1))
-    if success_samples_match:
-        parsed["success_samples"] = int(success_samples_match.group(1))
-    if failure_rate_match:
-        parsed["failure_rate"] = float(failure_rate_match.group(1))
-    if failure_samples_match:
-        parsed["failure_samples"] = int(failure_samples_match.group(1))
 
     return parsed
 
@@ -617,13 +608,6 @@ def _extract_mqtt_queue_metrics(text: str) -> dict[str, Any]:
 def _safe_int(value: Any) -> int | None:
     try:
         return int(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _safe_float(value: Any) -> float | None:
-    try:
-        return float(value)
     except (TypeError, ValueError):
         return None
 
