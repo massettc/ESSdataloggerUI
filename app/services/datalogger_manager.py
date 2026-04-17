@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import ssl
 import subprocess
 from datetime import datetime, timezone
 from html import unescape
@@ -418,99 +419,85 @@ def _read_mqtt_queue_metrics(
     last_url = ""
     debug_notes: list[str] = []
 
-    timeout = max(0.5, min(2.0, float(config.get("VERIFY_POLL_SECONDS", 2))))
-    headers = {"User-Agent": "ESS-Datalogger-UI/1.0", "Accept": "text/html,application/json"}
-    candidate_paths = ["/tools/queue", "/tools/queue/", "/tools/Queue",
-                       "/QueueStatus", "/queue-status", "/"]
+    timeout = max(1.0, min(5.0, float(config.get("VERIFY_POLL_SECONDS", 2))))
+    candidate_paths = ["/tools/queue", "/tools/queue/", "/QueueStatus", "/"]
 
-    # Strategy 1: Use Docker container's internal bridge IP to bypass any
-    # host port conflicts (the Flask app and Edge UI may share port 8080).
+    # Collect all (host, port) pairs to try.
+    targets: list[tuple[str, str]] = []
+
+    # From docker inspect: the container's bridge IP on port 80.
+    container_ip = ""
     if docker_bin and container_name:
         container_ip = _get_container_ip(config, docker_bin, container_name)
         if container_ip:
             debug_notes.append(f"container_ip={container_ip}")
-            for path in candidate_paths:
-                url = f"http://{container_ip}{path}"
-                last_url = url
-                try:
-                    request = Request(url, headers=headers)
-                    with urlopen(request, timeout=timeout) as response:
-                        payload = response.read().decode("utf-8", errors="ignore")
-                except (HTTPError, URLError, TimeoutError, ValueError, OSError) as exc:
-                    last_error = str(exc)
-                    continue
-
-                parsed = _extract_mqtt_queue_metrics(payload)
-                if any(parsed.get(key) is not None for key in ("queue_size", "success_rate", "failure_rate")):
-                    parsed["queue_source_url"] = url
-                    parsed["queue_fetch_error"] = ""
-                    return parsed
-            debug_notes.append(f"container_ip_error={last_error}")
+            targets.append((container_ip, "80"))
         else:
             debug_notes.append("container_ip=none")
 
-    # Strategy 2: Use the actual mapped host port from `docker port`.
+    # From docker port: the host-mapped port.
     if docker_bin and container_name:
         host_port = _get_container_host_port(config, docker_bin, container_name)
         if host_port:
             debug_notes.append(f"mapped_port={host_port}")
-            for path in candidate_paths:
-                url = f"http://127.0.0.1:{host_port}{path}"
-                last_url = url
-                try:
-                    request = Request(url, headers=headers)
-                    with urlopen(request, timeout=timeout) as response:
-                        payload = response.read().decode("utf-8", errors="ignore")
-                except (HTTPError, URLError, TimeoutError, ValueError, OSError) as exc:
-                    last_error = str(exc)
-                    continue
-
-                parsed = _extract_mqtt_queue_metrics(payload)
-                if any(parsed.get(key) is not None for key in ("queue_size", "success_rate", "failure_rate")):
-                    parsed["queue_source_url"] = url
-                    parsed["queue_fetch_error"] = ""
-                    return parsed
-            debug_notes.append(f"mapped_port_error={last_error}")
+            targets.append(("127.0.0.1", host_port))
         else:
             debug_notes.append("mapped_port=none")
 
-    # Strategy 3: Try well-known host port (8080) on loopback directly.
+    # The mqtt_ui_url (e.g. http://192.168.0.11:8080).
+    original_host = ""
     if mqtt_ui_url:
         parsed_base = urlparse(mqtt_ui_url)
-        port = parsed_base.port or 8080
-        for path in candidate_paths:
-            url = f"http://127.0.0.1:{port}{path}"
-            last_url = url
-            try:
-                request = Request(url, headers=headers)
-                with urlopen(request, timeout=timeout) as response:
-                    payload = response.read().decode("utf-8", errors="ignore")
-            except (HTTPError, URLError, TimeoutError, ValueError, OSError) as exc:
-                last_error = str(exc)
-                continue
+        original_host = parsed_base.hostname or ""
+        port = str(parsed_base.port or 8080)
+        debug_notes.append(f"mqtt_url_host={original_host}:{port}")
+        targets.append((original_host, port))
+        # Also try loopback on the same port.
+        targets.append(("127.0.0.1", port))
 
-            parsed = _extract_mqtt_queue_metrics(payload)
-            if any(parsed.get(key) is not None for key in ("queue_size", "success_rate", "failure_rate")):
-                parsed["queue_source_url"] = url
-                parsed["queue_fetch_error"] = ""
-                return parsed
-        debug_notes.append(f"loopback_port={port}_error={last_error}")
+    # Deduplicate while preserving order.
+    seen: set[tuple[str, str]] = set()
+    unique_targets: list[tuple[str, str]] = []
+    for t in targets:
+        if t not in seen:
+            seen.add(t)
+            unique_targets.append(t)
 
-    # Strategy 4: Fall back to the public mqtt_ui_url (for non-Docker setups).
-    if mqtt_ui_url:
-        url = mqtt_ui_url.rstrip("/") + "/tools/queue"
-        last_url = url
-        try:
-            request = Request(url, headers=headers)
-            with urlopen(request, timeout=timeout) as response:
-                payload = response.read().decode("utf-8", errors="ignore")
-            parsed = _extract_mqtt_queue_metrics(payload)
-            if any(parsed.get(key) is not None for key in ("queue_size", "success_rate", "failure_rate")):
-                parsed["queue_source_url"] = url
-                parsed["queue_fetch_error"] = ""
-                return parsed
-        except (HTTPError, URLError, TimeoutError, ValueError, OSError) as exc:
-            last_error = str(exc)
+    # For each target, try HTTP and HTTPS, with and without Host header.
+    ssl_ctx = ssl.create_default_context()
+    ssl_ctx.check_hostname = False
+    ssl_ctx.verify_mode = ssl.CERT_NONE
+
+    for host, port in unique_targets:
+        for scheme in ("http", "https"):
+            for path in candidate_paths:
+                url = f"{scheme}://{host}:{port}{path}"
+                last_url = url
+                for use_host_header in (False, True):
+                    if use_host_header and not original_host:
+                        continue
+                    if use_host_header and host == original_host:
+                        continue
+                    try:
+                        req_headers = {
+                            "User-Agent": "ESS-Datalogger-UI/1.0",
+                            "Accept": "text/html,application/json",
+                        }
+                        if use_host_header:
+                            req_headers["Host"] = original_host
+                        request = Request(url, headers=req_headers)
+                        ctx = ssl_ctx if scheme == "https" else None
+                        with urlopen(request, timeout=timeout, context=ctx) as response:
+                            payload = response.read().decode("utf-8", errors="ignore")
+                    except (HTTPError, URLError, TimeoutError, ValueError, OSError) as exc:
+                        last_error = str(exc)
+                        continue
+
+                    parsed = _extract_mqtt_queue_metrics(payload)
+                    if any(parsed.get(key) is not None for key in ("queue_size", "success_rate", "failure_rate")):
+                        parsed["queue_source_url"] = url
+                        parsed["queue_fetch_error"] = ""
+                        return parsed
 
     diag = "; ".join(debug_notes) if debug_notes else ""
     full_error = f"{last_error} [{diag}]" if diag else last_error

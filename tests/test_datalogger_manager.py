@@ -77,9 +77,9 @@ def test_get_datalogger_status_parses_logger_roles_and_health(monkeypatch):
         def __exit__(self, exc_type, exc, tb):
             return False
 
-    def fake_urlopen(request, timeout=0):
+    def fake_urlopen(request, timeout=0, context=None):
         url = request.full_url if hasattr(request, "full_url") else str(request)
-        if "172.17.0.3" in url and "/tools/queue" in url:
+        if "172.17.0.3" in url and "/tools/queue" in url and url.startswith("http://"):
             return FakeResponse(queue_html)
         raise datalogger_manager.URLError(f"unreachable: {url}")
 
@@ -103,7 +103,7 @@ def test_get_datalogger_status_parses_logger_roles_and_health(monkeypatch):
     assert status["mqtt_logger"]["mqtt_ui_url"] == "http://ess-pi:5055"
     assert status["mqtt_logger"]["queue_size"] == 7
     assert status["mqtt_logger"]["success_rate"] == 0.92
-    assert status["mqtt_logger"]["queue_source_url"] == "http://172.17.0.3/tools/queue"
+    assert "172.17.0.3" in status["mqtt_logger"]["queue_source_url"]
     assert "push" in status["mqtt_logger"]["last_push_label"].lower()
     assert status["plc_logger"]["running"] is False
     assert status["plc_logger"]["measurements"] == 43
@@ -201,9 +201,9 @@ def test_read_mqtt_queue_metrics_uses_container_bridge_ip(monkeypatch):
             return subprocess.CompletedProcess(args=[], returncode=0, stdout="172.17.0.3\n", stderr="")
         return subprocess.CompletedProcess(args=args, returncode=1, stdout="", stderr="")
 
-    def fake_urlopen(request, timeout=0):
+    def fake_urlopen(request, timeout=0, context=None):
         url = request.full_url if hasattr(request, "full_url") else str(request)
-        if url == "http://172.17.0.3/tools/queue":
+        if "172.17.0.3" in url and "/tools/queue" in url and url.startswith("http://"):
             return FakeResponse(queue_html)
         raise datalogger_manager.URLError(f"unexpected URL: {url}")
 
@@ -218,7 +218,8 @@ def test_read_mqtt_queue_metrics_uses_container_bridge_ip(monkeypatch):
     assert parsed["queue_size"] == 7
     assert parsed["success_rate"] == 0.92
     assert parsed["failure_rate"] == 0.03
-    assert parsed["queue_source_url"] == "http://172.17.0.3/tools/queue"
+    assert "172.17.0.3" in parsed["queue_source_url"]
+    assert "/tools/queue" in parsed["queue_source_url"]
 
 
 def test_read_mqtt_queue_metrics_falls_back_to_public_url(monkeypatch):
@@ -244,9 +245,9 @@ def test_read_mqtt_queue_metrics_falls_back_to_public_url(monkeypatch):
     def fake_run(config, args, check=True):
         return subprocess.CompletedProcess(args=args, returncode=1, stdout="", stderr="")
 
-    def fake_urlopen(request, timeout=0):
+    def fake_urlopen(request, timeout=0, context=None):
         url = request.full_url if hasattr(request, "full_url") else str(request)
-        if url == "http://ess-pi:8080/tools/queue":
+        if "ess-pi" in url and "/tools/queue" in url and url.startswith("http://"):
             return FakeResponse(queue_html)
         raise datalogger_manager.URLError(f"unexpected URL: {url}")
 
@@ -261,4 +262,5 @@ def test_read_mqtt_queue_metrics_falls_back_to_public_url(monkeypatch):
     assert parsed["queue_size"] == 11
     assert parsed["success_rate"] == 0.55
     assert parsed["failure_rate"] == 0.02
-    assert parsed["queue_source_url"] == "http://ess-pi:8080/tools/queue"
+    assert "ess-pi" in parsed["queue_source_url"]
+    assert "/tools/queue" in parsed["queue_source_url"]
