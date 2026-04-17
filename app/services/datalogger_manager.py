@@ -488,7 +488,9 @@ def _read_mqtt_queue_metrics(
             parsed["queue_source_url"] = url
             parsed["queue_fetch_error"] = ""
             return parsed
-        attempt_errors.append(f"{url} => no metrics in response ({len(payload)} bytes)")
+        # Show a snippet of the response to help diagnose parsing failures.
+        snippet = payload[:300].replace("\n", " ").replace("\r", "")
+        attempt_errors.append(f"{url} => no metrics in response ({len(payload)} bytes) snippet: {snippet!r}")
 
     diag = "; ".join(debug_notes) if debug_notes else ""
     attempts = " | ".join(attempt_errors) if attempt_errors else "no attempts"
