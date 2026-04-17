@@ -3,14 +3,11 @@ from __future__ import annotations
 import json
 import os
 import re
-import ssl
 import subprocess
 from datetime import datetime, timezone
 from html import unescape
 from typing import Any
-from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
 
 
 class DataloggerManagerError(RuntimeError):
@@ -419,90 +416,64 @@ def _read_mqtt_queue_metrics(
     last_url = ""
     debug_notes: list[str] = []
 
-    timeout = max(1.0, min(5.0, float(config.get("VERIFY_POLL_SECONDS", 2))))
     candidate_paths = ["/tools/queue", "/tools/queue/", "/QueueStatus", "/"]
 
-    # Collect all (host, port) pairs to try.
-    targets: list[tuple[str, str]] = []
+    # Collect all base URLs to try.
+    base_urls: list[str] = []
 
-    # From docker inspect + docker port: get the container's bridge IP and
-    # the actual port mappings (container_port -> host_port).
-    container_ip = ""
+    # From docker inspect + docker port: bridge IP on each container port.
     if docker_bin and container_name:
         container_ip = _get_container_ip(config, docker_bin, container_name)
         port_mappings = _get_container_port_mappings(config, docker_bin, container_name)
         if container_ip:
             debug_notes.append(f"container_ip={container_ip}")
-            # Try bridge IP on each container port (e.g. 8080, 9001).
             for container_port, host_port in port_mappings:
-                targets.append((container_ip, container_port))
-            if not port_mappings:
-                # Fallback: common web ports.
-                for p in ("8080", "80", "443"):
-                    targets.append((container_ip, p))
+                base_urls.append(f"http://{container_ip}:{container_port}")
         else:
             debug_notes.append("container_ip=none")
 
-        # Also try loopback on each host-mapped port.
         if port_mappings:
             debug_notes.append(f"ports={','.join(f'{c}->{h}' for c, h in port_mappings)}")
             for container_port, host_port in port_mappings:
-                targets.append(("127.0.0.1", host_port))
+                base_urls.append(f"http://127.0.0.1:{host_port}")
 
-    # The mqtt_ui_url (e.g. http://192.168.0.11:8080).
-    original_host = ""
     if mqtt_ui_url:
         parsed_base = urlparse(mqtt_ui_url)
         original_host = parsed_base.hostname or ""
         port = str(parsed_base.port or 8080)
         debug_notes.append(f"mqtt_url_host={original_host}:{port}")
-        targets.append((original_host, port))
-        # Also try loopback on the same port.
-        targets.append(("127.0.0.1", port))
+        base_urls.append(f"http://{original_host}:{port}")
 
     # Deduplicate while preserving order.
-    seen: set[tuple[str, str]] = set()
-    unique_targets: list[tuple[str, str]] = []
-    for t in targets:
-        if t not in seen:
-            seen.add(t)
-            unique_targets.append(t)
+    seen: set[str] = set()
+    unique_bases: list[str] = []
+    for b in base_urls:
+        if b not in seen:
+            seen.add(b)
+            unique_bases.append(b)
 
-    # For each target, try HTTP and HTTPS, with and without Host header.
-    ssl_ctx = ssl.create_default_context()
-    ssl_ctx.check_hostname = False
-    ssl_ctx.verify_mode = ssl.CERT_NONE
+    # Build full candidate URLs.
+    candidate_urls: list[str] = []
+    for base in unique_bases:
+        for path in candidate_paths:
+            candidate_urls.append(f"{base}{path}")
 
-    for host, port in unique_targets:
-        for scheme in ("http", "https"):
-            for path in candidate_paths:
-                url = f"{scheme}://{host}:{port}{path}"
-                last_url = url
-                for use_host_header in (False, True):
-                    if use_host_header and not original_host:
-                        continue
-                    if use_host_header and host == original_host:
-                        continue
-                    try:
-                        req_headers = {
-                            "User-Agent": "ESS-Datalogger-UI/1.0",
-                            "Accept": "text/html,application/json",
-                        }
-                        if use_host_header:
-                            req_headers["Host"] = original_host
-                        request = Request(url, headers=req_headers)
-                        ctx = ssl_ctx if scheme == "https" else None
-                        with urlopen(request, timeout=timeout, context=ctx) as response:
-                            payload = response.read().decode("utf-8", errors="ignore")
-                    except (HTTPError, URLError, TimeoutError, ValueError, OSError) as exc:
-                        last_error = str(exc)
-                        continue
+    # Use wget/curl from the host OS — Python's urllib gets connection
+    # drops from the .NET Kestrel server inside the container.
+    for url in candidate_urls:
+        last_url = url
+        payload, error = _fetch_url_via_cli(url)
+        if error:
+            last_error = error
+            continue
+        if not payload:
+            continue
 
-                    parsed = _extract_mqtt_queue_metrics(payload)
-                    if any(parsed.get(key) is not None for key in ("queue_size", "success_rate", "failure_rate")):
-                        parsed["queue_source_url"] = url
-                        parsed["queue_fetch_error"] = ""
-                        return parsed
+        parsed = _extract_mqtt_queue_metrics(payload)
+        if any(parsed.get(key) is not None for key in ("queue_size", "success_rate", "failure_rate")):
+            parsed["queue_source_url"] = url
+            parsed["queue_fetch_error"] = ""
+            return parsed
 
     diag = "; ".join(debug_notes) if debug_notes else ""
     full_error = f"{last_error} [{diag}]" if diag else last_error
@@ -515,6 +486,26 @@ def _read_mqtt_queue_metrics(
         "queue_source_url": last_url,
         "queue_fetch_error": full_error,
     }
+
+
+def _fetch_url_via_cli(url: str, timeout: int = 5) -> tuple[str, str]:
+    """Fetch a URL using wget or curl on the host. Returns (body, error)."""
+    commands = [
+        ["wget", "-q", "-O", "-", "--timeout", str(timeout), url],
+        ["curl", "-s", "-m", str(timeout), url],
+    ]
+    for cmd in commands:
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, check=False, timeout=timeout + 2,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout, ""
+        except FileNotFoundError:
+            continue
+        except subprocess.TimeoutExpired:
+            return "", f"timeout fetching {url}"
+    return "", f"wget/curl unavailable or failed for {url}"
 
 
 def _get_container_ip(config: dict[str, Any], docker_bin: str, container_name: str) -> str:

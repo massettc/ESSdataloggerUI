@@ -64,27 +64,13 @@ def test_get_datalogger_status_parses_logger_roles_and_health(monkeypatch):
         key = tuple(arg for arg in args if arg not in {"sudo", "-n"})
         return outputs.get(key, subprocess.CompletedProcess(args=args, returncode=1, stdout="", stderr="missing"))
 
-    class FakeResponse:
-        def __init__(self, text):
-            self._text = text
-
-        def read(self):
-            return self._text.encode("utf-8")
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-    def fake_urlopen(request, timeout=0, context=None):
-        url = request.full_url if hasattr(request, "full_url") else str(request)
-        if "172.17.0.3" in url and "/tools/queue" in url and url.startswith("http://"):
-            return FakeResponse(queue_html)
-        raise datalogger_manager.URLError(f"unreachable: {url}")
+    def fake_fetch(url, timeout=5):
+        if "172.17.0.3" in url and "/tools/queue" in url:
+            return queue_html, ""
+        return "", f"failed: {url}"
 
     monkeypatch.setattr(datalogger_manager, "_run_docker_command", fake_run)
-    monkeypatch.setattr(datalogger_manager, "urlopen", fake_urlopen)
+    monkeypatch.setattr(datalogger_manager, "_fetch_url_via_cli", fake_fetch)
 
     status = datalogger_manager.get_datalogger_status(
         {
@@ -174,24 +160,11 @@ def test_parse_mqtt_logs_extracts_queue_metrics_from_edge_ui_html():
 
 
 def test_read_mqtt_queue_metrics_uses_container_bridge_ip(monkeypatch):
-    """Primary path: docker inspect gives the container IP, urlopen fetches /tools/queue."""
+    """Primary path: docker inspect gives the container IP, wget fetches /tools/queue."""
     queue_html = (
         "<section><div>LENGTH</div><div>7</div><div>SUCCESS RATE (SEC)</div><div>0.92</div>"
         "<div>FAILURE RATE (SEC)</div><div>0.03</div><div>FAILURE SAMPLES</div><div>101</div></section>"
     )
-
-    class FakeResponse:
-        def __init__(self, text):
-            self._text = text
-
-        def read(self):
-            return self._text.encode("utf-8")
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
 
     def fake_run(config, args, check=True):
         key = tuple(arg for arg in args if arg not in {"sudo", "-n"})
@@ -199,16 +172,17 @@ def test_read_mqtt_queue_metrics_uses_container_bridge_ip(monkeypatch):
                    "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
                    "opsviewer2-edge"):
             return subprocess.CompletedProcess(args=[], returncode=0, stdout="172.17.0.3\n", stderr="")
+        if key == ("docker", "port", "opsviewer2-edge"):
+            return subprocess.CompletedProcess(args=[], returncode=0, stdout="8080/tcp -> 0.0.0.0:8080\n", stderr="")
         return subprocess.CompletedProcess(args=args, returncode=1, stdout="", stderr="")
 
-    def fake_urlopen(request, timeout=0, context=None):
-        url = request.full_url if hasattr(request, "full_url") else str(request)
-        if "172.17.0.3" in url and "/tools/queue" in url and url.startswith("http://"):
-            return FakeResponse(queue_html)
-        raise datalogger_manager.URLError(f"unexpected URL: {url}")
+    def fake_fetch(url, timeout=5):
+        if "172.17.0.3" in url and "/tools/queue" in url:
+            return queue_html, ""
+        return "", f"failed: {url}"
 
     monkeypatch.setattr(datalogger_manager, "_run_docker_command", fake_run)
-    monkeypatch.setattr(datalogger_manager, "urlopen", fake_urlopen)
+    monkeypatch.setattr(datalogger_manager, "_fetch_url_via_cli", fake_fetch)
 
     parsed = datalogger_manager._read_mqtt_queue_metrics(
         {}, "http://ess-pi:8080",
@@ -229,30 +203,16 @@ def test_read_mqtt_queue_metrics_falls_back_to_public_url(monkeypatch):
         "<div>FAILURE RATE (SEC)</div><div>0.02</div><div>FAILURE SAMPLES</div><div>5</div></section>"
     )
 
-    class FakeResponse:
-        def __init__(self, text):
-            self._text = text
-
-        def read(self):
-            return self._text.encode("utf-8")
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
     def fake_run(config, args, check=True):
         return subprocess.CompletedProcess(args=args, returncode=1, stdout="", stderr="")
 
-    def fake_urlopen(request, timeout=0, context=None):
-        url = request.full_url if hasattr(request, "full_url") else str(request)
-        if "ess-pi" in url and "/tools/queue" in url and url.startswith("http://"):
-            return FakeResponse(queue_html)
-        raise datalogger_manager.URLError(f"unexpected URL: {url}")
+    def fake_fetch(url, timeout=5):
+        if "ess-pi" in url and "/tools/queue" in url:
+            return queue_html, ""
+        return "", f"failed: {url}"
 
     monkeypatch.setattr(datalogger_manager, "_run_docker_command", fake_run)
-    monkeypatch.setattr(datalogger_manager, "urlopen", fake_urlopen)
+    monkeypatch.setattr(datalogger_manager, "_fetch_url_via_cli", fake_fetch)
 
     parsed = datalogger_manager._read_mqtt_queue_metrics(
         {}, "http://ess-pi:8080",
