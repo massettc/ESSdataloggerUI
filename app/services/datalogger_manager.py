@@ -71,6 +71,9 @@ def get_datalogger_status(config: dict[str, Any], host: str | None = None) -> di
         if name == mqtt_container_name:
             status["mqtt_logger"].update(container)
             status["mqtt_logger"]["running"] = container_status.lower().startswith("up")
+            detected_mqtt_ui_url = _discover_mqtt_ui_url(config, docker_bin, mqtt_container_name, host=host)
+            if detected_mqtt_ui_url:
+                status["mqtt_ui_url"] = detected_mqtt_ui_url
             status["mqtt_logger"]["mqtt_ui_url"] = status["mqtt_ui_url"]
             log_output = _read_container_logs(config, docker_bin, mqtt_container_name)
             status["mqtt_logger"].update(_parse_mqtt_logger_logs(log_output))
@@ -160,8 +163,40 @@ def _build_portainer_url(config: dict[str, Any], host: str | None = None) -> str
 
 def _build_mqtt_ui_url(config: dict[str, Any], host: str | None = None) -> str:
     hostname = host or config.get("MQTT_UI_HOSTNAME") or config.get("PORTAINER_HOSTNAME") or "localhost"
-    port = str(config.get("MQTT_UI_PORT", 8080)).strip()
+    port = str(config.get("MQTT_UI_PORT", "")).strip()
+    if not port:
+        return ""
     return f"http://{hostname}:{port}"
+
+
+def _discover_mqtt_ui_url(config: dict[str, Any], docker_bin: str, container_name: str, host: str | None = None) -> str:
+    configured_url = _build_mqtt_ui_url(config, host=host)
+    if configured_url:
+        return configured_url
+
+    result = _run_docker_command(config, [docker_bin, "port", container_name], check=False)
+    if result.returncode == 0:
+        host_port = _extract_mqtt_host_port(result.stdout)
+        if host_port:
+            hostname = host or config.get("MQTT_UI_HOSTNAME") or config.get("PORTAINER_HOSTNAME") or "localhost"
+            return f"http://{hostname}:{host_port}"
+
+    return ""
+
+
+def _extract_mqtt_host_port(port_output: str) -> str:
+    for line in port_output.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if not any(token in stripped.lower() for token in ("80/tcp", "8080/tcp", "5000/tcp", "3000/tcp")):
+            continue
+        match = re.search(r":(\d+)\s*$", stripped)
+        if match:
+            return match.group(1)
+
+    fallback = re.search(r":(\d+)\s*$", port_output.strip())
+    return fallback.group(1) if fallback else ""
 
 
 def _default_logger_state(label: str, container_name: str) -> dict[str, Any]:

@@ -34,6 +34,8 @@ class Config:
     PORTAINER_HTTP_PORT = int(os.getenv("PI_ADMIN_PORTAINER_HTTP_PORT", "9000"))
     PORTAINER_HTTPS_PORT = int(os.getenv("PI_ADMIN_PORTAINER_HTTPS_PORT", "9443"))
     PORTAINER_HOSTNAME = os.getenv("PI_ADMIN_PORTAINER_HOSTNAME", "")
+    MQTT_UI_HOSTNAME = os.getenv("PI_ADMIN_MQTT_UI_HOSTNAME", "")
+    MQTT_UI_PORT = os.getenv("PI_ADMIN_MQTT_UI_PORT", "")
     REPO_PATH = os.getenv("PI_ADMIN_REPO_PATH", str(BASE_DIR))
     UPDATE_SCRIPT = os.getenv("PI_ADMIN_UPDATE_SCRIPT", str(BASE_DIR / "deploy" / "update-from-git.sh"))
     UPDATE_LOG_PATH = os.getenv("PI_ADMIN_UPDATE_LOG_PATH", str(BASE_DIR / "update.log"))

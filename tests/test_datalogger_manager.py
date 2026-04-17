@@ -29,6 +29,13 @@ def test_get_datalogger_status_parses_logger_roles_and_health(monkeypatch):
                 ),
                 stderr="",
             ),
+        ("docker", "port", "opsviewer2-edge"):
+            subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout="80/tcp -> 0.0.0.0:5055\n",
+                stderr="",
+            ),
         ("docker", "logs", "--tail", "50", "plcreader"):
             subprocess.CompletedProcess(
                 args=[],
@@ -53,7 +60,6 @@ def test_get_datalogger_status_parses_logger_roles_and_health(monkeypatch):
             "PORTAINER_CONTAINER_NAME": "portainer",
             "MQTT_LOGGER_CONTAINER_NAME": "opsviewer2-edge",
             "PLC_LOGGER_CONTAINER_NAME": "plcreader",
-            "MQTT_UI_PORT": 8080,
         },
         host="ess-pi",
     )
@@ -62,7 +68,7 @@ def test_get_datalogger_status_parses_logger_roles_and_health(monkeypatch):
     assert status["mqtt_logger"]["running"] is True
     assert status["mqtt_logger"]["device_id"] == "ESS-UNIT-81"
     assert status["mqtt_logger"]["summary"] == "Data pushed successfully"
-    assert status["mqtt_logger"]["mqtt_ui_url"] == "http://ess-pi:8080"
+    assert status["mqtt_logger"]["mqtt_ui_url"] == "http://ess-pi:5055"
     assert "push" in status["mqtt_logger"]["last_push_label"].lower()
     assert status["plc_logger"]["running"] is False
     assert status["plc_logger"]["measurements"] == 43
