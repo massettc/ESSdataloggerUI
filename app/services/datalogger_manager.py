@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from html import unescape
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
 
 
@@ -406,20 +406,30 @@ def _read_mqtt_queue_metrics(config: dict[str, Any], mqtt_ui_url: str) -> dict[s
         return {}
 
     base_url = mqtt_ui_url.rstrip("/")
-    candidate_urls = [
-        f"{base_url}/tools/queue",
-        f"{base_url}/tools/queue/",
-        f"{base_url}/tools/Queue",
-        f"{base_url}/tools/queue-status",
-        f"{base_url}/queue-status",
-        f"{base_url}/QueueStatus",
-        f"{base_url}/queuestatus",
-        f"{base_url}/api/queue-status",
-        f"{base_url}/api/QueueStatus",
-        f"{base_url}/queue",
-        f"{base_url}/status",
-        f"{base_url}/",
-    ]
+    parsed_base = urlparse(base_url)
+    base_urls = [base_url]
+    if parsed_base.port and parsed_base.hostname not in {"localhost", "127.0.0.1"}:
+        base_urls.append(f"{parsed_base.scheme or 'http'}://localhost:{parsed_base.port}")
+        base_urls.append(f"{parsed_base.scheme or 'http'}://127.0.0.1:{parsed_base.port}")
+
+    candidate_urls: list[str] = []
+    for root in dict.fromkeys(base_urls):
+        candidate_urls.extend(
+            [
+                f"{root}/tools/queue",
+                f"{root}/tools/queue/",
+                f"{root}/tools/Queue",
+                f"{root}/tools/queue-status",
+                f"{root}/queue-status",
+                f"{root}/QueueStatus",
+                f"{root}/queuestatus",
+                f"{root}/api/queue-status",
+                f"{root}/api/QueueStatus",
+                f"{root}/queue",
+                f"{root}/status",
+                f"{root}/",
+            ]
+        )
 
     timeout = max(0.5, min(1.0, float(config.get("VERIFY_POLL_SECONDS", 2))))
     headers = {"User-Agent": "ESS-Datalogger-UI/1.0", "Accept": "text/html,application/json"}
