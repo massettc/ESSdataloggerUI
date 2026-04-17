@@ -103,13 +103,18 @@ def test_datalogger_page_shows_portainer_status(client, monkeypatch):
             "warnings": ["PLC logger stopped"],
             "mqtt_logger": {
                 "name": "opsviewer2-edge",
-                "summary": "Data pushed successfully",
+                "summary": "Buffering data locally",
                 "last_activity_text": "2026-04-16T17:39:10Z",
                 "last_push_age_seconds": 3,
                 "last_push_label": "Last pushed 3 sec ago",
-                "status_class": "status-online",
+                "status_class": "status-warning",
                 "device_id": "ESS-UNIT-81",
                 "channel_count": 10,
+                "queue_size": 1089,
+                "success_rate": 0.18,
+                "failure_rate": 1.31,
+                "success_samples": 275,
+                "failure_samples": 300,
                 "error": "",
             },
             "plc_logger": {
@@ -135,7 +140,10 @@ def test_datalogger_page_shows_portainer_status(client, monkeypatch):
     assert b"Logger health" in response.data
     assert b"Open MQTT UI" in response.data
     assert b"Last pushed 3 sec ago" in response.data
-    assert b"Data pushed successfully" in response.data
+    assert b"Buffering data locally" in response.data
+    assert b"Queue: 1089" in response.data
+    assert b"Success: 0.18/s" in response.data
+    assert b"Failure: 1.31/s" in response.data
     assert b"Portainer" in response.data
     assert b"http://ess-pi:9000" in response.data
     assert b"logger" in response.data

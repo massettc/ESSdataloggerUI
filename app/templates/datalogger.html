@@ -59,6 +59,7 @@
             {% else %}
             <p id="mqtt-device" class="muted-note">Device: not detected yet</p>
             {% endif %}
+            <p id="mqtt-metrics" class="muted-note">Queue: {% if mqtt_logger.get('queue_size') is not none %}{{ mqtt_logger.get('queue_size') }}{% else %}n/a{% endif %} | Success: {% if mqtt_logger.get('success_rate') is not none %}{{ '%.2f'|format(mqtt_logger.get('success_rate')) }}/s{% else %}n/a{% endif %} | Failure: {% if mqtt_logger.get('failure_rate') is not none %}{{ '%.2f'|format(mqtt_logger.get('failure_rate')) }}/s{% else %}n/a{% endif %}</p>
             {% if mqtt_logger.get('error') %}
             <p id="mqtt-error" class="update-error-note">{{ mqtt_logger.get('error') }}</p>
             {% else %}
@@ -207,7 +208,11 @@ document.addEventListener('DOMContentLoaded', function () {
                     deviceText += ' | Channels in sample: ' + logger.channel_count;
                 }
             }
+            const queue = logger.queue_size !== null && logger.queue_size !== undefined ? logger.queue_size : 'n/a';
+            const success = logger.success_rate !== null && logger.success_rate !== undefined ? Number(logger.success_rate).toFixed(2) + '/s' : 'n/a';
+            const failure = logger.failure_rate !== null && logger.failure_rate !== undefined ? Number(logger.failure_rate).toFixed(2) + '/s' : 'n/a';
             setText('mqtt-device', deviceText);
+            setText('mqtt-metrics', 'Queue: ' + queue + ' | Success: ' + success + ' | Failure: ' + failure);
         }
 
         if (prefix === 'plc') {

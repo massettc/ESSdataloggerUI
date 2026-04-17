@@ -5,7 +5,10 @@ import os
 import re
 import subprocess
 from datetime import datetime, timezone
+from html import unescape
 from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 
 class DataloggerManagerError(RuntimeError):
@@ -70,6 +73,7 @@ def get_datalogger_status(config: dict[str, Any], host: str | None = None) -> di
             status["mqtt_logger"]["mqtt_ui_url"] = status["mqtt_ui_url"]
             log_output = _read_container_logs(config, docker_bin, mqtt_container_name)
             status["mqtt_logger"].update(_parse_mqtt_logger_logs(log_output))
+            status["mqtt_logger"].update(_read_mqtt_queue_metrics(config, status["mqtt_ui_url"]))
             status["mqtt_logger"] = _finalize_logger_state(status["mqtt_logger"])
 
         if name == plc_container_name:
@@ -174,6 +178,10 @@ def _default_logger_state(label: str, container_name: str) -> dict[str, Any]:
         "error": "",
         "measurements": None,
         "queue_size": None,
+        "success_rate": None,
+        "failure_rate": None,
+        "success_samples": None,
+        "failure_samples": None,
         "device_id": "",
         "channel_count": None,
     }
@@ -220,6 +228,11 @@ def _parse_mqtt_logger_logs(log_text: str) -> dict[str, Any]:
         "last_activity_text": "Unknown",
         "device_id": "",
         "channel_count": None,
+        "queue_size": None,
+        "success_rate": None,
+        "failure_rate": None,
+        "success_samples": None,
+        "failure_samples": None,
         "error": "",
     }
     if not log_text:
@@ -236,6 +249,8 @@ def _parse_mqtt_logger_logs(log_text: str) -> dict[str, Any]:
                     parsed["channel_count"] = len(payload)
             except json.JSONDecodeError:
                 pass
+
+    parsed.update(_extract_mqtt_queue_metrics(log_text))
 
     if "Sending PUBLISH" in log_text or "Received PUBLISH" in log_text:
         parsed["summary"] = "Data pushed successfully"
@@ -262,6 +277,11 @@ def _finalize_logger_state(logger: dict[str, Any]) -> dict[str, Any]:
         logger["last_push_label"] = "Logger stopped"
         return logger
 
+    queue_size = logger.get("queue_size")
+    if isinstance(queue_size, int) and queue_size > 0 and logger.get("label") == "MQTT Logger":
+        logger["summary"] = "Buffering data locally"
+        logger["status_class"] = "status-warning"
+
     timestamp = _parse_activity_timestamp(logger.get("last_activity_text", ""))
     if timestamp is None:
         logger["status_class"] = "status-neutral"
@@ -275,10 +295,12 @@ def _finalize_logger_state(logger: dict[str, Any]) -> dict[str, Any]:
 
     logger["last_push_age_seconds"] = age_seconds
     if age_seconds <= 15:
-        logger["status_class"] = "status-online"
+        if logger.get("status_class") != "status-warning":
+            logger["status_class"] = "status-online"
         logger["last_push_label"] = _format_last_push_label(age_seconds)
     elif age_seconds <= 60:
-        logger["status_class"] = "status-neutral"
+        if logger.get("status_class") != "status-warning":
+            logger["status_class"] = "status-neutral"
         logger["last_push_label"] = _format_last_push_label(age_seconds)
     else:
         logger["status_class"] = "status-offline"
@@ -333,7 +355,101 @@ def _build_logger_warnings(mqtt_logger: dict[str, Any], plc_logger: dict[str, An
         warnings.append("MQTT logger error detected")
     if plc_logger.get("summary") == "Error detected":
         warnings.append("PLC logger error detected")
+    queue_size = mqtt_logger.get("queue_size")
+    if isinstance(queue_size, int) and queue_size > 0:
+        warnings.append(f"MQTT queue building: {queue_size} buffered")
     return warnings
+
+
+def _read_mqtt_queue_metrics(config: dict[str, Any], mqtt_ui_url: str) -> dict[str, Any]:
+    if not mqtt_ui_url:
+        return {}
+
+    candidate_urls = [
+        f"{mqtt_ui_url.rstrip('/')}/queue-status",
+        f"{mqtt_ui_url.rstrip('/')}/api/queue-status",
+        f"{mqtt_ui_url.rstrip('/')}/queue",
+        mqtt_ui_url.rstrip('/'),
+    ]
+
+    timeout = max(0.5, min(1.0, float(config.get("VERIFY_POLL_SECONDS", 2))))
+    headers = {"User-Agent": "ESS-Datalogger-UI/1.0", "Accept": "text/html,application/json"}
+
+    for url in candidate_urls:
+        try:
+            request = Request(url, headers=headers)
+            with urlopen(request, timeout=timeout) as response:
+                payload = response.read().decode("utf-8", errors="ignore")
+        except (HTTPError, URLError, TimeoutError, ValueError, OSError):
+            continue
+
+        parsed = _extract_mqtt_queue_metrics(payload)
+        if any(parsed.get(key) is not None for key in ("queue_size", "success_rate", "failure_rate")):
+            return parsed
+
+    return {}
+
+
+def _extract_mqtt_queue_metrics(text: str) -> dict[str, Any]:
+    parsed = {
+        "queue_size": None,
+        "success_rate": None,
+        "failure_rate": None,
+        "success_samples": None,
+        "failure_samples": None,
+    }
+    if not text:
+        return parsed
+
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        payload = None
+
+    if isinstance(payload, dict):
+        lower_payload = {str(key).lower(): value for key, value in payload.items()}
+        parsed["queue_size"] = _safe_int(lower_payload.get("length", lower_payload.get("queue_size")))
+        parsed["success_rate"] = _safe_float(lower_payload.get("success rate (sec)", lower_payload.get("success_rate")))
+        parsed["failure_rate"] = _safe_float(lower_payload.get("failure rate (sec)", lower_payload.get("failure_rate")))
+        parsed["success_samples"] = _safe_int(lower_payload.get("success samples", lower_payload.get("success_samples")))
+        parsed["failure_samples"] = _safe_int(lower_payload.get("failure samples", lower_payload.get("failure_samples")))
+        return parsed
+
+    normalized = unescape(re.sub(r"<[^>]+>", " ", text))
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+
+    queue_match = re.search(r"LENGTH\s+([0-9]+)", normalized, re.IGNORECASE)
+    success_rate_match = re.search(r"SUCCESS RATE \(SEC\)\s+([0-9]*\.?[0-9]+)", normalized, re.IGNORECASE)
+    success_samples_match = re.search(r"SUCCESS SAMPLES\s+([0-9]+)", normalized, re.IGNORECASE)
+    failure_rate_match = re.search(r"FAILURE RATE \(SEC\)\s+([0-9]*\.?[0-9]+)", normalized, re.IGNORECASE)
+    failure_samples_match = re.search(r"FAILURE SAMPLES\s+([0-9]+)", normalized, re.IGNORECASE)
+
+    if queue_match:
+        parsed["queue_size"] = int(queue_match.group(1))
+    if success_rate_match:
+        parsed["success_rate"] = float(success_rate_match.group(1))
+    if success_samples_match:
+        parsed["success_samples"] = int(success_samples_match.group(1))
+    if failure_rate_match:
+        parsed["failure_rate"] = float(failure_rate_match.group(1))
+    if failure_samples_match:
+        parsed["failure_samples"] = int(failure_samples_match.group(1))
+
+    return parsed
+
+
+def _safe_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _safe_float(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _last_meaningful_line(text: str) -> str:

@@ -116,3 +116,17 @@ def test_parse_mqtt_logs_extracts_device_and_publish_state():
     assert parsed["channel_count"] == 1
     assert parsed["summary"] == "Data pushed successfully"
     assert parsed["last_activity_text"] == "2026-04-16T17:39:10.3038222Z"
+
+
+def test_parse_mqtt_logs_extracts_queue_metrics_from_edge_ui_html():
+    parsed = datalogger_manager._parse_mqtt_logger_logs(
+        "<section><div>LENGTH</div><div>1089</div><div>SUCCESS RATE (SEC)</div><div>0.18</div>"
+        "<div>SUCCESS SAMPLES</div><div>275</div><div>FAILURE RATE (SEC)</div><div>1.31</div>"
+        "<div>FAILURE SAMPLES</div><div>300</div></section>"
+    )
+
+    assert parsed["queue_size"] == 1089
+    assert parsed["success_rate"] == 0.18
+    assert parsed["failure_rate"] == 1.31
+    assert parsed["success_samples"] == 275
+    assert parsed["failure_samples"] == 300
