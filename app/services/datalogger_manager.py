@@ -438,6 +438,7 @@ def _read_mqtt_queue_metrics(config: dict[str, Any], mqtt_ui_url: str) -> dict[s
         )
 
     timeout = max(0.5, min(1.0, float(config.get("VERIFY_POLL_SECONDS", 2))))
+    original_netloc = parsed_base.netloc
     headers = {"User-Agent": "ESS-Datalogger-UI/1.0", "Accept": "text/html,application/json"}
     pending_urls = list(dict.fromkeys(candidate_urls))
     seen_urls: set[str] = set()
@@ -453,7 +454,11 @@ def _read_mqtt_queue_metrics(config: dict[str, Any], mqtt_ui_url: str) -> dict[s
         last_url = url
 
         try:
-            request = Request(url, headers=headers)
+            request_headers = dict(headers)
+            url_parts = urlparse(url)
+            if original_netloc and url_parts.hostname in {"localhost", "127.0.0.1"}:
+                request_headers["Host"] = original_netloc
+            request = Request(url, headers=request_headers)
             with urlopen(request, timeout=timeout) as response:
                 payload = response.read().decode("utf-8", errors="ignore")
         except (HTTPError, URLError, TimeoutError, ValueError, OSError) as exc:

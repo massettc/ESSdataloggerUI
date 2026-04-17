@@ -237,9 +237,10 @@ def test_read_mqtt_queue_metrics_falls_back_to_localhost(monkeypatch):
 
     def fake_urlopen(request, timeout=0):
         url = request.full_url if hasattr(request, "full_url") else str(request)
-        if url in responses:
+        host_header = request.get_header("Host") if hasattr(request, "get_header") else None
+        if url == "http://localhost:8080/tools/queue" and host_header == "192.168.0.11:8080":
             return FakeResponse(responses[url])
-        raise datalogger_manager.URLError(f"unexpected URL: {url}")
+        raise datalogger_manager.URLError(f"unexpected URL: {url} host={host_header}")
 
     monkeypatch.setattr(datalogger_manager, "urlopen", fake_urlopen)
 
