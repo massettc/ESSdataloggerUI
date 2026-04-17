@@ -225,3 +225,16 @@ nmcli device status
 - The app keeps the runtime environment file in /etc/pi-network-admin/app.env so normal updates do not overwrite your live settings.
 - Use tagged releases for field deployments when you want a stable, repeatable version.
 - Keep Ethernet connected during first setup so the Pi stays reachable if Wi-Fi is not configured correctly.
+
+
+internet access/data transfering.
+Update this App button/function.
+remove login to app.
+Data logger management
+    docker install?
+    Container management
+    Logs.
+Disk size.
+Install dataplicity button?
+change hostname.
+reboot button.

@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from html import unescape
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 
@@ -414,87 +414,52 @@ def _read_mqtt_queue_metrics(
     docker_bin: str | None = None,
     container_name: str | None = None,
 ) -> dict[str, Any]:
+    last_error = ""
+    last_url = ""
+
+    # Strategy 1: Use Docker container's internal bridge IP to bypass any
+    # host port conflicts (the Flask app and Edge UI may share port 8080).
+    if docker_bin and container_name:
+        container_ip = _get_container_ip(config, docker_bin, container_name)
+        if container_ip:
+            candidate_paths = ["/tools/queue", "/tools/queue/", "/tools/Queue",
+                               "/QueueStatus", "/queue-status", "/"]
+            timeout = max(0.5, min(1.0, float(config.get("VERIFY_POLL_SECONDS", 2))))
+            headers = {"User-Agent": "ESS-Datalogger-UI/1.0", "Accept": "text/html,application/json"}
+            for path in candidate_paths:
+                url = f"http://{container_ip}{path}"
+                last_url = url
+                try:
+                    request = Request(url, headers=headers)
+                    with urlopen(request, timeout=timeout) as response:
+                        payload = response.read().decode("utf-8", errors="ignore")
+                except (HTTPError, URLError, TimeoutError, ValueError, OSError) as exc:
+                    last_error = str(exc)
+                    continue
+
+                parsed = _extract_mqtt_queue_metrics(payload)
+                if any(parsed.get(key) is not None for key in ("queue_size", "success_rate", "failure_rate")):
+                    parsed["queue_source_url"] = url
+                    parsed["queue_fetch_error"] = ""
+                    return parsed
+
+    # Strategy 2: Fall back to the public mqtt_ui_url (for non-Docker setups).
     if mqtt_ui_url:
-        base_url = mqtt_ui_url.rstrip("/")
-        parsed_base = urlparse(base_url)
-        scheme = parsed_base.scheme or "http"
-        port = parsed_base.port or 8080
-        base_urls = [
-            f"{scheme}://localhost:{port}",
-            f"{scheme}://127.0.0.1:{port}",
-            base_url,
-        ]
-        if parsed_base.hostname:
-            base_urls.append(f"{scheme}://{parsed_base.hostname}:{port}")
-
-        candidate_urls: list[str] = []
-        for root in dict.fromkeys(base_urls):
-            candidate_urls.extend(
-                [
-                    f"{root}/tools/queue",
-                    f"{root}/tools/queue/",
-                    f"{root}/tools/Queue",
-                    f"{root}/tools/queue-status",
-                    f"{root}/tools/QueueStatus",
-                    f"{root}/queue-status",
-                    f"{root}/QueueStatus",
-                    f"{root}/queuestatus",
-                    f"{root}/api/queue-status",
-                    f"{root}/api/QueueStatus",
-                    f"{root}/queue",
-                    f"{root}/status",
-                    f"{root}/",
-                ]
-            )
-
+        url = mqtt_ui_url.rstrip("/") + "/tools/queue"
+        last_url = url
         timeout = max(0.5, min(1.0, float(config.get("VERIFY_POLL_SECONDS", 2))))
-        original_netloc = parsed_base.netloc
         headers = {"User-Agent": "ESS-Datalogger-UI/1.0", "Accept": "text/html,application/json"}
-        pending_urls = list(dict.fromkeys(candidate_urls))
-        seen_urls: set[str] = set()
-
-        last_error = ""
-        last_url = ""
-
-        while pending_urls:
-            url = pending_urls.pop(0)
-            if url in seen_urls:
-                continue
-            seen_urls.add(url)
-            last_url = url
-
-            try:
-                request_headers = dict(headers)
-                url_parts = urlparse(url)
-                if original_netloc and url_parts.hostname in {"localhost", "127.0.0.1"}:
-                    request_headers["Host"] = original_netloc
-                request = Request(url, headers=request_headers)
-                with urlopen(request, timeout=timeout) as response:
-                    payload = response.read().decode("utf-8", errors="ignore")
-            except (HTTPError, URLError, TimeoutError, ValueError, OSError) as exc:
-                last_error = str(exc)
-                continue
-
+        try:
+            request = Request(url, headers=headers)
+            with urlopen(request, timeout=timeout) as response:
+                payload = response.read().decode("utf-8", errors="ignore")
             parsed = _extract_mqtt_queue_metrics(payload)
             if any(parsed.get(key) is not None for key in ("queue_size", "success_rate", "failure_rate")):
                 parsed["queue_source_url"] = url
                 parsed["queue_fetch_error"] = ""
                 return parsed
-
-            for discovered_url in _discover_mqtt_queue_urls(url, payload):
-                if discovered_url not in seen_urls:
-                    pending_urls.append(discovered_url)
-    else:
-        last_error = ""
-        last_url = ""
-
-    if docker_bin and container_name:
-        container_metrics = _read_mqtt_queue_metrics_from_container(config, docker_bin, container_name)
-        if any(container_metrics.get(key) is not None for key in ("queue_size", "success_rate", "failure_rate")):
-            return container_metrics
-        if container_metrics.get("queue_fetch_error"):
-            last_error = container_metrics.get("queue_fetch_error", last_error)
-            last_url = container_metrics.get("queue_source_url", last_url)
+        except (HTTPError, URLError, TimeoutError, ValueError, OSError) as exc:
+            last_error = str(exc)
 
     return {
         "queue_size": None,
@@ -507,75 +472,20 @@ def _read_mqtt_queue_metrics(
     }
 
 
-def _read_mqtt_queue_metrics_from_container(config: dict[str, Any], docker_bin: str, container_name: str) -> dict[str, Any]:
-    queue_source = f"container://{container_name}/tools/queue"
-    commands = [
-        [
-            docker_bin,
-            "exec",
-            container_name,
-            "python3",
-            "-c",
-            "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1/tools/queue', timeout=2).read().decode('utf-8', 'ignore'))",
-        ],
-        [
-            docker_bin,
-            "exec",
-            container_name,
-            "python",
-            "-c",
-            "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1/tools/queue', timeout=2).read().decode('utf-8', 'ignore'))",
-        ],
-    ]
-
-    last_result = None
-    for command in commands:
-        result = _run_docker_command(config, command, check=False)
-        last_result = result
-        if result.returncode == 0 and result.stdout.strip():
-            parsed = _extract_mqtt_queue_metrics(result.stdout)
-            parsed["queue_source_url"] = queue_source
-            parsed["queue_fetch_error"] = ""
-            return parsed
-
-    result = last_result
-    if result is None:
-        return {
-            "queue_size": None,
-            "success_rate": None,
-            "failure_rate": None,
-            "success_samples": None,
-            "failure_samples": None,
-            "queue_source_url": queue_source,
-            "queue_fetch_error": "Unable to run container queue probe",
-        }
-
-    parsed = _extract_mqtt_queue_metrics(result.stdout)
-    parsed["queue_source_url"] = queue_source
-    parsed["queue_fetch_error"] = ""
-    return parsed
-
-
-def _discover_mqtt_queue_urls(source_url: str, payload: str) -> list[str]:
-    if not payload:
-        return []
-
-    discovered: list[str] = []
-    href_matches = re.findall(r'href=["\']([^"\']+)["\']', payload, re.IGNORECASE)
-    script_matches = re.findall(r'["\']([^"\']*(?:queue|status)[^"\']*)["\']', payload, re.IGNORECASE)
-
-    for raw_target in [*href_matches, *script_matches]:
-        candidate = (raw_target or "").strip()
-        lower_candidate = candidate.lower()
-        if not candidate:
-            continue
-        if "queue" not in lower_candidate and "status" not in lower_candidate:
-            continue
-        if lower_candidate.startswith("javascript:"):
-            continue
-        discovered.append(urljoin(source_url, candidate))
-
-    return list(dict.fromkeys(discovered))
+def _get_container_ip(config: dict[str, Any], docker_bin: str, container_name: str) -> str:
+    """Return the Docker-internal bridge IP of a running container, or ''."""
+    result = _run_docker_command(
+        config,
+        [docker_bin, "inspect", "-f",
+         "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
+         container_name],
+        check=False,
+    )
+    if result.returncode == 0:
+        ip = result.stdout.strip()
+        if ip and re.match(r"^\d{1,3}(\.\d{1,3}){3}$", ip):
+            return ip
+    return ""
 
 
 def _extract_mqtt_queue_metrics(text: str) -> dict[str, Any]:
