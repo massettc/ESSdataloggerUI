@@ -162,6 +162,18 @@ def test_get_technician_tools_state_includes_json_editor_data(tmp_path: Path):
 
 
 
+def test_get_technician_tools_state_includes_default_plcreader_json(monkeypatch, tmp_path: Path):
+    json_path = tmp_path / "settings.json"
+    json_path.write_text('{"mode": "edge"}', encoding="utf-8")
+
+    monkeypatch.setattr(system_manager, "_default_json_editor_paths", lambda config: [str(json_path)])
+
+    state = system_manager.get_technician_tools_state({})
+
+    assert any(item["path"] == str(json_path) for item in state["json_files"])
+
+
+
 def test_save_technician_json_file_rejects_invalid_json(tmp_path: Path):
     json_path = tmp_path / "logger.json"
     json_path.write_text('{"enabled": true}', encoding="utf-8")

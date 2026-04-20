@@ -657,6 +657,10 @@ def _get_allowed_json_files(config: dict[str, Any]) -> list[dict[str, str]]:
         if default_config_dir.exists():
             configured_paths = sorted(str(path) for path in default_config_dir.glob("*.json"))
 
+    for default_path in _default_json_editor_paths(config):
+        if default_path not in configured_paths:
+            configured_paths.append(default_path)
+
     files: list[dict[str, str]] = []
     for raw_path in configured_paths:
         candidate = Path(raw_path)
@@ -693,6 +697,10 @@ def _parse_json_editor_paths(config: dict[str, Any]) -> list[str]:
     for separator in separators:
         normalized = normalized.replace(separator, os.pathsep)
     return [part.strip() for part in normalized.split(os.pathsep) if part.strip()]
+
+
+def _default_json_editor_paths(config: dict[str, Any]) -> list[str]:
+    return ["/var/usr/plcreader/settings.json"]
 
 
 def _build_json_file_entry(path: Path, index: int) -> dict[str, str]:
