@@ -25,6 +25,7 @@ from app.services.system_manager import (
     run_custom_technician_command,
     run_system_update,
     run_technician_command,
+    save_technician_json_file,
     set_system_hostname,
     start_custom_technician_command,
     start_technician_command,
@@ -292,6 +293,12 @@ def technician_tools():
                 )
             elif action == "delete_command":
                 result = delete_technician_command(current_app.config, request.form.get("command_id", ""))
+            elif action == "save_json":
+                result = save_technician_json_file(
+                    current_app.config,
+                    request.form.get("json_file", ""),
+                    request.form.get("json_content", ""),
+                )
             else:
                 result = {"success": False, "message": "Unknown technician action."}
         except Exception as exc:
@@ -300,10 +307,16 @@ def technician_tools():
             return redirect(url_for("network.technician_tools"))
 
         flash(result["message"], "success" if result["success"] else "error")
+        if action == "save_json":
+            return redirect(url_for("network.technician_tools", json_file=request.form.get("json_file", "")))
         return redirect(url_for("network.technician_tools"))
 
     try:
-        tools_state = get_technician_tools_state(current_app.config)
+        view_config = dict(current_app.config)
+        selected_json_file = request.args.get("json_file", "").strip()
+        if selected_json_file:
+            view_config["SELECTED_JSON_FILE"] = selected_json_file
+        tools_state = get_technician_tools_state(view_config)
     except Exception as exc:
         current_app.logger.exception("technician tools view error")
         flash(str(exc), "error")

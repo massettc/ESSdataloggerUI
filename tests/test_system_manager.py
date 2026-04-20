@@ -145,6 +145,39 @@ def test_run_custom_technician_command_adds_docker_permission_hint(monkeypatch, 
 
 
 
+def test_get_technician_tools_state_includes_json_editor_data(tmp_path: Path):
+    json_path = tmp_path / "logger.json"
+    json_path.write_text('{"enabled": true, "interval": 5}', encoding="utf-8")
+
+    config = {
+        "TECHNICIAN_COMMANDS_FILE": str(tmp_path / "commands.json"),
+        "TECHNICIAN_OUTPUT_FILE": str(tmp_path / "technician-output.json"),
+        "JSON_EDITOR_PATHS": str(json_path),
+    }
+
+    state = system_manager.get_technician_tools_state(config)
+
+    assert state["json_files"][0]["label"] == "logger.json"
+    assert '"enabled": true' in state["json_editor_content"]
+
+
+
+def test_save_technician_json_file_rejects_invalid_json(tmp_path: Path):
+    json_path = tmp_path / "logger.json"
+    json_path.write_text('{"enabled": true}', encoding="utf-8")
+
+    config = {
+        "JSON_EDITOR_PATHS": str(json_path),
+    }
+
+    result = system_manager.save_technician_json_file(config, "logger-json", '{invalid json}')
+
+    assert result["success"] is False
+    assert "valid json" in result["message"].lower()
+    assert json_path.read_text(encoding="utf-8") == '{"enabled": true}'
+
+
+
 def test_start_custom_technician_command_handles_launch_error(monkeypatch, tmp_path: Path):
     def fake_popen(args, **kwargs):
         raise PermissionError("launch failed")

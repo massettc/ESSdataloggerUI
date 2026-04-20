@@ -237,7 +237,7 @@ def test_datalogger_status_api_includes_live_connectivity(client, monkeypatch):
     assert payload["connectivity"]["wifi_label"] == "PlantWiFi"
 
 
-def test_technician_tools_page_shows_buttons_terminal_and_remove_action(client, monkeypatch):
+def test_technician_tools_page_shows_buttons_terminal_and_json_editor(client, monkeypatch):
     monkeypatch.setattr(
         network_routes,
         "get_technician_tools_state",
@@ -258,6 +258,10 @@ def test_technician_tools_page_shows_buttons_terminal_and_remove_action(client, 
                 "exit_code": 0,
                 "output": "Thu Apr 16",
             },
+            "json_files": [{"id": "logger-json", "label": "Logger JSON", "path": "/tmp/logger.json"}],
+            "selected_json_file": "logger-json",
+            "json_editor_content": '{\n  "enabled": true\n}',
+            "json_editor_error": "",
             "error": "",
         },
     )
@@ -270,6 +274,9 @@ def test_technician_tools_page_shows_buttons_terminal_and_remove_action(client, 
     assert b"Add new button" in response.data
     assert b"Show date" in response.data
     assert b"Terminal output" in response.data
+    assert b"JSON editor" in response.data
+    assert b"Logger JSON" in response.data
+    assert b'"enabled": true' in response.data
     assert b"Remove" in response.data
 
 
@@ -327,6 +334,31 @@ def test_technician_tools_post_can_run_saved_button(client, monkeypatch):
 
 
 
+def test_technician_tools_post_can_save_json_file(client, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        network_routes,
+        "save_technician_json_file",
+        lambda config, file_id, content: calls.append((file_id, content)) or {"success": True, "message": "JSON saved."},
+    )
+    monkeypatch.setattr(
+        network_routes,
+        "get_technician_tools_state",
+        lambda config: {"commands": [], "last_result": None, "json_files": [], "json_editor_content": "", "json_editor_error": "", "error": ""},
+    )
+
+    _login(client)
+    response = client.post(
+        "/tools",
+        data={"action": "save_json", "json_file": "logger-json", "json_content": '{"enabled": true}'},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert calls == [("logger-json", '{"enabled": true}')]
+
+
+
 def test_technician_tools_status_api_returns_live_terminal_state(client, monkeypatch):
     monkeypatch.setattr(
         network_routes,
@@ -341,6 +373,9 @@ def test_technician_tools_status_api_returns_live_terminal_state(client, monkeyp
                 "output": "Pulling fs layer",
                 "ran_at": "2026-04-16 17:30:00",
             },
+            "json_files": [],
+            "json_editor_content": "",
+            "json_editor_error": "",
             "error": "",
         },
     )

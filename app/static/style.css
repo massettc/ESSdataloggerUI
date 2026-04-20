@@ -738,6 +738,12 @@ td {
     font-size: 0.92rem;
 }
 
+.json-editor-area {
+    min-height: 320px;
+    font-family: Consolas, "Cascadia Code", monospace;
+    line-height: 1.45;
+}
+
 .terminal-placeholder {
     color: #9fb0bd;
 }

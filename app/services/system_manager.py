@@ -167,9 +167,19 @@ def get_technician_tools_state(config: dict[str, Any]) -> dict[str, Any]:
             }
             _write_technician_output(config, last_result)
 
+    json_files = _get_allowed_json_files(config)
+    selected_json_file = str(config.get("SELECTED_JSON_FILE", "")).strip()
+    if not selected_json_file and json_files:
+        selected_json_file = str(json_files[0].get("id", ""))
+    json_editor_content, json_editor_error = _read_selected_json_content(config, selected_json_file, json_files)
+
     return {
         "commands": _load_technician_commands(config),
         "last_result": last_result,
+        "json_files": json_files,
+        "selected_json_file": selected_json_file,
+        "json_editor_content": json_editor_content,
+        "json_editor_error": json_editor_error,
         "error": "",
     }
 
@@ -214,6 +224,28 @@ def delete_technician_command(config: dict[str, Any], command_id: str) -> dict[s
 
     _save_technician_commands(config, remaining)
     return {"success": True, "message": "Saved button removed."}
+
+
+def save_technician_json_file(config: dict[str, Any], file_id: str, content: str) -> dict[str, Any]:
+    file_id = file_id.strip()
+    allowed_files = _get_allowed_json_files(config)
+    selected = next((item for item in allowed_files if item.get("id") == file_id), None)
+    if not selected:
+        return {"success": False, "message": "That JSON file is not available in the editor."}
+
+    raw_content = content.strip()
+    if not raw_content:
+        return {"success": False, "message": "JSON content cannot be empty."}
+
+    try:
+        parsed = json.loads(raw_content)
+    except json.JSONDecodeError as exc:
+        return {"success": False, "message": f"Please enter valid JSON before saving: {exc.msg}."}
+
+    output_path = Path(str(selected.get("path", "")))
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(parsed, indent=2) + "\n", encoding="utf-8")
+    return {"success": True, "message": f"Saved JSON file {output_path.name}."}
 
 
 def start_technician_command(config: dict[str, Any], command_id: str) -> dict[str, Any]:
@@ -614,6 +646,84 @@ def _decorate_technician_output(command: str, output: str, exit_code: int) -> tu
         )
 
     return output, docker_permission_denied
+
+
+def _get_allowed_json_files(config: dict[str, Any]) -> list[dict[str, str]]:
+    repo_path = Path(str(config.get("REPO_PATH", BASE_DIR)))
+    configured_paths = _parse_json_editor_paths(config)
+
+    if not configured_paths:
+        default_config_dir = repo_path / "config"
+        if default_config_dir.exists():
+            configured_paths = sorted(str(path) for path in default_config_dir.glob("*.json"))
+
+    files: list[dict[str, str]] = []
+    for raw_path in configured_paths:
+        candidate = Path(raw_path)
+        if not candidate.is_absolute():
+            candidate = repo_path / candidate
+
+        if candidate.is_dir():
+            for path in sorted(candidate.glob("*.json")):
+                files.append(_build_json_file_entry(path, len(files)))
+            continue
+
+        if candidate.suffix.lower() != ".json":
+            continue
+        files.append(_build_json_file_entry(candidate, len(files)))
+
+    unique_files: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for item in files:
+        path_key = str(item.get("path", ""))
+        if path_key in seen:
+            continue
+        seen.add(path_key)
+        unique_files.append(item)
+    return unique_files
+
+
+def _parse_json_editor_paths(config: dict[str, Any]) -> list[str]:
+    raw_value = str(config.get("JSON_EDITOR_PATHS", "") or "")
+    if not raw_value:
+        return []
+
+    normalized = raw_value.replace("\r", "\n")
+    separators = ["\n", ","]
+    for separator in separators:
+        normalized = normalized.replace(separator, os.pathsep)
+    return [part.strip() for part in normalized.split(os.pathsep) if part.strip()]
+
+
+def _build_json_file_entry(path: Path, index: int) -> dict[str, str]:
+    base = re.sub(r"[^a-z0-9]+", "-", path.name.lower()).strip("-") or "json-file"
+    file_id = base if index == 0 else f"{base}-{index + 1}"
+    return {"id": file_id, "label": path.name, "path": str(path)}
+
+
+def _read_selected_json_content(
+    config: dict[str, Any],
+    selected_json_file: str,
+    json_files: list[dict[str, str]],
+) -> tuple[str, str]:
+    if not selected_json_file:
+        return "", ""
+
+    selected = next((item for item in json_files if item.get("id") == selected_json_file), None)
+    if not selected:
+        return "", "Selected JSON file was not found."
+
+    json_path = Path(str(selected.get("path", "")))
+    if not json_path.exists():
+        return "{}\n", "The JSON file does not exist yet. Saving will create it."
+
+    raw_content = json_path.read_text(encoding="utf-8")
+    try:
+        parsed = json.loads(raw_content)
+        return json.dumps(parsed, indent=2), ""
+    except json.JSONDecodeError as exc:
+        return raw_content, f"This file is not currently valid JSON: {exc.msg}."
+
 
 
 def _load_technician_commands(config: dict[str, Any]) -> list[dict[str, Any]]:

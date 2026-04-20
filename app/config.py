@@ -46,6 +46,7 @@ class Config:
     TECHNICIAN_OUTPUT_FILE = os.getenv(
         "PI_ADMIN_TECHNICIAN_OUTPUT_FILE", str(BASE_DIR / "technician-output.json")
     )
+    JSON_EDITOR_PATHS = os.getenv("PI_ADMIN_JSON_EDITOR_PATHS", "")
     TECHNICIAN_COMMAND_PATH = os.getenv(
         "PI_ADMIN_TECHNICIAN_COMMAND_PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
     )

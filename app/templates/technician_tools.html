@@ -124,6 +124,41 @@ Use a quick action or the custom command field below.{% endif %}</pre>
 <section class="panel">
     <div class="section-heading">
         <div>
+            <h3>JSON editor</h3>
+            <p>Open and safely save approved JSON configuration files from this page.</p>
+        </div>
+    </div>
+
+    {% if tools_state.json_files %}
+    <form method="get" class="stack-form compact-form">
+        <label for="json_file_picker">Choose JSON file</label>
+        <select id="json_file_picker" name="json_file" onchange="this.form.submit()">
+            {% for item in tools_state.json_files %}
+            <option value="{{ item.id }}" {{ 'selected' if item.id == tools_state.selected_json_file else '' }}>{{ item.label }}</option>
+            {% endfor %}
+        </select>
+    </form>
+
+    {% if tools_state.json_editor_error %}
+    <p class="update-error-note">{{ tools_state.json_editor_error }}</p>
+    {% endif %}
+
+    <form method="post" class="stack-form" data-confirm="Save this JSON file now?">
+        <input type="hidden" name="action" value="save_json">
+        <input type="hidden" name="json_file" value="{{ tools_state.selected_json_file }}">
+        <label for="json_content">JSON content</label>
+        <textarea id="json_content" name="json_content" class="json-editor-area" spellcheck="false">{{ tools_state.json_editor_content | safe }}</textarea>
+        <button type="submit">Save JSON</button>
+    </form>
+    <p class="muted-note">Only approved JSON files listed here can be edited.</p>
+    {% else %}
+    <p class="muted-note">No JSON files are configured for editing yet. Add paths in the app environment using PI_ADMIN_JSON_EDITOR_PATHS.</p>
+    {% endif %}
+</section>
+
+<section class="panel">
+    <div class="section-heading">
+        <div>
             <h3>Saved buttons</h3>
             <p>Run or remove the command buttons currently available on this device.</p>
         </div>
