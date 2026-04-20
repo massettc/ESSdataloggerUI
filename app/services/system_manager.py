@@ -231,21 +231,26 @@ def save_technician_json_file(config: dict[str, Any], file_id: str, content: str
     allowed_files = _get_allowed_json_files(config)
     selected = next((item for item in allowed_files if item.get("id") == file_id), None)
     if not selected:
-        return {"success": False, "message": "That JSON file is not available in the editor."}
+        return {"success": False, "message": "That file is not available in the editor."}
 
-    raw_content = content.strip()
-    if not raw_content:
-        return {"success": False, "message": "JSON content cannot be empty."}
-
-    try:
-        parsed = json.loads(raw_content)
-    except json.JSONDecodeError as exc:
-        return {"success": False, "message": f"Please enter valid JSON before saving: {exc.msg}."}
+    raw_content = content.rstrip() + "\n"
+    if not raw_content.strip():
+        return {"success": False, "message": "Editor content cannot be empty."}
 
     output_path = Path(str(selected.get("path", "")))
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(parsed, indent=2) + "\n", encoding="utf-8")
-    return {"success": True, "message": f"Saved JSON file {output_path.name}."}
+
+    editor_type = str(selected.get("editor_type", "json"))
+    if editor_type == "json":
+        try:
+            parsed = json.loads(raw_content)
+        except json.JSONDecodeError as exc:
+            return {"success": False, "message": f"Please enter valid JSON before saving: {exc.msg}."}
+        output_path.write_text(json.dumps(parsed, indent=2) + "\n", encoding="utf-8")
+        return {"success": True, "message": f"Saved JSON file {output_path.name}."}
+
+    output_path.write_text(raw_content, encoding="utf-8")
+    return {"success": True, "message": f"Saved file {output_path.name}."}
 
 
 def start_technician_command(config: dict[str, Any], command_id: str) -> dict[str, Any]:
@@ -672,7 +677,7 @@ def _get_allowed_json_files(config: dict[str, Any]) -> list[dict[str, str]]:
                 files.append(_build_json_file_entry(path, len(files)))
             continue
 
-        if candidate.suffix.lower() != ".json":
+        if candidate.suffix.lower() not in {".json", ".env"} and candidate.name.lower() != "app.env":
             continue
         files.append(_build_json_file_entry(candidate, len(files)))
 
@@ -700,13 +705,14 @@ def _parse_json_editor_paths(config: dict[str, Any]) -> list[str]:
 
 
 def _default_json_editor_paths(config: dict[str, Any]) -> list[str]:
-    return ["/var/usr/plcreader/settings.json"]
+    return ["/var/usr/plcreader/settings.json", "/etc/pi-network-admin/app.env"]
 
 
 def _build_json_file_entry(path: Path, index: int) -> dict[str, str]:
     base = re.sub(r"[^a-z0-9]+", "-", path.name.lower()).strip("-") or "json-file"
     file_id = base if index == 0 else f"{base}-{index + 1}"
-    return {"id": file_id, "label": path.name, "path": str(path)}
+    editor_type = "json" if path.suffix.lower() == ".json" else "text"
+    return {"id": file_id, "label": path.name, "path": str(path), "editor_type": editor_type}
 
 
 def _read_selected_json_content(
@@ -726,11 +732,14 @@ def _read_selected_json_content(
         return "{}\n", "The JSON file does not exist yet. Saving will create it."
 
     raw_content = json_path.read_text(encoding="utf-8")
-    try:
-        parsed = json.loads(raw_content)
-        return json.dumps(parsed, indent=2), ""
-    except json.JSONDecodeError as exc:
-        return raw_content, f"This file is not currently valid JSON: {exc.msg}."
+    if json_path.suffix.lower() == ".json":
+        try:
+            parsed = json.loads(raw_content)
+            return json.dumps(parsed, indent=2), ""
+        except json.JSONDecodeError as exc:
+            return raw_content, f"This file is not currently valid JSON: {exc.msg}."
+
+    return raw_content, ""
 
 
 

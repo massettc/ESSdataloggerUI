@@ -258,7 +258,10 @@ def test_technician_tools_page_shows_buttons_terminal_and_json_editor(client, mo
                 "exit_code": 0,
                 "output": "Thu Apr 16",
             },
-            "json_files": [{"id": "logger-json", "label": "Logger JSON", "path": "/tmp/logger.json"}],
+            "json_files": [
+                {"id": "logger-json", "label": "Logger JSON", "path": "/tmp/logger.json", "editor_type": "json"},
+                {"id": "app-env", "label": "app.env", "path": "/etc/pi-network-admin/app.env", "editor_type": "text"},
+            ],
             "selected_json_file": "logger-json",
             "json_editor_content": '{\n  "enabled": true\n}',
             "json_editor_error": "",

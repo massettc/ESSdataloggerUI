@@ -174,6 +174,19 @@ def test_get_technician_tools_state_includes_default_plcreader_json(monkeypatch,
 
 
 
+def test_get_technician_tools_state_includes_app_env_editor(monkeypatch, tmp_path: Path):
+    env_path = tmp_path / "app.env"
+    env_path.write_text("PI_ADMIN_PORT=8080\nAUTH_ENABLED=false\n", encoding="utf-8")
+
+    monkeypatch.setattr(system_manager, "_default_json_editor_paths", lambda config: [str(env_path)])
+
+    state = system_manager.get_technician_tools_state({})
+
+    assert any(item["label"] == "app.env" for item in state["json_files"])
+    assert "PI_ADMIN_PORT=8080" in state["json_editor_content"]
+
+
+
 def test_save_technician_json_file_rejects_invalid_json(tmp_path: Path):
     json_path = tmp_path / "logger.json"
     json_path.write_text('{"enabled": true}', encoding="utf-8")
