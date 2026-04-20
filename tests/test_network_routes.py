@@ -210,6 +210,33 @@ def test_datalogger_status_api_handles_unexpected_errors(client, monkeypatch):
     assert response.get_json()["error"] == "boom"
 
 
+def test_datalogger_status_api_includes_live_connectivity(client, monkeypatch):
+    monkeypatch.setattr(
+        network_routes,
+        "get_datalogger_status",
+        lambda config, host=None: {"mqtt_logger": {}, "plc_logger": {}, "warnings": [], "error": ""},
+    )
+    monkeypatch.setattr(
+        network_routes,
+        "get_dashboard_state",
+        lambda config: {
+            "hostname": "ess-pi",
+            "interfaces": [{"device": "wlan0", "state": "connected", "connection": "PlantWiFi"}],
+            "wifi_networks": [],
+            "internet_access": True,
+        },
+    )
+
+    _login(client)
+    response = client.get("/datalogger/status")
+
+    assert response.status_code == 200
+    assert response.is_json
+    payload = response.get_json()
+    assert payload["connectivity"]["internet_label"] == "Online"
+    assert payload["connectivity"]["wifi_label"] == "PlantWiFi"
+
+
 def test_technician_tools_page_shows_buttons_terminal_and_remove_action(client, monkeypatch):
     monkeypatch.setattr(
         network_routes,

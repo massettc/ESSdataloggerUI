@@ -336,6 +336,9 @@ document.addEventListener('DOMContentLoaded', function () {
             const response = await fetch(endpoint, { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
             if (!response.ok) return;
             const status = await response.json();
+            const connectivity = status.connectivity || {};
+            setPill('internet-pill', connectivity.internet_label || 'Unknown', connectivity.internet_class || 'status-neutral');
+            setPill('wifi-pill', connectivity.wifi_label || 'Unknown', connectivity.wifi_class || 'status-neutral');
             setPill('system-pill', status.system_status_label || 'Checking status', status.system_status_class || 'status-neutral');
             setPill('logger-live-pill', status.system_status_label || 'Checking status', status.system_status_class || 'status-neutral');
             setText('system-status-note', status.system_status_detail || 'Waiting for live logger data.');

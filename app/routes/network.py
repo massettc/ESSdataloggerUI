@@ -202,12 +202,20 @@ def datalogger():
 @login_required
 def datalogger_status_api():
     try:
-        return get_datalogger_status(current_app.config, host=request.host.split(":")[0])
+        status = get_datalogger_status(current_app.config, host=request.host.split(":")[0])
     except Exception as exc:
         current_app.logger.exception("datalogger status api error")
         status = _default_datalogger_status()
         status["error"] = str(exc)
-        return status
+
+    try:
+        state = get_dashboard_state(current_app.config)
+    except NetworkManagerError:
+        current_app.logger.exception("datalogger status connectivity error")
+        state = _default_state()
+
+    status["connectivity"] = _build_connectivity_badges(state, current_app.config)
+    return status
 
 
 @network_bp.route("/system", methods=["GET", "POST"])
