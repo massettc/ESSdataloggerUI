@@ -203,6 +203,25 @@ def test_stale_mqtt_data_marks_plc_not_connected():
     assert "No recent" in logger["summary"]
 
 
+def test_backlog_keeps_plc_connected_when_opsviewer_is_down():
+    logger = datalogger_manager._decorate_plc_logger_state(
+        {
+            "running": True,
+            "measurements": 43,
+            "queue_size": 12,
+            "error": "",
+            "last_push_age_seconds": 180,
+            "last_push_label": "No push seen for 3 min",
+            "status_class": "status-warning",
+            "summary": "Last send OK",
+        }
+    )
+
+    assert logger["plc_link_label"] == "Connected"
+    assert logger["opsviewer_link_label"] == "Backlog"
+    assert "buffered for OpsViewer" in logger["summary"]
+
+
 def test_read_mqtt_queue_metrics_uses_container_bridge_ip(monkeypatch):
     """Primary path: docker inspect gives the container IP, fetch /api/Queue."""
     queue_json = '{"Length": 7}'

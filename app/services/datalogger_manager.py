@@ -387,6 +387,7 @@ def _decorate_mqtt_logger_state(logger: dict[str, Any]) -> dict[str, Any]:
     age_seconds = logger.get("last_push_age_seconds")
     queue_size = logger.get("queue_size")
     recent = _has_recent_activity(logger)
+    plc_signal = recent or (isinstance(queue_size, int) and queue_size > 0)
 
     if not logger.get("running"):
         logger["plc_link_label"] = "Not connected"
@@ -396,7 +397,7 @@ def _decorate_mqtt_logger_state(logger: dict[str, Any]) -> dict[str, Any]:
         logger["summary"] = "MQTT logger is stopped"
         return logger
 
-    if recent:
+    if plc_signal:
         logger["plc_link_label"] = "Connected"
         logger["plc_link_class"] = "status-online"
     elif age_seconds is None:
@@ -413,7 +414,7 @@ def _decorate_mqtt_logger_state(logger: dict[str, Any]) -> dict[str, Any]:
     elif isinstance(queue_size, int) and queue_size > 0:
         logger["opsviewer_link_label"] = "Backlog"
         logger["opsviewer_link_class"] = "status-warning"
-        if recent:
+        if plc_signal:
             logger["summary"] = f"PLC connected; {queue_size} records buffered for OpsViewer"
         else:
             logger["summary"] = f"No recent PLC data; {queue_size} records buffered for OpsViewer"
@@ -439,6 +440,7 @@ def _decorate_plc_logger_state(logger: dict[str, Any]) -> dict[str, Any]:
     queue_size = logger.get("queue_size")
     measurements = logger.get("measurements")
     recent = _has_recent_activity(logger)
+    plc_signal = recent or (isinstance(queue_size, int) and queue_size > 0)
 
     if not logger.get("running"):
         logger["plc_link_label"] = "Not connected"
@@ -448,7 +450,7 @@ def _decorate_plc_logger_state(logger: dict[str, Any]) -> dict[str, Any]:
         logger["summary"] = "PLC reader is stopped"
         return logger
 
-    if recent:
+    if plc_signal:
         logger["plc_link_label"] = "Connected"
         logger["plc_link_class"] = "status-online"
     elif age_seconds is None:
@@ -465,7 +467,7 @@ def _decorate_plc_logger_state(logger: dict[str, Any]) -> dict[str, Any]:
     elif isinstance(queue_size, int) and queue_size > 0:
         logger["opsviewer_link_label"] = "Backlog"
         logger["opsviewer_link_class"] = "status-warning"
-        if recent:
+        if plc_signal:
             logger["summary"] = f"PLC connected; {queue_size} records buffered for OpsViewer"
         else:
             logger["summary"] = f"No recent PLC data; {queue_size} records buffered for OpsViewer"
@@ -593,9 +595,9 @@ def _build_logger_warnings(mqtt_logger: dict[str, Any], plc_logger: dict[str, An
         warnings.append("Cloud delivery error detected")
     if plc_logger.get("summary") == "Error detected" or plc_logger.get("error"):
         warnings.append("PLC logger error detected")
-    if mqtt_logger.get("running") and not _has_recent_activity(mqtt_logger):
+    if mqtt_logger.get("running") and not _has_recent_activity(mqtt_logger) and not (isinstance(mqtt_logger.get("queue_size"), int) and mqtt_logger.get("queue_size") > 0):
         warnings.append("MQTT logger has no recent PLC data")
-    if plc_logger.get("running") and not _has_recent_activity(plc_logger):
+    if plc_logger.get("running") and not _has_recent_activity(plc_logger) and not (isinstance(plc_logger.get("queue_size"), int) and plc_logger.get("queue_size") > 0):
         warnings.append("PLC logger has no recent PLC data")
     queue_size = mqtt_logger.get("queue_size")
     if isinstance(queue_size, int) and queue_size > 0:

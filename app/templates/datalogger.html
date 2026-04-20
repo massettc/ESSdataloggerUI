@@ -77,10 +77,6 @@
                     <span>Queue backlog</span>
                     <strong id="mqtt-queue-value">{% if mqtt_logger.get('queue_size') is not none %}{{ mqtt_logger.get('queue_size') }} buffered{% else %}n/a{% endif %}</strong>
                 </div>
-                <div class="logger-metric">
-                    <span>Last pushed</span>
-                    <strong id="mqtt-last-push-value">{{ mqtt_logger.get('last_push_label', 'Waiting for data') }}</strong>
-                </div>
             </div>
             <p id="mqtt-metrics" class="muted-note">PLC: {{ mqtt_logger.get('plc_link_label', 'Waiting') }} | OpsViewer: {{ mqtt_logger.get('opsviewer_link_label', 'Waiting') }} | Queue: {% if mqtt_logger.get('queue_size') is not none %}{{ mqtt_logger.get('queue_size') }}{% else %}n/a{% endif %}</p>
             {% if mqtt_logger.get('queue_source_url') %}
@@ -119,10 +115,6 @@
                 <div class="logger-metric logger-metric-highlight">
                     <span>Queue backlog</span>
                     <strong id="plc-queue-value">{% if plc_logger.get('queue_size') is not none %}{{ plc_logger.get('queue_size') }} buffered{% else %}n/a{% endif %}</strong>
-                </div>
-                <div class="logger-metric">
-                    <span>Last pushed</span>
-                    <strong id="plc-last-push-value">{{ plc_logger.get('last_push_label', 'Waiting for data') }}</strong>
                 </div>
             </div>
             <p id="plc-metrics" class="muted-note">PLC: {{ plc_logger.get('plc_link_label', 'Waiting') }} | OpsViewer: {{ plc_logger.get('opsviewer_link_label', 'Waiting') }} | {% if plc_logger.get('measurements') is not none %}Measurements: {{ plc_logger.get('measurements') }}{% else %}Measurements: n/a{% endif %}</p>
@@ -317,7 +309,6 @@ document.addEventListener('DOMContentLoaded', function () {
             setText('mqtt-card-title', 'MQTT logger');
             setText('mqtt-device', deviceText);
             setText('mqtt-queue-value', queue === 'n/a' ? queue : queue + ' buffered');
-            setText('mqtt-last-push-value', logger.last_push_label || 'Waiting for data');
             setText('mqtt-plc-link', plcStatus);
             setText('mqtt-cloud-link', cloudStatus);
             setText('mqtt-metrics', 'PLC: ' + plcStatus + ' | OpsViewer: ' + cloudStatus + ' | Queue: ' + queue);
@@ -334,7 +325,6 @@ document.addEventListener('DOMContentLoaded', function () {
             setText('plc-plc-link', plcStatus);
             setText('plc-cloud-link', cloudStatus);
             setText('plc-queue-value', queue === 'n/a' ? queue : queue + ' buffered');
-            setText('plc-last-push-value', logger.last_push_label || 'Waiting for data');
             setText('plc-metrics', 'PLC: ' + plcStatus + ' | OpsViewer: ' + cloudStatus + ' | Measurements: ' + measurements);
         }
 
