@@ -47,24 +47,6 @@ def test_wifi_page_prefills_selected_network_from_query(client, monkeypatch):
 def test_sidebar_prioritizes_datalogger_and_hides_dashboard_link(client, monkeypatch):
     monkeypatch.setattr(
         network_routes,
-        "get_datalogger_status",
-        lambda config, host=None: {
-            "docker_available": True,
-            "docker_running": True,
-            "portainer_installed": True,
-            "portainer_running": True,
-            "portainer_url": "http://ess-pi:9000",
-            "mqtt_ui_url": "http://ess-pi:8080",
-            "active_logger": "MQTT Logger",
-            "warnings": [],
-            "mqtt_logger": {},
-            "plc_logger": {},
-            "containers": [],
-            "error": "",
-        },
-    )
-    monkeypatch.setattr(
-        network_routes,
         "get_dashboard_state",
         lambda config: {
             "hostname": "ess-pi",
@@ -91,53 +73,12 @@ def test_sidebar_prioritizes_datalogger_and_hides_dashboard_link(client, monkeyp
 def test_datalogger_page_shows_portainer_status(client, monkeypatch):
     monkeypatch.setattr(
         network_routes,
-        "get_datalogger_status",
-        lambda config, host=None: {
-            "docker_available": True,
-            "docker_running": True,
-            "portainer_installed": True,
-            "portainer_running": True,
-            "portainer_url": "http://ess-pi:9000",
-            "mqtt_ui_url": "http://ess-pi:8080",
-            "active_logger": "MQTT Logger",
-            "warnings": ["Cloud backlog: 1089 buffered"],
-            "system_status_label": "OpsViewer backlog",
-            "system_status_class": "status-warning",
-            "system_status_detail": "MQTT logger has 1089 records buffered for OpsViewer.",
-            "mqtt_logger": {
-                "name": "opsviewer2-edge",
-                "summary": "PLC connected; 1089 records buffered for OpsViewer",
-                "last_activity_text": "2026-04-16T17:39:10Z",
-                "last_push_age_seconds": 3,
-                "last_push_label": "Last pushed 3 sec ago",
-                "status_class": "status-warning",
-                "plc_link_label": "Connected",
-                "plc_link_class": "status-online",
-                "opsviewer_link_label": "Backlog",
-                "opsviewer_link_class": "status-warning",
-                "device_id": "ESS-UNIT-81",
-                "channel_count": 10,
-                "queue_size": 1089,
-                "broker_clients_connected": 7,
-                "error": "",
-            },
-            "plc_logger": {
-                "name": "plcreader",
-                "summary": "Connected to PLC and sending to OpsViewer (43 measurements)",
-                "last_activity_text": "04/16/2026 17:36:03",
-                "last_push_age_seconds": 12,
-                "last_push_label": "Last pushed 12 sec ago",
-                "status_class": "status-online",
-                "plc_link_label": "Connected",
-                "plc_link_class": "status-online",
-                "opsviewer_link_label": "Connected",
-                "opsviewer_link_class": "status-online",
-                "measurements": 43,
-                "queue_size": 0,
-                "error": "",
-            },
-            "containers": [{"name": "logger", "image": "my/logger:latest", "status": "Up 2 hours"}],
-            "error": "",
+        "get_dashboard_state",
+        lambda config: {
+            "hostname": "ess-pi",
+            "interfaces": [{"device": "wlan0", "type": "wifi", "state": "connected", "connection": "PlantWiFi"}],
+            "wifi_networks": [],
+            "internet_access": True,
         },
     )
 
@@ -146,19 +87,39 @@ def test_datalogger_page_shows_portainer_status(client, monkeypatch):
 
     assert response.status_code == 200
     assert b"Logger health" in response.data
-    assert b"Open MQTT UI" in response.data
-    assert b"OpsViewer backlog" in response.data
+    assert b"Open Portainer" in response.data
+    assert b"Checking status" in response.data
     assert b"MQTT logger" in response.data
     assert b"PLC logger" in response.data
-    assert b"PLC connected; 1089 records buffered for OpsViewer" in response.data
-    assert b"Connected to PLC and sending to OpsViewer (43 measurements)" in response.data
     assert b"Queue backlog" in response.data
-    assert b"1089 buffered" in response.data
-    assert b"Last pushed 3 sec ago" in response.data
     assert b"OpsViewer" in response.data
     assert b"Portainer" in response.data
-    assert b"http://ess-pi:9000" in response.data
-    assert b"logger" in response.data
+    assert b":9443" in response.data
+
+
+def test_datalogger_page_renders_without_live_status_probe(client, monkeypatch):
+    monkeypatch.setattr(
+        network_routes,
+        "get_datalogger_status",
+        lambda config, host=None: (_ for _ in ()).throw(AssertionError("live status should not be fetched during page render")),
+    )
+    monkeypatch.setattr(
+        network_routes,
+        "get_dashboard_state",
+        lambda config: {
+            "hostname": "ess-pi",
+            "interfaces": [{"device": "wlan0", "type": "wifi", "state": "connected", "connection": "PlantWiFi"}],
+            "wifi_networks": [],
+            "internet_access": True,
+        },
+    )
+
+    _login(client)
+    response = client.get("/datalogger")
+
+    assert response.status_code == 200
+    assert b"Checking status" in response.data
+    assert b"PlantWiFi" in response.data
 
 
 def test_datalogger_post_can_start_portainer(client, monkeypatch):

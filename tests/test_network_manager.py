@@ -35,6 +35,56 @@ def test_scan_wifi_networks_retries_when_first_result_is_sparse(monkeypatch):
     assert [network["ssid"] for network in networks] == ["PlantWiFi", "Guest"]
 
 
+
+def test_scan_wifi_networks_uses_short_cache(monkeypatch):
+    calls = {"count": 0}
+    sample_output = "*:PlantWiFi:84:WPA2\n"
+
+    monkeypatch.setattr(network_manager, "_rescan_wifi", lambda config, interface: None)
+
+    def fake_run(config, arguments):
+        calls["count"] += 1
+        return sample_output
+
+    monkeypatch.setattr(network_manager, "_run_nmcli", fake_run)
+
+    config = {"WIFI_INTERFACE": "wlan0", "WIFI_SCAN_CACHE_SECONDS": 30, "REPO_PATH": "/tmp/test-cache"}
+    first = network_manager.scan_wifi_networks(config)
+    second = network_manager.scan_wifi_networks(config)
+
+    assert first == second
+    assert calls["count"] == 1
+
+
+
+def test_get_dashboard_state_uses_short_cache(monkeypatch):
+    calls = {"devices": 0, "wifi": 0, "internet": 0}
+
+    def fake_devices(config):
+        calls["devices"] += 1
+        return [{"device": "wlan0"}]
+
+    def fake_wifi(config):
+        calls["wifi"] += 1
+        return [{"ssid": "PlantWiFi", "signal": "80", "security": "WPA2", "in_use": True}]
+
+    def fake_internet(config):
+        calls["internet"] += 1
+        return True
+
+    monkeypatch.setattr(network_manager, "_get_device_status", fake_devices)
+    monkeypatch.setattr(network_manager, "scan_wifi_networks", fake_wifi)
+    monkeypatch.setattr(network_manager, "has_internet_access", fake_internet)
+
+    config = {"STATUS_CACHE_SECONDS": 10, "REPO_PATH": "/tmp/test-dashboard-cache"}
+    first = network_manager.get_dashboard_state(config)
+    second = network_manager.get_dashboard_state(config)
+
+    assert first["internet_access"] is True
+    assert second["wifi_networks"][0]["ssid"] == "PlantWiFi"
+    assert calls == {"devices": 1, "wifi": 1, "internet": 1}
+
+
 def test_list_connection_profiles_filters_by_type_and_interface(monkeypatch):
     sample_output = "Office WiFi:802-11-wireless:wlan0\nWired connection 1:802-3-ethernet:eth0\nSpare LAN:802-3-ethernet:--\nVPN:wireguard:--\n"
 

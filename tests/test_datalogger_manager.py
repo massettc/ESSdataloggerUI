@@ -110,6 +110,56 @@ def test_get_datalogger_status_parses_logger_roles_and_health(monkeypatch):
     assert "PLC logger stopped" in status["warnings"]
 
 
+def test_get_datalogger_status_uses_short_cache(monkeypatch):
+    calls = {"count": 0}
+
+    def fake_run(config, args, check=True):
+        calls["count"] += 1
+        key = tuple(arg for arg in args if arg not in {"sudo", "-n"})
+        if key == ("docker", "version", "--format", "{{.Server.Version}}"):
+            return subprocess.CompletedProcess(args=[], returncode=0, stdout="24.0\n", stderr="")
+        if key == ("docker", "ps", "-a", "--format", "{{.Names}}|{{.Image}}|{{.Status}}"):
+            return subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout="portainer|portainer/portainer-ce:lts|Up 20 minutes\n",
+                stderr="",
+            )
+        return subprocess.CompletedProcess(args=args, returncode=1, stdout="", stderr="")
+
+    monkeypatch.setattr(datalogger_manager, "_run_docker_command", fake_run)
+
+    config = {
+        "DOCKER_BIN": "docker",
+        "PORTAINER_CONTAINER_NAME": "portainer",
+        "DATALOGGER_STATUS_CACHE_SECONDS": 10,
+        "REPO_PATH": "/tmp/test-datalogger-cache",
+    }
+
+    first = datalogger_manager.get_datalogger_status(config, host="ess-pi")
+    second = datalogger_manager.get_datalogger_status(config, host="ess-pi")
+
+    assert first["portainer_running"] is True
+    assert second["portainer_running"] is True
+    assert calls["count"] == 2
+
+
+def test_run_docker_command_returns_timeout_result_when_probe_hangs(monkeypatch):
+    def fake_run(*args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd=args[0], timeout=kwargs.get("timeout", 0))
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    result = datalogger_manager._run_docker_command(
+        {"DATALOGGER_COMMAND_TIMEOUT_SECONDS": 4, "USE_SUDO_FOR_DOCKER": False},
+        ["docker", "ps"],
+        check=False,
+    )
+
+    assert result.returncode == 124
+    assert "Timed out after 4 seconds" in result.stderr
+
+
 def test_command_error_prefers_real_docker_message():
     result = subprocess.CompletedProcess(
         args=["docker", "run"],

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import os
 import socket
 import subprocess
@@ -13,21 +14,34 @@ class NetworkManagerError(RuntimeError):
 
 WIFI_CONNECTION_TYPE = "802-11-wireless"
 ETHERNET_CONNECTION_TYPE = "802-3-ethernet"
+_CACHE: dict[tuple[str, str], tuple[float, Any]] = {}
 
 
 def get_dashboard_state(config: dict[str, Any]) -> dict[str, Any]:
+    cache_ttl = _get_cache_ttl_seconds(config, "STATUS_CACHE_SECONDS")
+    cached_state = _get_cached_value(config, "dashboard_state", cache_ttl)
+    if cached_state is not None:
+        return cached_state
+
     interfaces = _get_device_status(config)
     wifi_networks = scan_wifi_networks(config)
-    return {
+    state = {
         "hostname": socket.gethostname(),
         "interfaces": interfaces,
         "wifi_networks": wifi_networks,
         "internet_access": has_internet_access(config),
     }
+    return _set_cached_value(config, "dashboard_state", state, cache_ttl)
 
 
 def scan_wifi_networks(config: dict[str, Any]) -> list[dict[str, Any]]:
     wifi_interface = config["WIFI_INTERFACE"]
+    cache_ttl = _get_cache_ttl_seconds(config, "WIFI_SCAN_CACHE_SECONDS")
+    cache_key = f"wifi_scan:{wifi_interface}"
+    cached_networks = _get_cached_value(config, cache_key, cache_ttl)
+    if cached_networks is not None:
+        return cached_networks
+
     _rescan_wifi(config, wifi_interface)
 
     networks_by_ssid: dict[str, dict[str, Any]] = {}
@@ -65,16 +79,17 @@ def scan_wifi_networks(config: dict[str, Any]) -> list[dict[str, Any]]:
             continue
 
         _merge_wifi_networks(networks_by_ssid, output)
-        if len(networks_by_ssid) > 1:
+        if len(networks_by_ssid) > 1 or (cache_ttl > 0 and networks_by_ssid):
             break
 
     if not networks_by_ssid and last_error is not None:
         raise last_error
 
-    return sorted(
+    networks = sorted(
         networks_by_ssid.values(),
         key=lambda item: (not item["in_use"], -_safe_int(item["signal"]), item["ssid"].lower()),
     )
+    return _set_cached_value(config, cache_key, networks, cache_ttl)
 
 
 def list_connection_profiles(
@@ -314,6 +329,12 @@ def set_connection_ipv4_config(
 
 def has_internet_access(config: dict[str, Any]) -> bool:
     target_host = config.get("WATCHDOG_TARGET_HOST", "1.1.1.1")
+    cache_ttl = _get_cache_ttl_seconds(config, "STATUS_CACHE_SECONDS")
+    cache_key = f"internet_access:{target_host}"
+    cached_result = _get_cached_value(config, cache_key, cache_ttl)
+    if cached_result is not None:
+        return bool(cached_result)
+
     ping_bin = config.get("PING_BIN", "ping")
     count_flag = "-n" if os.name == "nt" else "-c"
     timeout_flag = "-w" if os.name == "nt" else "-W"
@@ -327,9 +348,42 @@ def has_internet_access(config: dict[str, Any]) -> bool:
             check=False,
             timeout=max(3, int(config.get("COMMAND_TIMEOUT_SECONDS", 15))),
         )
-        return completed.returncode == 0
+        return _set_cached_value(config, cache_key, completed.returncode == 0, cache_ttl)
     except (FileNotFoundError, subprocess.TimeoutExpired, ValueError):
-        return False
+        return _set_cached_value(config, cache_key, False, cache_ttl)
+
+
+def _get_cache_ttl_seconds(config: dict[str, Any], setting_name: str, default: float = 0.0) -> float:
+    try:
+        return max(0.0, float(config.get(setting_name, default)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _get_cache_scope(config: dict[str, Any]) -> str:
+    return str(config.get("REPO_PATH") or "default")
+
+
+def _get_cached_value(config: dict[str, Any], cache_name: str, cache_ttl: float) -> Any | None:
+    if cache_ttl <= 0:
+        return None
+
+    cache_entry = _CACHE.get((_get_cache_scope(config), cache_name))
+    if cache_entry is None:
+        return None
+
+    expires_at, value = cache_entry
+    if time.monotonic() >= expires_at:
+        _CACHE.pop((_get_cache_scope(config), cache_name), None)
+        return None
+
+    return copy.deepcopy(value)
+
+
+def _set_cached_value(config: dict[str, Any], cache_name: str, value: Any, cache_ttl: float) -> Any:
+    if cache_ttl > 0:
+        _CACHE[(_get_cache_scope(config), cache_name)] = (time.monotonic() + cache_ttl, copy.deepcopy(value))
+    return value
 
 
 def _rescan_wifi(config: dict[str, Any], wifi_interface: str) -> None:

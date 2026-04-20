@@ -181,20 +181,13 @@ def datalogger():
         return redirect(url_for("network.datalogger"))
 
     try:
-        datalogger_status = get_datalogger_status(current_app.config, host=request.host.split(":")[0])
-    except Exception as exc:
-        current_app.logger.exception("datalogger view error")
-        flash(str(exc), "error")
-        datalogger_status = _default_datalogger_status()
-        datalogger_status["error"] = str(exc)
-
-    try:
         state = get_dashboard_state(current_app.config)
     except NetworkManagerError as exc:
         current_app.logger.exception("datalogger connectivity state error")
         flash(str(exc), "error")
         state = _default_state()
 
+    datalogger_status = _build_initial_datalogger_status(current_app.config, host=request.host.split(":")[0])
     connectivity = _build_connectivity_badges(state, current_app.config)
     return render_template("datalogger.html", datalogger_status=datalogger_status, state=state, connectivity=connectivity)
 
@@ -393,6 +386,29 @@ def _default_update_status() -> dict[str, object]:
 
 def _default_technician_tools_state() -> dict[str, object]:
     return {"commands": [], "last_result": None, "error": ""}
+
+
+def _build_initial_datalogger_status(config: dict[str, object], host: str) -> dict[str, object]:
+    status = _default_datalogger_status()
+    status["portainer_url"] = _build_initial_portainer_url(config, host)
+    status["mqtt_ui_url"] = _build_initial_mqtt_ui_url(config, host)
+    return status
+
+
+def _build_initial_portainer_url(config: dict[str, object], host: str) -> str:
+    hostname = str(config.get("PORTAINER_HOSTNAME") or host or "localhost")
+    https_port = str(config.get("PORTAINER_HTTPS_PORT", 9443)).strip()
+    if https_port and https_port != "0":
+        return f"https://{hostname}:{https_port}"
+    return f"http://{hostname}:{config.get('PORTAINER_HTTP_PORT', 9000)}"
+
+
+def _build_initial_mqtt_ui_url(config: dict[str, object], host: str) -> str:
+    port = str(config.get("MQTT_UI_PORT", "")).strip()
+    if not port:
+        return ""
+    hostname = str(config.get("MQTT_UI_HOSTNAME") or config.get("PORTAINER_HOSTNAME") or host or "localhost")
+    return f"http://{hostname}:{port}"
 
 
 def _default_datalogger_status() -> dict[str, object]:

@@ -25,12 +25,8 @@
         <p>Use this page as the technician-friendly entry point to confirm PLC logging and cloud delivery at a glance.</p>
     </div>
     <div class="hero-actions">
-        {% if datalogger_status.mqtt_ui_url %}
-        <a class="button-link secondary-link" href="{{ datalogger_status.mqtt_ui_url }}" target="_blank" rel="noopener noreferrer">Open MQTT UI</a>
-        {% endif %}
-        {% if datalogger_status.portainer_url %}
-        <a class="button-link secondary-link" href="{{ datalogger_status.portainer_url }}" target="_blank" rel="noopener noreferrer">Open Portainer</a>
-        {% endif %}
+        <a id="mqtt-ui-link" class="button-link secondary-link" href="{{ datalogger_status.mqtt_ui_url or '#' }}" target="_blank" rel="noopener noreferrer" {% if not datalogger_status.mqtt_ui_url %}hidden{% endif %}>Open MQTT UI</a>
+        <a id="portainer-link" class="button-link secondary-link" href="{{ datalogger_status.portainer_url or '#' }}" target="_blank" rel="noopener noreferrer" {% if not datalogger_status.portainer_url %}hidden{% endif %}>Open Portainer</a>
     </div>
 </section>
 
@@ -38,7 +34,7 @@
     <div class="section-heading">
         <div>
             <h3>Logger health</h3>
-            <p>Live technician view of recent push activity. This section refreshes every second while the page is open.</p>
+            <p>Live technician view of recent push activity. This section refreshes every 5 seconds while the page is open.</p>
         </div>
         <span class="status-pill {{ datalogger_status.get('system_status_class', 'status-neutral') }}" id="logger-live-pill"><span class="status-dot"></span>{{ datalogger_status.get('system_status_label', 'Checking status') }}</span>
     </div>
@@ -237,6 +233,18 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    function setLink(linkId, href) {
+        const element = document.getElementById(linkId);
+        if (!element) return;
+        if (href) {
+            element.hidden = false;
+            element.href = href;
+        } else {
+            element.hidden = true;
+            element.href = '#';
+        }
+    }
+
     function extractQueueMetrics(text) {
         if (!text) return null;
         var parsed;
@@ -337,6 +345,8 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!response.ok) return;
             const status = await response.json();
             const connectivity = status.connectivity || {};
+            setLink('mqtt-ui-link', (status.mqtt_logger && status.mqtt_logger.mqtt_ui_url) || status.mqtt_ui_url || '');
+            setLink('portainer-link', status.portainer_url || '');
             setPill('internet-pill', connectivity.internet_label || 'Unknown', connectivity.internet_class || 'status-neutral');
             setPill('wifi-pill', connectivity.wifi_label || 'Unknown', connectivity.wifi_class || 'status-neutral');
             setPill('system-pill', status.system_status_label || 'Checking status', status.system_status_class || 'status-neutral');
@@ -352,7 +362,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     refreshLoggerHealth();
-    window.setInterval(refreshLoggerHealth, 1000);
+    window.setInterval(refreshLoggerHealth, 5000);
 });
 </script>
 {% endblock %}

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import http.client
 import json
 import os
@@ -16,7 +17,16 @@ class DataloggerManagerError(RuntimeError):
     pass
 
 
+_CACHE: dict[tuple[str, str], tuple[float, Any]] = {}
+
+
 def get_datalogger_status(config: dict[str, Any], host: str | None = None) -> dict[str, Any]:
+    cache_ttl = _get_cache_ttl_seconds(config, "DATALOGGER_STATUS_CACHE_SECONDS", default=5.0)
+    cache_key = f"datalogger_status:{host or ''}"
+    cached_status = _get_cached_value(config, cache_key, cache_ttl)
+    if cached_status is not None:
+        return cached_status
+
     docker_bin = config.get("DOCKER_BIN", "docker")
     container_name = config.get("PORTAINER_CONTAINER_NAME", "portainer")
     mqtt_container_name = config.get("MQTT_LOGGER_CONTAINER_NAME", "opsviewer2-edge")
@@ -106,7 +116,40 @@ def get_datalogger_status(config: dict[str, Any], host: str | None = None) -> di
     status["active_logger"] = _determine_active_logger(status["mqtt_logger"], status["plc_logger"])
     status["warnings"] = _build_logger_warnings(status["mqtt_logger"], status["plc_logger"])
     status.update(_build_system_status(status["mqtt_logger"], status["plc_logger"], status["warnings"]))
-    return status
+    return _set_cached_value(config, cache_key, status, cache_ttl)
+
+
+def _get_cache_ttl_seconds(config: dict[str, Any], setting_name: str, default: float = 0.0) -> float:
+    try:
+        return max(0.0, float(config.get(setting_name, default)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _get_cache_scope(config: dict[str, Any]) -> str:
+    return str(config.get("REPO_PATH") or "default")
+
+
+def _get_cached_value(config: dict[str, Any], cache_name: str, cache_ttl: float) -> Any | None:
+    if cache_ttl <= 0:
+        return None
+
+    cache_entry = _CACHE.get((_get_cache_scope(config), cache_name))
+    if cache_entry is None:
+        return None
+
+    expires_at, value = cache_entry
+    if time.monotonic() >= expires_at:
+        _CACHE.pop((_get_cache_scope(config), cache_name), None)
+        return None
+
+    return copy.deepcopy(value)
+
+
+def _set_cached_value(config: dict[str, Any], cache_name: str, value: Any, cache_ttl: float) -> Any:
+    if cache_ttl > 0:
+        _CACHE[(_get_cache_scope(config), cache_name)] = (time.monotonic() + cache_ttl, copy.deepcopy(value))
+    return value
 
 
 def ensure_portainer(config: dict[str, Any]) -> dict[str, Any]:
@@ -809,7 +852,16 @@ def _run_docker_command(
         command.insert(0, config.get("SUDO_BIN", "sudo"))
         command.insert(1, "-n")
 
-    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    timeout_seconds = max(1, int(config.get("DATALOGGER_COMMAND_TIMEOUT_SECONDS", config.get("COMMAND_TIMEOUT_SECONDS", 5))))
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, check=False, timeout=timeout_seconds)
+    except subprocess.TimeoutExpired:
+        result = subprocess.CompletedProcess(
+            args=command,
+            returncode=124,
+            stdout="",
+            stderr=f"Timed out after {timeout_seconds} seconds",
+        )
     if check and result.returncode != 0:
         raise DataloggerManagerError(_command_error(result, "Docker command failed"))
     return result
