@@ -109,7 +109,7 @@ def set_system_hostname(config: dict[str, Any], hostname: str) -> dict[str, Any]
 
     result = _run_privileged_command(
         config,
-        [str(config.get("BASH_BIN", "/bin/bash") or "/bin/bash"), str(hostname_script), hostname],
+        [_get_privileged_bash_bin(config), str(hostname_script), hostname],
         check=False,
     )
     if result.returncode != 0:
@@ -125,6 +125,13 @@ def set_system_hostname(config: dict[str, Any], hostname: str) -> dict[str, Any]
 def _get_hostname_update_script(config: dict[str, Any]) -> Path:
     repo_path = Path(config.get("REPO_PATH", BASE_DIR))
     return repo_path / "deploy" / "set-hostname.sh"
+
+
+def _get_privileged_bash_bin(config: dict[str, Any]) -> str:
+    configured = str(config.get("BASH_BIN", "") or "").strip()
+    if configured.startswith("/"):
+        return configured
+    return "/bin/bash"
 
 
 def request_system_reboot(config: dict[str, Any]) -> dict[str, Any]:

@@ -33,7 +33,7 @@ def test_set_system_hostname_uses_persistent_helper_script(monkeypatch, tmp_path
     monkeypatch.setattr(system_manager, "_is_linux_target", lambda: True)
     monkeypatch.setattr(system_manager, "_run_privileged_command", fake_privileged)
 
-    result = system_manager.set_system_hostname({"REPO_PATH": str(tmp_path)}, "ess-pi-2")
+    result = system_manager.set_system_hostname({"REPO_PATH": str(tmp_path), "BASH_BIN": "bash"}, "ess-pi-2")
 
     assert result["success"] is True
     assert captured["args"][0] == "/bin/bash"
