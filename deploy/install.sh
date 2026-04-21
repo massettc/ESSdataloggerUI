@@ -72,6 +72,10 @@ if [[ ! -f "$CONFIG_DIR/app.env" ]]; then
 else
     echo "Keeping existing $CONFIG_DIR/app.env"
 fi
+if ! sudo grep -q '^PI_ADMIN_BASH_BIN=' "$CONFIG_DIR/app.env"; then
+    echo 'PI_ADMIN_BASH_BIN=/bin/bash' | sudo tee -a "$CONFIG_DIR/app.env" >/dev/null
+    echo "Added PI_ADMIN_BASH_BIN to $CONFIG_DIR/app.env"
+fi
 if [[ ! -f "$CONFIG_DIR/plc_alarm.json" ]]; then
     sudo cp "$APP_DIR/config/plc_alarm.json" "$CONFIG_DIR/plc_alarm.json"
     echo "Created $CONFIG_DIR/plc_alarm.json from template."
