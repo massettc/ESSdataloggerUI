@@ -26,7 +26,6 @@
     </div>
     <div class="hero-actions">
         <a id="mqtt-ui-link" class="button-link secondary-link" href="{{ datalogger_status.mqtt_ui_url or '#' }}" target="_blank" rel="noopener noreferrer" {% if not datalogger_status.mqtt_ui_url %}hidden{% endif %}>Open MQTT UI</a>
-        <a id="portainer-link" class="button-link secondary-link" href="{{ datalogger_status.portainer_url or '#' }}" target="_blank" rel="noopener noreferrer" {% if not datalogger_status.portainer_url %}hidden{% endif %}>Open Portainer</a>
     </div>
 </section>
 
@@ -121,86 +120,6 @@
             {% endif %}
         </article>
     </div>
-</section>
-
-<section class="panel">
-    <div class="section-heading">
-        <div>
-            <h3>Docker and Portainer</h3>
-            <p>Infrastructure details and container management tools.</p>
-        </div>
-    </div>
-
-    <div class="system-stats-grid datalogger-stats-grid">
-        <div class="stat-card">
-            <span>Active logger</span>
-            <strong>{{ datalogger_status.get('active_logger', 'Unknown') }}</strong>
-        </div>
-        <div class="stat-card">
-            <span>Docker</span>
-            <strong>{{ 'Ready' if datalogger_status.docker_available else 'Unavailable' }}</strong>
-        </div>
-        <div class="stat-card">
-            <span>Portainer</span>
-            <strong>{{ 'Running' if datalogger_status.portainer_running else 'Stopped' }}</strong>
-        </div>
-        <div class="stat-card">
-            <span>Containers</span>
-            <strong>{{ datalogger_status.containers|length }}</strong>
-        </div>
-    </div>
-
-    {% if datalogger_status.error %}
-    <p class="update-error-note">{{ datalogger_status.error }}</p>
-    {% endif %}
-
-    <div class="system-action-row">
-        <form method="post" data-busy-label="Starting Portainer...">
-            <input type="hidden" name="action" value="portainer">
-            <button type="submit">Start or install Portainer</button>
-        </form>
-        {% if datalogger_status.portainer_url %}
-        <a class="button-link secondary-link" href="{{ datalogger_status.portainer_url }}" target="_blank" rel="noopener noreferrer">Launch Portainer</a>
-        {% endif %}
-    </div>
-
-    {% if datalogger_status.portainer_url %}
-    <p class="muted-note">Portainer address: {{ datalogger_status.portainer_url }}</p>
-    {% endif %}
-</section>
-
-<section class="panel">
-    <div class="section-heading">
-        <div>
-            <h3>Container list</h3>
-            <p>Current Docker containers visible on the device.</p>
-        </div>
-    </div>
-
-    {% if datalogger_status.containers %}
-    <div class="table-wrap">
-        <table>
-            <thead>
-                <tr>
-                    <th>Name</th>
-                    <th>Image</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for container in datalogger_status.containers %}
-                <tr>
-                    <td>{{ container.name }}</td>
-                    <td>{{ container.image }}</td>
-                    <td>{{ container.status }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% else %}
-    <p class="muted-note">No containers were reported yet.</p>
-    {% endif %}
 </section>
 
 <script>
@@ -346,7 +265,6 @@ document.addEventListener('DOMContentLoaded', function () {
             const status = await response.json();
             const connectivity = status.connectivity || {};
             setLink('mqtt-ui-link', (status.mqtt_logger && status.mqtt_logger.mqtt_ui_url) || status.mqtt_ui_url || '');
-            setLink('portainer-link', status.portainer_url || '');
             setPill('internet-pill', connectivity.internet_label || 'Unknown', connectivity.internet_class || 'status-neutral');
             setPill('wifi-pill', connectivity.wifi_label || 'Unknown', connectivity.wifi_class || 'status-neutral');
             setPill('system-pill', status.system_status_label || 'Checking status', status.system_status_class || 'status-neutral');
