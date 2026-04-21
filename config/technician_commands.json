@@ -1,0 +1,50 @@
+[
+  {
+    "id": "stop-plcreader",
+    "label": "Stop plcreader",
+    "command": "docker stop plcreader",
+    "description": ".",
+    "confirm": false,
+    "builtin": false
+  },
+  {
+    "id": "start-plcreader",
+    "label": "Start plcreader",
+    "command": "docker start plcreader",
+    "description": ".",
+    "confirm": false,
+    "builtin": false
+  },
+  {
+    "id": "remove-plcreader",
+    "label": "Remove plcreader",
+    "command": "docker rm plcreader",
+    "description": ".",
+    "confirm": false,
+    "builtin": false
+  },
+  {
+    "id": "download-plcreader",
+    "label": "Download plcreader",
+    "command": "/usr/bin/docker run -d --name plcreader --restart unless-stopped -v /var/usr/plcreader:/var/usr/plcreader opsviewer2/ultralight:r1363 dotnet EmeraldSurf.OpsViewer.PlcReader.dll startlogging",
+    "description": "version r1363",
+    "confirm": false,
+    "builtin": false
+  },
+  {
+    "id": "attach-plcreader",
+    "label": "Attach plcreader",
+    "command": "docker attach plcreader",
+    "description": ".",
+    "confirm": false,
+    "builtin": false
+  },
+  {
+    "id": "prune-plcreader",
+    "label": "Prune plcreader",
+    "command": "docker system prune -fa",
+    "description": ".",
+    "confirm": false,
+    "builtin": false
+  }
+]
