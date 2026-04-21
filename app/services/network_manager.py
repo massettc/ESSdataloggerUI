@@ -34,11 +34,11 @@ def get_dashboard_state(config: dict[str, Any]) -> dict[str, Any]:
     return _set_cached_value(config, "dashboard_state", state, cache_ttl)
 
 
-def scan_wifi_networks(config: dict[str, Any]) -> list[dict[str, Any]]:
+def scan_wifi_networks(config: dict[str, Any], force_refresh: bool = False) -> list[dict[str, Any]]:
     wifi_interface = config["WIFI_INTERFACE"]
     cache_ttl = _get_cache_ttl_seconds(config, "WIFI_SCAN_CACHE_SECONDS")
     cache_key = f"wifi_scan:{wifi_interface}"
-    cached_networks = _get_cached_value(config, cache_key, cache_ttl)
+    cached_networks = None if force_refresh else _get_cached_value(config, cache_key, cache_ttl)
     if cached_networks is not None:
         return cached_networks
 
@@ -79,7 +79,7 @@ def scan_wifi_networks(config: dict[str, Any]) -> list[dict[str, Any]]:
             continue
 
         _merge_wifi_networks(networks_by_ssid, output)
-        if len(networks_by_ssid) > 1 or (cache_ttl > 0 and networks_by_ssid):
+        if len(networks_by_ssid) > 1:
             break
 
     if not networks_by_ssid and last_error is not None:
@@ -89,6 +89,8 @@ def scan_wifi_networks(config: dict[str, Any]) -> list[dict[str, Any]]:
         networks_by_ssid.values(),
         key=lambda item: (not item["in_use"], -_safe_int(item["signal"]), item["ssid"].lower()),
     )
+    if not networks:
+        return networks
     return _set_cached_value(config, cache_key, networks, cache_ttl)
 
 

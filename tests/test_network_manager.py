@@ -38,7 +38,7 @@ def test_scan_wifi_networks_retries_when_first_result_is_sparse(monkeypatch):
 
 def test_scan_wifi_networks_uses_short_cache(monkeypatch):
     calls = {"count": 0}
-    sample_output = "*:PlantWiFi:84:WPA2\n"
+    sample_output = "*:PlantWiFi:84:WPA2\n:Guest:48:Open\n"
 
     monkeypatch.setattr(network_manager, "_rescan_wifi", lambda config, interface: None)
 
@@ -54,6 +54,47 @@ def test_scan_wifi_networks_uses_short_cache(monkeypatch):
 
     assert first == second
     assert calls["count"] == 1
+
+
+
+def test_scan_wifi_networks_force_refresh_bypasses_cache(monkeypatch):
+    calls = {"count": 0}
+    sample_output = "*:PlantWiFi:84:WPA2\n:Guest:48:Open\n"
+
+    monkeypatch.setattr(network_manager, "_rescan_wifi", lambda config, interface: None)
+
+    def fake_run(config, arguments):
+        calls["count"] += 1
+        return sample_output
+
+    monkeypatch.setattr(network_manager, "_run_nmcli", fake_run)
+
+    config = {"WIFI_INTERFACE": "wlan0", "WIFI_SCAN_CACHE_SECONDS": 30, "REPO_PATH": "/tmp/test-force-refresh"}
+    network_manager.scan_wifi_networks(config)
+    network_manager.scan_wifi_networks(config, force_refresh=True)
+
+    assert calls["count"] == 2
+
+
+
+def test_scan_wifi_networks_does_not_cache_empty_results(monkeypatch):
+    calls = {"count": 0}
+
+    monkeypatch.setattr(network_manager, "_rescan_wifi", lambda config, interface: None)
+
+    def fake_run(config, arguments):
+        calls["count"] += 1
+        return ""
+
+    monkeypatch.setattr(network_manager, "_run_nmcli", fake_run)
+
+    config = {"WIFI_INTERFACE": "wlan0", "WIFI_SCAN_CACHE_SECONDS": 30, "REPO_PATH": "/tmp/test-empty-cache"}
+    first = network_manager.scan_wifi_networks(config)
+    second = network_manager.scan_wifi_networks(config)
+
+    assert first == []
+    assert second == []
+    assert calls["count"] == 4
 
 
 

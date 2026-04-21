@@ -77,7 +77,7 @@ def wifi_settings():
         return redirect(url_for("network.wifi_settings"))
 
     try:
-        wifi_networks = scan_wifi_networks(current_app.config)
+        wifi_networks = scan_wifi_networks(current_app.config, force_refresh=True)
         state = get_dashboard_state(current_app.config)
     except NetworkManagerError as exc:
         current_app.logger.exception("wifi view error")

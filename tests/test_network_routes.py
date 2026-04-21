@@ -8,8 +8,9 @@ def _login(client):
 
 def test_wifi_page_shows_explicit_scan_and_connect_flow(client, monkeypatch):
     wifi_networks = [{"ssid": "PlantWiFi", "signal": "81", "security": "WPA2", "in_use": False}]
+    scan_calls = []
 
-    monkeypatch.setattr(network_routes, "scan_wifi_networks", lambda config: wifi_networks)
+    monkeypatch.setattr(network_routes, "scan_wifi_networks", lambda config, force_refresh=False: scan_calls.append(force_refresh) or wifi_networks)
     monkeypatch.setattr(
         network_routes,
         "get_dashboard_state",
@@ -24,12 +25,13 @@ def test_wifi_page_shows_explicit_scan_and_connect_flow(client, monkeypatch):
     assert b"Internet access" in response.data
     assert b"Connect" in response.data
     assert b"PlantWiFi" in response.data
+    assert scan_calls == [True]
 
 
 def test_wifi_page_prefills_selected_network_from_query(client, monkeypatch):
     wifi_networks = [{"ssid": "CabinetWiFi", "signal": "75", "security": "WPA2", "in_use": False}]
 
-    monkeypatch.setattr(network_routes, "scan_wifi_networks", lambda config: wifi_networks)
+    monkeypatch.setattr(network_routes, "scan_wifi_networks", lambda config, force_refresh=False: wifi_networks)
     monkeypatch.setattr(
         network_routes,
         "get_dashboard_state",
