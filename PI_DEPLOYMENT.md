@@ -46,6 +46,7 @@ The installer will:
 
 - install or enable NetworkManager if needed
 - disable dhcpcd if it is still active
+- tell NetworkManager to ignore Docker bridge and veth interfaces so the desktop does not spam connection popups for container networking
 - copy the app to /opt/pi-network-admin
 - create the Python virtual environment
 - install the Python dependencies
@@ -218,6 +219,8 @@ sudo journalctl -u pi-network-failover -n 100 --no-pager
 nmcli device status
 ```
 
+If the Pi desktop was showing repeated notifications like `You are now connected to 'veth...'`, update to the latest app build and rerun `bash deploy/install.sh` or `sudo bash deploy/update-from-git.sh main`. That installs a NetworkManager rule so Docker virtual interfaces are left unmanaged.
+
 ---
 
 ## 9. Notes
@@ -225,16 +228,3 @@ nmcli device status
 - The app keeps the runtime environment file in /etc/pi-network-admin/app.env so normal updates do not overwrite your live settings.
 - Use tagged releases for field deployments when you want a stable, repeatable version.
 - Keep Ethernet connected during first setup so the Pi stays reachable if Wi-Fi is not configured correctly.
-
-
-internet access/data transfering.
-Update this App button/function.
-remove login to app.
-Data logger management
-    docker install?
-    Container management
-    Logs.
-Disk size.
-Install dataplicity button?
-change hostname.
-reboot button.

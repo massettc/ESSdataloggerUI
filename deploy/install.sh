@@ -3,6 +3,8 @@ set -euo pipefail
 
 APP_DIR=/opt/pi-network-admin
 CONFIG_DIR=/etc/pi-network-admin
+NM_CONF_DIR=/etc/NetworkManager/conf.d
+NM_DOCKER_UNMANAGED_CONF=90-pi-network-admin-unmanaged-docker.conf
 SERVICE_NAME=pi-network-admin.service
 WATCHDOG_SERVICE_NAME=pi-network-failover.service
 USER_NAME=pi-network-admin
@@ -47,7 +49,7 @@ else
     echo "Docker group not present yet; technician Docker commands will stay unavailable until Docker is installed."
 fi
 
-sudo mkdir -p "$APP_DIR" "$CONFIG_DIR" /var/log/pi-network-admin
+sudo mkdir -p "$APP_DIR" "$CONFIG_DIR" "$NM_CONF_DIR" /var/log/pi-network-admin
 
 REPO_REALPATH=$(cd -- "$REPO_DIR" && pwd -P)
 APP_REALPATH=$(cd -- "$APP_DIR" && pwd -P)
@@ -69,6 +71,8 @@ if [[ ! -f "$CONFIG_DIR/app.env" ]]; then
 else
     echo "Keeping existing $CONFIG_DIR/app.env"
 fi
+sudo cp "$APP_DIR/config/networkmanager-unmanaged-docker.conf" "$NM_CONF_DIR/$NM_DOCKER_UNMANAGED_CONF"
+sudo systemctl restart NetworkManager
 sudo cp "$APP_DIR/config/sudoers.pi-network-admin" /etc/sudoers.d/pi-network-admin
 sudo chmod 440 /etc/sudoers.d/pi-network-admin
 sudo cp "$APP_DIR/systemd/$SERVICE_NAME" /etc/systemd/system/$SERVICE_NAME
