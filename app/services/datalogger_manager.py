@@ -334,7 +334,7 @@ def _parse_plc_logger_logs(log_text: str) -> dict[str, Any]:
         parsed["summary"] = "Last send OK"
     if re.search(r"error|exception|failed", log_text, re.IGNORECASE):
         parsed["summary"] = "Error detected"
-        parsed["error"] = _last_meaningful_line(log_text)
+        parsed["error"] = _last_error_line(log_text)
 
     return parsed
 
@@ -372,7 +372,7 @@ def _parse_mqtt_logger_logs(log_text: str) -> dict[str, Any]:
         parsed["summary"] = "Data pushed successfully"
     if re.search(r"error|exception|failed", log_text, re.IGNORECASE):
         parsed["summary"] = "Error detected"
-        parsed["error"] = _last_meaningful_line(log_text)
+        parsed["error"] = _last_error_line(log_text)
 
     return parsed
 
@@ -430,7 +430,8 @@ def _decorate_mqtt_logger_state(logger: dict[str, Any]) -> dict[str, Any]:
     age_seconds = logger.get("last_push_age_seconds")
     queue_size = logger.get("queue_size")
     recent = _has_recent_activity(logger)
-    plc_signal = recent or (isinstance(queue_size, int) and queue_size > 0)
+    backlog_present = isinstance(queue_size, int) and queue_size > 0
+    plc_signal = recent
 
     if not logger.get("running"):
         logger["plc_link_label"] = "Not connected"
@@ -454,13 +455,14 @@ def _decorate_mqtt_logger_state(logger: dict[str, Any]) -> dict[str, Any]:
         logger["opsviewer_link_label"] = "Error"
         logger["opsviewer_link_class"] = "status-offline"
         logger["summary"] = "PLC data present, but OpsViewer send has errors"
-    elif isinstance(queue_size, int) and queue_size > 0:
+    elif backlog_present and recent:
         logger["opsviewer_link_label"] = "Backlog"
         logger["opsviewer_link_class"] = "status-warning"
-        if plc_signal:
-            logger["summary"] = f"PLC connected; {queue_size} records buffered for OpsViewer"
-        else:
-            logger["summary"] = f"No recent PLC data; {queue_size} records buffered for OpsViewer"
+        logger["summary"] = f"PLC connected; {queue_size} records buffered for OpsViewer"
+    elif backlog_present:
+        logger["opsviewer_link_label"] = "Stalled"
+        logger["opsviewer_link_class"] = "status-offline"
+        logger["summary"] = f"No recent PLC data; {queue_size} records still buffered for OpsViewer"
     elif recent:
         logger["opsviewer_link_label"] = "Connected"
         logger["opsviewer_link_class"] = "status-online"
@@ -483,7 +485,8 @@ def _decorate_plc_logger_state(logger: dict[str, Any]) -> dict[str, Any]:
     queue_size = logger.get("queue_size")
     measurements = logger.get("measurements")
     recent = _has_recent_activity(logger)
-    plc_signal = recent or (isinstance(queue_size, int) and queue_size > 0)
+    backlog_present = isinstance(queue_size, int) and queue_size > 0
+    plc_signal = recent
 
     if not logger.get("running"):
         logger["plc_link_label"] = "Not connected"
@@ -507,13 +510,14 @@ def _decorate_plc_logger_state(logger: dict[str, Any]) -> dict[str, Any]:
         logger["opsviewer_link_label"] = "Error"
         logger["opsviewer_link_class"] = "status-offline"
         logger["summary"] = "PLC data present, but OpsViewer send has errors"
-    elif isinstance(queue_size, int) and queue_size > 0:
+    elif backlog_present and recent:
         logger["opsviewer_link_label"] = "Backlog"
         logger["opsviewer_link_class"] = "status-warning"
-        if plc_signal:
-            logger["summary"] = f"PLC connected; {queue_size} records buffered for OpsViewer"
-        else:
-            logger["summary"] = f"No recent PLC data; {queue_size} records buffered for OpsViewer"
+        logger["summary"] = f"PLC connected; {queue_size} records buffered for OpsViewer"
+    elif backlog_present:
+        logger["opsviewer_link_label"] = "Stalled"
+        logger["opsviewer_link_class"] = "status-offline"
+        logger["summary"] = f"No recent PLC data; {queue_size} records still buffered for OpsViewer"
     elif recent:
         logger["opsviewer_link_label"] = "Connected"
         logger["opsviewer_link_class"] = "status-online"
@@ -548,6 +552,20 @@ def _build_system_status(
 
     mqtt_queue = mqtt_logger.get("queue_size")
     plc_queue = plc_logger.get("queue_size")
+    mqtt_recent = _has_recent_activity(mqtt_logger)
+    plc_recent = _has_recent_activity(plc_logger)
+    if isinstance(mqtt_queue, int) and mqtt_queue > 0 and not mqtt_recent:
+        return {
+            "system_status_label": "Cloud delivery stalled",
+            "system_status_class": "status-offline",
+            "system_status_detail": f"MQTT logger has {mqtt_queue} records buffered for OpsViewer, but no recent pushes were seen.",
+        }
+    if isinstance(plc_queue, int) and plc_queue > 0 and not plc_recent:
+        return {
+            "system_status_label": "Cloud delivery stalled",
+            "system_status_class": "status-offline",
+            "system_status_detail": f"PLC reader has {plc_queue} records buffered for OpsViewer, but no recent pushes were seen.",
+        }
     if isinstance(mqtt_queue, int) and mqtt_queue > 0:
         return {
             "system_status_label": "OpsViewer backlog",
@@ -561,7 +579,7 @@ def _build_system_status(
             "system_status_detail": f"PLC reader has {plc_queue} records buffered for OpsViewer.",
         }
 
-    if _has_recent_activity(mqtt_logger) or _has_recent_activity(plc_logger):
+    if mqtt_recent or plc_recent:
         return {
             "system_status_label": "System healthy",
             "system_status_class": "status-online",
@@ -644,7 +662,10 @@ def _build_logger_warnings(mqtt_logger: dict[str, Any], plc_logger: dict[str, An
         warnings.append("PLC logger has no recent PLC data")
     queue_size = mqtt_logger.get("queue_size")
     if isinstance(queue_size, int) and queue_size > 0:
-        warnings.append(f"Cloud backlog: {queue_size} buffered")
+        if _has_recent_activity(mqtt_logger):
+            warnings.append(f"Cloud backlog: {queue_size} buffered")
+        else:
+            warnings.append(f"Cloud delivery stalled: {queue_size} buffered")
     return warnings
 
 
@@ -840,6 +861,19 @@ def _last_meaningful_line(text: str) -> str:
         if stripped:
             return stripped
     return ""
+
+
+def _last_error_line(text: str) -> str:
+    error_pattern = re.compile(r"error|exception|failed", re.IGNORECASE)
+    for line in reversed(text.splitlines()):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("[") and stripped.endswith("]"):
+            continue
+        if error_pattern.search(stripped):
+            return stripped
+    return _last_meaningful_line(text)
 
 
 def _run_docker_command(

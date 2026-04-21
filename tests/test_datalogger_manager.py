@@ -215,6 +215,17 @@ def test_parse_mqtt_logs_extracts_queue_metrics_from_edge_ui_html():
     assert parsed["queue_size"] == 1089
 
 
+def test_parse_mqtt_logs_prefers_actual_error_line_over_payload():
+    parsed = datalogger_manager._parse_mqtt_logger_logs(
+        'info: Edge.Services.EventHubRelayHostService[0]\n'
+        'warn: failed to publish batch to OpsViewer relay\n'
+        '[{"DeviceId":"ESS-UNIT-81","Timestamp":"2026-04-21T16:58:16.8717039Z","Name":"Dose 1"}]\n'
+    )
+
+    assert parsed["summary"] == "Error detected"
+    assert parsed["error"] == "warn: failed to publish batch to OpsViewer relay"
+
+
 def test_stale_plc_data_marks_links_not_connected():
     logger = datalogger_manager._decorate_plc_logger_state(
         {
@@ -260,8 +271,8 @@ def test_backlog_keeps_plc_connected_when_opsviewer_is_down():
             "measurements": 43,
             "queue_size": 12,
             "error": "",
-            "last_push_age_seconds": 180,
-            "last_push_label": "No push seen for 3 min",
+            "last_push_age_seconds": 10,
+            "last_push_label": "Last pushed 10 sec ago",
             "status_class": "status-warning",
             "summary": "Last send OK",
         }
@@ -270,6 +281,44 @@ def test_backlog_keeps_plc_connected_when_opsviewer_is_down():
     assert logger["plc_link_label"] == "Connected"
     assert logger["opsviewer_link_label"] == "Backlog"
     assert "buffered for OpsViewer" in logger["summary"]
+
+
+def test_stale_backlog_marks_cloud_delivery_stalled():
+    logger = datalogger_manager._decorate_mqtt_logger_state(
+        {
+            "running": True,
+            "device_id": "ESS-UNIT-81",
+            "queue_size": 126,
+            "error": "",
+            "last_push_age_seconds": 180,
+            "last_push_label": "No push seen for 3 min",
+            "status_class": "status-offline",
+            "summary": "Data pushed successfully",
+        }
+    )
+
+    assert logger["plc_link_label"] == "Disconnected"
+    assert logger["opsviewer_link_label"] == "Stalled"
+    assert "still buffered for OpsViewer" in logger["summary"]
+
+
+def test_system_status_flags_stale_backlog_as_stalled_delivery():
+    status = datalogger_manager._build_system_status(
+        {
+            "queue_size": 126,
+            "last_push_age_seconds": 180,
+            "error": "",
+        },
+        {
+            "queue_size": 0,
+            "last_push_age_seconds": None,
+            "error": "",
+        },
+        [],
+    )
+
+    assert status["system_status_label"] == "Cloud delivery stalled"
+    assert "126 records buffered" in status["system_status_detail"]
 
 
 def test_read_mqtt_queue_metrics_uses_container_bridge_ip(monkeypatch):
