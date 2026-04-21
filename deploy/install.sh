@@ -7,6 +7,7 @@ NM_CONF_DIR=/etc/NetworkManager/conf.d
 NM_DOCKER_UNMANAGED_CONF=90-pi-network-admin-unmanaged-docker.conf
 SERVICE_NAME=pi-network-admin.service
 WATCHDOG_SERVICE_NAME=pi-network-failover.service
+PLC_ALARM_SERVICE_NAME=pi-plc-alarm.service
 USER_NAME=pi-network-admin
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -71,14 +72,27 @@ if [[ ! -f "$CONFIG_DIR/app.env" ]]; then
 else
     echo "Keeping existing $CONFIG_DIR/app.env"
 fi
+if [[ ! -f "$CONFIG_DIR/plc_alarm.json" ]]; then
+    sudo cp "$APP_DIR/config/plc_alarm.json" "$CONFIG_DIR/plc_alarm.json"
+    echo "Created $CONFIG_DIR/plc_alarm.json from template."
+else
+    echo "Keeping existing $CONFIG_DIR/plc_alarm.json"
+fi
+if [[ ! -f "$CONFIG_DIR/technician_commands.json" ]]; then
+    sudo cp "$APP_DIR/config/technician_commands.json" "$CONFIG_DIR/technician_commands.json"
+    echo "Created $CONFIG_DIR/technician_commands.json from template."
+else
+    echo "Keeping existing $CONFIG_DIR/technician_commands.json"
+fi
 sudo cp "$APP_DIR/config/networkmanager-unmanaged-docker.conf" "$NM_CONF_DIR/$NM_DOCKER_UNMANAGED_CONF"
 sudo systemctl restart NetworkManager
 sudo cp "$APP_DIR/config/sudoers.pi-network-admin" /etc/sudoers.d/pi-network-admin
 sudo chmod 440 /etc/sudoers.d/pi-network-admin
 sudo cp "$APP_DIR/systemd/$SERVICE_NAME" /etc/systemd/system/$SERVICE_NAME
 sudo cp "$APP_DIR/systemd/$WATCHDOG_SERVICE_NAME" /etc/systemd/system/$WATCHDOG_SERVICE_NAME
+sudo cp "$APP_DIR/systemd/$PLC_ALARM_SERVICE_NAME" /etc/systemd/system/$PLC_ALARM_SERVICE_NAME
 sudo systemctl daemon-reload
-sudo systemctl enable --now $SERVICE_NAME $WATCHDOG_SERVICE_NAME
-sudo systemctl restart $SERVICE_NAME $WATCHDOG_SERVICE_NAME
+sudo systemctl enable --now $SERVICE_NAME $WATCHDOG_SERVICE_NAME $PLC_ALARM_SERVICE_NAME
+sudo systemctl restart $SERVICE_NAME $WATCHDOG_SERVICE_NAME $PLC_ALARM_SERVICE_NAME
 
 echo "Install complete. Generate an admin password hash and place it at $CONFIG_DIR/admin_password.hash"

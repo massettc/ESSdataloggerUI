@@ -10,6 +10,7 @@ Local technician web UI for a Raspberry Pi datalogger. The ESSdataloggerUI app l
 - Wi-Fi connect flow with staged verification and rollback to the previous active wireless profile
 - Ethernet profile selection plus DHCP or static IPv4 configuration with verification and rollback
 - Background watchdog service that probes upstream connectivity, promotes the configured primary interface, and fails over to the backup interface when needed
+- Optional PLC alarm worker that writes a Modbus holding register when cloud delivery is unhealthy for a configurable duration
 - File-based audit logging
 - Deployment scaffolding for systemd and restricted sudo access to `nmcli`
 
@@ -48,6 +49,7 @@ Local technician web UI for a Raspberry Pi datalogger. The ESSdataloggerUI app l
 - Create `/etc/pi-network-admin/admin_password.hash` with the generated hash.
 - Install the sudoers file only after reviewing the `nmcli` path on the target image.
 - Review the watchdog settings, especially the primary and backup connection names, route metrics, and probe target host.
+- Review /etc/pi-network-admin/plc_alarm.json if you want the Pi to write a cloud alarm back to the PLC.
 - Review `deploy/install.sh` before using it on a live image; it is a starter installer, not a finalized production script.
 
 ## Git-based deployment

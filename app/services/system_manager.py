@@ -103,7 +103,15 @@ def set_system_hostname(config: dict[str, Any], hostname: str) -> dict[str, Any]
     if not _is_linux_target():
         return {"success": False, "message": "Hostname changes are only available on the Pi target device."}
 
-    result = _run_privileged_command(config, [config.get("HOSTNAMECTL_BIN", "hostnamectl"), "set-hostname", hostname], check=False)
+    hostname_script = _get_hostname_update_script(config)
+    if not hostname_script.exists():
+        return {"success": False, "message": f"Hostname update script not found at {hostname_script}."}
+
+    result = _run_privileged_command(
+        config,
+        [str(config.get("BASH_BIN", "/bin/bash") or "/bin/bash"), str(hostname_script), hostname],
+        check=False,
+    )
     if result.returncode != 0:
         return {"success": False, "message": _command_error(result, "Unable to update the hostname")}
 
@@ -112,6 +120,11 @@ def set_system_hostname(config: dict[str, Any], hostname: str) -> dict[str, Any]
         "message": f"Hostname updated to {hostname}. Reboot recommended.",
         "reboot_required": True,
     }
+
+
+def _get_hostname_update_script(config: dict[str, Any]) -> Path:
+    repo_path = Path(config.get("REPO_PATH", BASE_DIR))
+    return repo_path / "deploy" / "set-hostname.sh"
 
 
 def request_system_reboot(config: dict[str, Any]) -> dict[str, Any]:
@@ -705,7 +718,11 @@ def _parse_json_editor_paths(config: dict[str, Any]) -> list[str]:
 
 
 def _default_json_editor_paths(config: dict[str, Any]) -> list[str]:
-    return ["/var/usr/plcreader/settings.json", "/etc/pi-network-admin/app.env"]
+    return [
+        "/var/usr/plcreader/settings.json",
+        str(config.get("PLC_ALARM_CONFIG_FILE") or "/etc/pi-network-admin/plc_alarm.json"),
+        "/etc/pi-network-admin/app.env",
+    ]
 
 
 def _build_json_file_entry(path: Path, index: int) -> dict[str, str]:
@@ -821,28 +838,52 @@ def _default_technician_commands() -> list[dict[str, Any]]:
     if _is_linux_target():
         return [
             {
-                "id": "show-ip-addresses",
-                "label": "Show IP addresses",
-                "command": "hostname -I",
-                "description": "Display the current IP addresses for the device.",
+                "id": "stop-plcreader",
+                "label": "Stop plcreader",
+                "command": "docker stop plcreader",
+                "description": ".",
                 "confirm": False,
-                "builtin": True,
+                "builtin": False,
             },
             {
-                "id": "check-disk-usage",
-                "label": "Check disk usage",
-                "command": "df -h /",
-                "description": "Review available space on the root filesystem.",
+                "id": "start-plcreader",
+                "label": "Start plcreader",
+                "command": "docker start plcreader",
+                "description": ".",
                 "confirm": False,
-                "builtin": True,
+                "builtin": False,
             },
             {
-                "id": "show-uptime",
-                "label": "Show uptime",
-                "command": "uptime",
-                "description": "Display uptime and recent load information.",
+                "id": "remove-plcreader",
+                "label": "Remove plcreader",
+                "command": "docker rm plcreader",
+                "description": ".",
                 "confirm": False,
-                "builtin": True,
+                "builtin": False,
+            },
+            {
+                "id": "download-plcreader",
+                "label": "Download plcreader",
+                "command": "/usr/bin/docker run -d --name plcreader --restart unless-stopped -v /var/usr/plcreader:/var/usr/plcreader opsviewer2/ultralight:r1363 dotnet EmeraldSurf.OpsViewer.PlcReader.dll startlogging",
+                "description": "version r1363",
+                "confirm": False,
+                "builtin": False,
+            },
+            {
+                "id": "attach-plcreader",
+                "label": "Attach plcreader",
+                "command": "docker attach plcreader",
+                "description": ".",
+                "confirm": False,
+                "builtin": False,
+            },
+            {
+                "id": "prune-plcreader",
+                "label": "Prune plcreader",
+                "command": "docker system prune -fa",
+                "description": ".",
+                "confirm": False,
+                "builtin": False,
             },
         ]
 

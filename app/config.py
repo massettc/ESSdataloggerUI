@@ -38,6 +38,9 @@ class Config:
     PORTAINER_HOSTNAME = os.getenv("PI_ADMIN_PORTAINER_HOSTNAME", "")
     MQTT_UI_HOSTNAME = os.getenv("PI_ADMIN_MQTT_UI_HOSTNAME", "")
     MQTT_UI_PORT = os.getenv("PI_ADMIN_MQTT_UI_PORT", "")
+    PLC_ALARM_CONFIG_FILE = os.getenv(
+        "PI_ADMIN_PLC_ALARM_CONFIG_FILE", str(BASE_DIR / "config" / "plc_alarm.json")
+    )
     REPO_PATH = os.getenv("PI_ADMIN_REPO_PATH", str(BASE_DIR))
     UPDATE_SCRIPT = os.getenv("PI_ADMIN_UPDATE_SCRIPT", str(BASE_DIR / "deploy" / "update-from-git.sh"))
     UPDATE_LOG_PATH = os.getenv("PI_ADMIN_UPDATE_LOG_PATH", str(BASE_DIR / "update.log"))

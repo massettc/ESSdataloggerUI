@@ -1,0 +1,15 @@
+{
+  "enabled": true,
+  "host": "192.168.0.10",
+  "port": 502,
+  "unit_id": 1,
+  "register_address": 1000,
+  "poll_interval_seconds": 5,
+  "alarm_after_seconds": 30,
+  "clear_after_seconds": 30,
+  "request_timeout_seconds": 3,
+  "trigger_on_backlog": true,
+  "trigger_on_error": true,
+  "alarm_value": 1,
+  "clear_value": 0
+}

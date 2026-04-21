@@ -20,6 +20,36 @@ class DummyProcess:
         return 0
 
 
+def test_set_system_hostname_uses_persistent_helper_script(monkeypatch, tmp_path: Path):
+    captured = {}
+    script_path = tmp_path / "deploy" / "set-hostname.sh"
+    script_path.parent.mkdir(parents=True, exist_ok=True)
+    script_path.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+
+    def fake_privileged(config, args, check=True):
+        captured["args"] = args
+        return DummyResult(returncode=0)
+
+    monkeypatch.setattr(system_manager, "_is_linux_target", lambda: True)
+    monkeypatch.setattr(system_manager, "_run_privileged_command", fake_privileged)
+
+    result = system_manager.set_system_hostname({"REPO_PATH": str(tmp_path)}, "ess-pi-2")
+
+    assert result["success"] is True
+    assert captured["args"][0] == "/bin/bash"
+    assert captured["args"][1] == str(script_path)
+    assert captured["args"][2] == "ess-pi-2"
+
+
+def test_set_system_hostname_reports_missing_helper_script(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(system_manager, "_is_linux_target", lambda: True)
+
+    result = system_manager.set_system_hostname({"REPO_PATH": str(tmp_path)}, "ess-pi-2")
+
+    assert result["success"] is False
+    assert "script not found" in result["message"].lower()
+
+
 def test_start_custom_technician_command_creates_running_state(monkeypatch, tmp_path: Path):
     captured = {}
 
@@ -161,6 +191,28 @@ def test_get_technician_tools_state_includes_json_editor_data(tmp_path: Path):
     assert '"enabled": true' in state["json_editor_content"]
 
 
+def test_get_technician_tools_state_uses_plcreader_defaults_on_linux(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(system_manager, "_is_linux_target", lambda: True)
+
+    config = {
+        "TECHNICIAN_COMMANDS_FILE": str(tmp_path / "missing-commands.json"),
+        "TECHNICIAN_OUTPUT_FILE": str(tmp_path / "technician-output.json"),
+    }
+
+    state = system_manager.get_technician_tools_state(config)
+
+    assert [item["id"] for item in state["commands"]] == [
+        "stop-plcreader",
+        "start-plcreader",
+        "remove-plcreader",
+        "download-plcreader",
+        "attach-plcreader",
+        "prune-plcreader",
+    ]
+    assert state["commands"][3]["description"] == "version r1363"
+    assert state["commands"][0]["builtin"] is False
+
+
 
 def test_get_technician_tools_state_includes_default_plcreader_json(monkeypatch, tmp_path: Path):
     json_path = tmp_path / "settings.json"
@@ -173,6 +225,21 @@ def test_get_technician_tools_state_includes_default_plcreader_json(monkeypatch,
     assert any(item["path"] == str(json_path) for item in state["json_files"])
 
 
+def test_get_technician_tools_state_includes_plc_alarm_json(monkeypatch, tmp_path: Path):
+    json_path = tmp_path / "plc_alarm.json"
+    json_path.write_text('{"enabled": true}', encoding="utf-8")
+
+    monkeypatch.setattr(
+        system_manager,
+        "_default_json_editor_paths",
+        lambda config: [str(json_path), str(tmp_path / "app.env")],
+    )
+
+    state = system_manager.get_technician_tools_state({})
+
+    assert any(item["label"] == "plc_alarm.json" for item in state["json_files"])
+
+
 
 def test_get_technician_tools_state_includes_app_env_editor(monkeypatch, tmp_path: Path):
     env_path = tmp_path / "app.env"
@@ -180,7 +247,7 @@ def test_get_technician_tools_state_includes_app_env_editor(monkeypatch, tmp_pat
 
     monkeypatch.setattr(system_manager, "_default_json_editor_paths", lambda config: [str(env_path)])
 
-    state = system_manager.get_technician_tools_state({})
+    state = system_manager.get_technician_tools_state({"JSON_EDITOR_PATHS": str(env_path)})
 
     assert any(item["label"] == "app.env" for item in state["json_files"])
     assert "PI_ADMIN_PORT=8080" in state["json_editor_content"]
