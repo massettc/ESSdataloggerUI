@@ -3,6 +3,7 @@ set -euo pipefail
 
 APP_DIR=/opt/pi-network-admin
 CONFIG_DIR=/etc/pi-network-admin
+HOSTNAME_HELPER_PATH=/usr/local/sbin/pi-network-admin-set-hostname
 NM_CONF_DIR=/etc/NetworkManager/conf.d
 NM_DOCKER_UNMANAGED_CONF=90-pi-network-admin-unmanaged-docker.conf
 SERVICE_NAME=pi-network-admin.service
@@ -89,6 +90,8 @@ else
     echo "Keeping existing $CONFIG_DIR/technician_commands.json"
 fi
 sudo cp "$APP_DIR/config/networkmanager-unmanaged-docker.conf" "$NM_CONF_DIR/$NM_DOCKER_UNMANAGED_CONF"
+sudo cp "$APP_DIR/deploy/set-hostname.sh" "$HOSTNAME_HELPER_PATH"
+sudo chmod 755 "$HOSTNAME_HELPER_PATH"
 sudo systemctl restart NetworkManager
 sudo cp "$APP_DIR/config/sudoers.pi-network-admin" /etc/sudoers.d/pi-network-admin
 sudo chmod 440 /etc/sudoers.d/pi-network-admin

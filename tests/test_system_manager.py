@@ -33,12 +33,29 @@ def test_set_system_hostname_uses_persistent_helper_script(monkeypatch, tmp_path
     monkeypatch.setattr(system_manager, "_is_linux_target", lambda: True)
     monkeypatch.setattr(system_manager, "_run_privileged_command", fake_privileged)
 
-    result = system_manager.set_system_hostname({"REPO_PATH": str(tmp_path), "BASH_BIN": "bash"}, "ess-pi-2")
+    result = system_manager.set_system_hostname({"REPO_PATH": str(tmp_path)}, "ess-pi-2")
 
     assert result["success"] is True
-    assert captured["args"][0] == "/bin/bash"
-    assert captured["args"][1] == str(script_path)
-    assert captured["args"][2] == "ess-pi-2"
+    assert captured["args"][0] == str(script_path)
+    assert captured["args"][1] == "ess-pi-2"
+
+
+def test_get_hostname_update_script_prefers_installed_helper(monkeypatch, tmp_path: Path):
+    installed_path = tmp_path / "pi-network-admin-set-hostname"
+    installed_path.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+
+    original_path = system_manager.Path
+
+    def fake_path(value):
+        if value == "/usr/local/sbin/pi-network-admin-set-hostname":
+            return installed_path
+        return original_path(value)
+
+    monkeypatch.setattr(system_manager, "Path", fake_path)
+
+    result = system_manager._get_hostname_update_script({"REPO_PATH": str(tmp_path)})
+
+    assert result == installed_path
 
 
 def test_set_system_hostname_reports_missing_helper_script(monkeypatch, tmp_path: Path):
