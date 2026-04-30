@@ -5,7 +5,7 @@ import threading
 from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 
 from app.auth import login_required
-from app.services.datalogger_manager import DataloggerManagerError, ensure_portainer, get_datalogger_status, install_dataplicity, install_docker
+from app.services.datalogger_manager import DataloggerManagerError, ensure_portainer, get_datalogger_status, install_docker
 from app.services.network_apply import apply_ethernet_settings, apply_wifi_settings
 from app.services.network_manager import (
     ETHERNET_CONNECTION_TYPE,
@@ -249,11 +249,17 @@ def system_settings():
                 flash("Portainer install started. This may take a minute — the datalogger page will show when it is ready.", "info")
                 return redirect(url_for("network.system_settings"))
             elif action == "install_dataplicity":
-                config_snapshot = dict(current_app.config)
-                t = threading.Thread(target=install_dataplicity, args=(config_snapshot,), daemon=True)
-                t.start()
-                flash("Dataplicity install started. This may take a minute.", "info")
-                return redirect(url_for("network.system_settings"))
+                result = start_custom_technician_command(
+                    current_app.config,
+                    "Install Dataplicity",
+                    "sudo curl -s https://www.dataplicity.com/3-5oxoarku.py | sudo python",
+                    allow_sudo=True,
+                )
+                if result["success"]:
+                    flash("Dataplicity install started — live output is shown in the terminal below.", "info")
+                else:
+                    flash(result["message"], "error")
+                return redirect(url_for("network.technician_tools"))
             else:
                 result = {"success": False, "message": "Unknown system action."}
         except SystemManagerError as exc:

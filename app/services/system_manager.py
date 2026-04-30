@@ -284,13 +284,13 @@ def start_technician_command(config: dict[str, Any], command_id: str) -> dict[st
     return start_custom_technician_command(config, selected.get("label", "Saved command"), selected.get("command", ""))
 
 
-def start_custom_technician_command(config: dict[str, Any], label: str, command: str) -> dict[str, Any]:
+def start_custom_technician_command(config: dict[str, Any], label: str, command: str, allow_sudo: bool = False) -> dict[str, Any]:
     label = label.strip() or "Custom command"
     command = command.strip()
     if not command:
         return {"success": False, "message": "A command is required."}
 
-    if command.startswith("sudo "):
+    if not allow_sudo and command.startswith("sudo "):
         _write_technician_output(
             config,
             {
