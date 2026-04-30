@@ -252,7 +252,7 @@ def system_settings():
                 result = start_custom_technician_command(
                     current_app.config,
                     "Install Dataplicity",
-                    "sudo curl -s https://www.dataplicity.com/3-5oxoarku.py | sudo python",
+                    "sudo /bin/bash /opt/pi-network-admin/deploy/install-dataplicity.sh",
                     allow_sudo=True,
                 )
                 if result["success"]:
