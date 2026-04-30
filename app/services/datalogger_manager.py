@@ -190,6 +190,33 @@ def install_docker(config: dict[str, Any]) -> dict[str, Any]:
     return {"success": True, "message": "Docker installed successfully. A service restart is needed before Docker commands work."}
 
 
+def install_dataplicity(config: dict[str, Any]) -> dict[str, Any]:
+    """Install Dataplicity remote access agent."""
+    if not _is_linux_target():
+        return {"success": False, "message": "Dataplicity install is only available on the Pi target device."}
+
+    sudo_bin = config.get("SUDO_BIN", "sudo")
+    bash_bin = config.get("BASH_BIN", "/bin/bash")
+
+    script = f"{sudo_bin} curl -s https://www.dataplicity.com/3-5oxoarku.py | {sudo_bin} python"
+    try:
+        result = subprocess.run(
+            [bash_bin, "-c", script],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        return {"success": False, "message": "Dataplicity install timed out after 2 minutes."}
+
+    if result.returncode != 0:
+        stderr = (result.stderr or "").strip()[:300]
+        return {"success": False, "message": f"Dataplicity install failed: {stderr or 'unknown error'}"}
+
+    return {"success": True, "message": "Dataplicity installed successfully. The agent should now appear in the Dataplicity dashboard."}
+
+
 def ensure_portainer(config: dict[str, Any]) -> dict[str, Any]:
     if not _is_linux_target():
         return {"success": False, "message": "Portainer control is only available on the Pi target device."}

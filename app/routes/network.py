@@ -5,7 +5,7 @@ import threading
 from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 
 from app.auth import login_required
-from app.services.datalogger_manager import DataloggerManagerError, ensure_portainer, get_datalogger_status, install_docker
+from app.services.datalogger_manager import DataloggerManagerError, ensure_portainer, get_datalogger_status, install_dataplicity, install_docker
 from app.services.network_apply import apply_ethernet_settings, apply_wifi_settings
 from app.services.network_manager import (
     ETHERNET_CONNECTION_TYPE,
@@ -247,6 +247,12 @@ def system_settings():
                 t = threading.Thread(target=ensure_portainer, args=(config_snapshot,), daemon=True)
                 t.start()
                 flash("Portainer install started. This may take a minute — the datalogger page will show when it is ready.", "info")
+                return redirect(url_for("network.system_settings"))
+            elif action == "install_dataplicity":
+                config_snapshot = dict(current_app.config)
+                t = threading.Thread(target=install_dataplicity, args=(config_snapshot,), daemon=True)
+                t.start()
+                flash("Dataplicity install started. This may take a minute.", "info")
                 return redirect(url_for("network.system_settings"))
             else:
                 result = {"success": False, "message": "Unknown system action."}

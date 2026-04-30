@@ -182,5 +182,19 @@
         <p class="muted-note">Install Docker first before installing Portainer.</p>
         {% endif %}
     </article>
+
+    <article class="panel">
+        <div class="section-heading">
+            <div>
+                <h3>Dataplicity</h3>
+                <p>Remote terminal and web forwarding access via Dataplicity.</p>
+            </div>
+        </div>
+        <form method="post" data-busy-label="Installing Dataplicity. This may take a minute...">
+            <input type="hidden" name="action" value="install_dataplicity">
+            <button type="submit">Install Dataplicity</button>
+        </form>
+        <p class="muted-note">Runs the official Dataplicity install script. Requires internet access. Once complete, the device will appear in the Dataplicity dashboard.</p>
+    </article>
 </section>
 {% endblock %}
