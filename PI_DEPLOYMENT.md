@@ -62,7 +62,7 @@ Key values to check:
 - `PI_ADMIN_ETHERNET_INTERFACE` — Ethernet interface name (default `eth0`)
 - `PI_ADMIN_PRIMARY_CONNECTION_NAME` — NetworkManager connection name for Wi-Fi
 - `PI_ADMIN_BACKUP_CONNECTION_NAME` — NetworkManager connection name for Ethernet
-- `PI_ADMIN_PORT` — app port (default `8080`; do not use port 80)
+- `PI_ADMIN_PORT` — app port (default `8181`; do not use port 80)
 
 Authentication is disabled by default — the app is open to anyone on the local network.
 
@@ -87,7 +87,7 @@ sudo systemctl status pi-plc-alarm
 From another device on the same network, browse to:
 
 ```text
-http://<pi-ip>:8080
+http://<pi-ip>:8181
 ```
 
 Replace the port if you changed PI_ADMIN_PORT.
