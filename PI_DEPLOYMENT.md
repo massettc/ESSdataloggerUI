@@ -206,39 +206,9 @@ If the Pi desktop was showing repeated notifications like `You are now connected
 
 ---
 
-## 9. Installing infrastructure from the System tab
-
-The System tab has one-click install buttons for Docker, Portainer, and Dataplicity. All installs run in the background and stream live output to the Technician Tools terminal.
-
-### Docker
-
-Click **Install Docker** on the System tab. This runs the official `get.docker.com` convenience script and adds the `pi-network-admin` user to the docker group. After install, restart the service:
-
-```bash
-sudo systemctl restart pi-network-admin
-```
-
-### Portainer
-
-Click **Install Portainer** after Docker is installed. This pulls and starts `portainer/portainer-ce` on ports 9000/9443. The status badge updates on the next page load.
-
-### Dataplicity
-
-1. Log in to [dataplicity.com](https://www.dataplicity.com) and copy your device enrollment URL (format: `https://www.dataplicity.com/xxxxxxxx.py`).
-2. Add it to `/etc/pi-network-admin/app.env` on the Pi:
-   ```bash
-   sudo nano /etc/pi-network-admin/app.env
-   # Add: PI_ADMIN_DATAPLICITY_INSTALL_URL=https://www.dataplicity.com/xxxxxxxx.py
-   ```
-3. Restart the service: `sudo systemctl restart pi-network-admin`
-4. Click **Install Dataplicity** on the System tab. Live output appears in the Technician Tools terminal.
-
-> **Keep your enrollment URL private.** Do not commit it to a git repository. It belongs only in `app.env` on the device.
-
----
-
-## 10. Notes
+## 9. Notes
 
 - The app keeps the runtime environment file in `/etc/pi-network-admin/app.env` so normal updates do not overwrite your live settings.
 - Use tagged releases for field deployments when you want a stable, repeatable version.
 - Keep Ethernet connected during first setup so the Pi stays reachable if Wi-Fi is not configured correctly.
+- **Dataplicity:** Install manually from a terminal on the Pi using the one-liner from your Dataplicity dashboard (format: `sudo curl -s https://www.dataplicity.com/xxxxxxxx.py | sudo python`). This is a one-time per-device step.

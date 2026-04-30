@@ -248,23 +248,6 @@ def system_settings():
                 t.start()
                 flash("Portainer install started. This may take a minute — the datalogger page will show when it is ready.", "info")
                 return redirect(url_for("network.system_settings"))
-            elif action == "install_dataplicity":
-                dataplicity_url = str(current_app.config.get("DATAPLICITY_INSTALL_URL", "")).strip()
-                if not dataplicity_url:
-                    flash("Dataplicity install URL is not configured. Set PI_ADMIN_DATAPLICITY_INSTALL_URL in app.env.", "error")
-                    return redirect(url_for("network.system_settings"))
-                repo_path = str(current_app.config.get("REPO_PATH", "/opt/pi-network-admin"))
-                result = start_custom_technician_command(
-                    current_app.config,
-                    "Install Dataplicity",
-                    f"sudo /bin/bash {repo_path}/deploy/install-dataplicity.sh {dataplicity_url}",
-                    allow_sudo=True,
-                )
-                if result["success"]:
-                    flash("Dataplicity install started — live output is shown in the terminal below.", "info")
-                else:
-                    flash(result["message"], "error")
-                return redirect(url_for("network.technician_tools"))
             else:
                 result = {"success": False, "message": "Unknown system action."}
         except SystemManagerError as exc:
@@ -297,7 +280,6 @@ def system_settings():
         system=system,
         update_status=update_status,
         datalogger_status=datalogger_status,
-        dataplicity_configured=bool(str(current_app.config.get("DATAPLICITY_INSTALL_URL", "")).strip()),
     )
 
 

@@ -182,23 +182,5 @@
         <p class="muted-note">Install Docker first before installing Portainer.</p>
         {% endif %}
     </article>
-
-    <article class="panel">
-        <div class="section-heading">
-            <div>
-                <h3>Dataplicity</h3>
-                <p>Remote terminal and web forwarding access via Dataplicity.</p>
-            </div>
-        </div>
-        <form method="post" data-busy-label="Installing Dataplicity. This may take a minute...">
-            <input type="hidden" name="action" value="install_dataplicity">
-            <button type="submit" {% if not dataplicity_configured %}disabled{% endif %}>Install Dataplicity</button>
-        </form>
-        {% if dataplicity_configured %}
-        <p class="muted-note">Runs the official Dataplicity install script. Requires internet access. Once complete, the device will appear in the Dataplicity dashboard.</p>
-        {% else %}
-        <p class="muted-note">Set <code>PI_ADMIN_DATAPLICITY_INSTALL_URL</code> in <code>/etc/pi-network-admin/app.env</code> to your account-specific enrollment URL from the Dataplicity dashboard, then restart the service.</p>
-        {% endif %}
-    </article>
 </section>
 {% endblock %}
