@@ -1,18 +1,19 @@
 # ESS Datalogger UI
 
-Local technician web UI for a Raspberry Pi datalogger. The ESSdataloggerUI app lets a technician sign in, inspect network status, manage Wi-Fi and Ethernet connections, and run a watchdog that fails traffic over between the two interfaces.
+Local technician web UI for a Raspberry Pi datalogger. The ESSdataloggerUI app lets a technician inspect network status, manage Wi-Fi and Ethernet connections, run a watchdog that fails traffic over between the two interfaces, and install supporting software like Docker, Portainer, and Dataplicity directly from the web UI.
 
 ## Features
 
-- Password-protected local admin login
 - Dashboard with interface state, active connection name, IP, gateway, and DNS
-- Cleaner Wi-Fi workflow with scan, select, password entry, and connect behavior similar to a simple RasAP-style appliance page
-- Wi-Fi connect flow with staged verification and rollback to the previous active wireless profile
+- Wi-Fi workflow with scan, select, password entry, connect, verification, and rollback to previous profile
 - Ethernet profile selection plus DHCP or static IPv4 configuration with verification and rollback
 - Background watchdog service that probes upstream connectivity, promotes the configured primary interface, and fails over to the backup interface when needed
 - Optional PLC alarm worker that writes a Modbus holding register when cloud delivery is unhealthy for a configurable duration
+- System tab: hostname management, disk usage, git-based app updates, one-click Docker install, one-click Portainer install/start, one-click Dataplicity install
+- Technician Tools tab: live terminal output for saved and custom commands
 - File-based audit logging
 - Deployment scaffolding for systemd and restricted sudo access to `nmcli`
+- Authentication disabled by default (open LAN access) — enable with `PI_ADMIN_AUTH_ENABLED=true`
 
 ## Expected target environment
 
@@ -23,58 +24,53 @@ Local technician web UI for a Raspberry Pi datalogger. The ESSdataloggerUI app l
 
 ## Local development
 
-1. Create a virtual environment.
-2. Install dependencies from `requirements.txt`.
-3. Generate a password hash:
-   `python -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('replace-me'))"`
-4. Save that hash to `config/admin_password.hash` or point `PI_ADMIN_PASSWORD_HASH_FILE` at another path.
-5. Export the environment variables from `config/app.env.example` as needed.
-6. Set `PI_ADMIN_PRIMARY_CONNECTION_NAME` and `PI_ADMIN_BACKUP_CONNECTION_NAME` to the NetworkManager profile names you want the watchdog to promote during failover.
-7. Run `python run.py` for the web UI or `python watchdog.py` to exercise the failover worker directly.
+1. Create a virtual environment and install dependencies from `requirements.txt`.
+2. Export the environment variables from `config/app.env.example` as needed.
+3. Set `PI_ADMIN_PRIMARY_CONNECTION_NAME` and `PI_ADMIN_BACKUP_CONNECTION_NAME` to the NetworkManager profile names you want the watchdog to promote during failover.
+4. Run `python run.py` for the web UI or `python watchdog.py` to exercise the failover worker directly.
+
+Authentication is disabled by default (`AUTH_ENABLED=false`). To enable it, set `PI_ADMIN_AUTH_ENABLED=true` and create a password hash file:
+
+```bash
+python -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('replace-me'))" > config/admin_password.hash
+```
 
 ## Publish to GitHub
 
 1. Create a new empty repository on GitHub.
 2. In this project folder, run:
-   - git remote add origin YOUR_GITHUB_REPO_URL
-   - git commit -m "Initial ESSdataloggerUI app"
-   - git push -u origin main
+   - `git remote add origin YOUR_GITHUB_REPO_URL`
+   - `git commit -m "Initial ESSdataloggerUI app"`
+   - `git push -u origin main`
 3. After that, the Pi can clone and install from the repo remotely.
+
+> **Security note:** Do not commit real secrets to the repo. The `config/admin_password.hash` and `config/app.env` files are gitignored. All sensitive values — including `PI_ADMIN_SECRET_KEY` and `PI_ADMIN_DATAPLICITY_INSTALL_URL` — live only in `/etc/pi-network-admin/app.env` on the device.
 
 ## Deployment notes
 
-- You can deploy from a git clone on the Pi, then run `bash deploy/install.sh` from that clone.
-- For a one-step git-driven install, run `bash deploy/install-from-git.sh <repo-url> [ref]` on the Pi, where ref can be `main` or a release tag like `v0.1.0`.
-- Copy `config/app.env.example` to `/etc/pi-network-admin/app.env` and set a unique secret key.
-- Create `/etc/pi-network-admin/admin_password.hash` with the generated hash.
-- Install the sudoers file only after reviewing the `nmcli` path on the target image.
-- Review the watchdog settings, especially the primary and backup connection names, route metrics, and probe target host.
-- Review /etc/pi-network-admin/plc_alarm.json if you want the Pi to write a cloud alarm back to the PLC.
-- Review `deploy/install.sh` before using it on a live image; it is a starter installer, not a finalized production script.
+- Run `bash deploy/install-from-git.sh <repo-url>` on the Pi for a one-step install.
+- Copy `config/app.env.example` to `/etc/pi-network-admin/app.env` and update site-specific values. The installer does this automatically on first install.
+- Key values to set per device: `PI_ADMIN_PRIMARY_CONNECTION_NAME`, `PI_ADMIN_BACKUP_CONNECTION_NAME`, `PI_ADMIN_SECRET_KEY`, `PI_ADMIN_DATAPLICITY_INSTALL_URL`.
+- Install the sudoers file only after reviewing the binary paths on the target image.
+- Review `deploy/install.sh` before using it on a live image.
 
 ## Git-based deployment
 
-1. Install git on the Pi if needed: `sudo apt-get install -y git`
-2. Clone the repository on the Pi: `git clone <repo-url>`
-3. Change into the clone directory.
-4. Run `bash deploy/install.sh`
-5. Edit `/etc/pi-network-admin/app.env`
-6. Create `/etc/pi-network-admin/admin_password.hash`
-7. Restart services: `sudo systemctl restart pi-network-admin pi-network-failover`
+Fresh install:
+```bash
+curl -fsSL https://raw.githubusercontent.com/massettc/ESSdataloggerUI/main/deploy/install-from-git.sh | bash -s -- https://github.com/massettc/ESSdataloggerUI.git
+```
 
-For a fresh one-step bootstrap on the Pi, you can also run:
+Update existing install:
+```bash
+cd /opt/pi-network-admin
+sudo bash deploy/update-from-git.sh main
+```
 
-`bash deploy/install-from-git.sh <repo-url> [ref]`
-
-For updates after the first deploy:
-
-1. `cd /opt/pi-network-admin`
-2. `sudo bash deploy/update-from-git.sh main`
-
-To pin the Pi to a specific release instead of the latest branch head:
-
-1. Create and push a tag such as `v0.1.0`
-2. On the Pi, run `sudo bash deploy/update-from-git.sh v0.1.0`
+Pin to a specific release:
+```bash
+sudo bash deploy/update-from-git.sh v0.3.4
+```
 
 ## Versioned release workflow
 
@@ -92,7 +88,7 @@ The current repository version marker is stored in `VERSION`.
 
 ## Validation checklist
 
-1. Log in from the cabinet LAN.
+1. Log in from the cabinet LAN (or confirm UI is accessible if auth is disabled).
 2. Confirm the dashboard shows `eth0` and `wlan0` state.
 3. Open the Wi-Fi page and verify SSIDs appear.
 4. Open the Ethernet page and verify saved Ethernet profiles appear.
@@ -100,11 +96,5 @@ The current repository version marker is stored in `VERSION`.
 6. Attempt an invalid password and confirm the old Wi-Fi connection is restored.
 7. Disconnect the primary link or block the watchdog target and confirm the backup profile is activated.
 8. Restore the primary link and confirm the watchdog promotes it again.
-9. Reboot and confirm both the web UI service and failover service start automatically.
-
-## Next hardening steps
-
-- Add CSRF protection.
-- Add login rate limiting.
-- Restrict bind/proxy exposure more tightly if needed.
-- Add unit tests for more `nmcli` output variations from the target image.
+9. Open the System tab and verify Docker and Portainer status badges reflect the real device state.
+10. Reboot and confirm all three services (`pi-network-admin`, `pi-network-failover`, `pi-plc-alarm`) start automatically.

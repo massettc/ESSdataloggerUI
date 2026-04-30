@@ -249,10 +249,15 @@ def system_settings():
                 flash("Portainer install started. This may take a minute — the datalogger page will show when it is ready.", "info")
                 return redirect(url_for("network.system_settings"))
             elif action == "install_dataplicity":
+                dataplicity_url = str(current_app.config.get("DATAPLICITY_INSTALL_URL", "")).strip()
+                if not dataplicity_url:
+                    flash("Dataplicity install URL is not configured. Set PI_ADMIN_DATAPLICITY_INSTALL_URL in app.env.", "error")
+                    return redirect(url_for("network.system_settings"))
+                repo_path = str(current_app.config.get("REPO_PATH", "/opt/pi-network-admin"))
                 result = start_custom_technician_command(
                     current_app.config,
                     "Install Dataplicity",
-                    "sudo /bin/bash /opt/pi-network-admin/deploy/install-dataplicity.sh",
+                    f"sudo /bin/bash {repo_path}/deploy/install-dataplicity.sh {dataplicity_url}",
                     allow_sudo=True,
                 )
                 if result["success"]:
@@ -287,7 +292,13 @@ def system_settings():
         current_app.logger.exception("system datalogger status error")
         datalogger_status = _default_datalogger_status()
 
-    return render_template("system.html", system=system, update_status=update_status, datalogger_status=datalogger_status)
+    return render_template(
+        "system.html",
+        system=system,
+        update_status=update_status,
+        datalogger_status=datalogger_status,
+        dataplicity_configured=bool(str(current_app.config.get("DATAPLICITY_INSTALL_URL", "")).strip()),
+    )
 
 
 @network_bp.route("/tools", methods=["GET", "POST"])

@@ -78,3 +78,4 @@ class Config:
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Strict"
     SESSION_COOKIE_SECURE = os.getenv("PI_ADMIN_SECURE_COOKIE", "false").lower() == "true"
+    DATAPLICITY_INSTALL_URL = os.getenv("PI_ADMIN_DATAPLICITY_INSTALL_URL", "")

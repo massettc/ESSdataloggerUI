@@ -63,6 +63,7 @@ Key values to check:
 - `PI_ADMIN_PRIMARY_CONNECTION_NAME` — NetworkManager connection name for Wi-Fi
 - `PI_ADMIN_BACKUP_CONNECTION_NAME` — NetworkManager connection name for Ethernet
 - `PI_ADMIN_PORT` — app port (default `8181`; do not use port 80)
+- `PI_ADMIN_DATAPLICITY_INSTALL_URL` — your account-specific enrollment URL from the Dataplicity dashboard (e.g. `https://www.dataplicity.com/xxxxxxxx.py`). Required to use the Install Dataplicity button on the System tab.
 
 Authentication is disabled by default — the app is open to anyone on the local network.
 
@@ -183,8 +184,9 @@ After the app is deployed, verify the following:
 7. The failover service starts and remains active.
 8. The datalogger page shows PLC connection and cloud delivery status.
 9. The PLC alarm service is active (`systemctl status pi-plc-alarm`).
-10. The technician tools page loads and can run a quick command.
-11. A reboot brings all three services back automatically.
+10. The System tab shows correct Docker and Portainer status badges.
+11. The technician tools page loads and can run a quick command.
+12. A reboot brings all three services back automatically.
 
 ---
 
@@ -204,8 +206,39 @@ If the Pi desktop was showing repeated notifications like `You are now connected
 
 ---
 
-## 9. Notes
+## 9. Installing infrastructure from the System tab
 
-- The app keeps the runtime environment file in /etc/pi-network-admin/app.env so normal updates do not overwrite your live settings.
+The System tab has one-click install buttons for Docker, Portainer, and Dataplicity. All installs run in the background and stream live output to the Technician Tools terminal.
+
+### Docker
+
+Click **Install Docker** on the System tab. This runs the official `get.docker.com` convenience script and adds the `pi-network-admin` user to the docker group. After install, restart the service:
+
+```bash
+sudo systemctl restart pi-network-admin
+```
+
+### Portainer
+
+Click **Install Portainer** after Docker is installed. This pulls and starts `portainer/portainer-ce` on ports 9000/9443. The status badge updates on the next page load.
+
+### Dataplicity
+
+1. Log in to [dataplicity.com](https://www.dataplicity.com) and copy your device enrollment URL (format: `https://www.dataplicity.com/xxxxxxxx.py`).
+2. Add it to `/etc/pi-network-admin/app.env` on the Pi:
+   ```bash
+   sudo nano /etc/pi-network-admin/app.env
+   # Add: PI_ADMIN_DATAPLICITY_INSTALL_URL=https://www.dataplicity.com/xxxxxxxx.py
+   ```
+3. Restart the service: `sudo systemctl restart pi-network-admin`
+4. Click **Install Dataplicity** on the System tab. Live output appears in the Technician Tools terminal.
+
+> **Keep your enrollment URL private.** Do not commit it to a git repository. It belongs only in `app.env` on the device.
+
+---
+
+## 10. Notes
+
+- The app keeps the runtime environment file in `/etc/pi-network-admin/app.env` so normal updates do not overwrite your live settings.
 - Use tagged releases for field deployments when you want a stable, repeatable version.
 - Keep Ethernet connected during first setup so the Pi stays reachable if Wi-Fi is not configured correctly.
