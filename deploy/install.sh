@@ -113,4 +113,24 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now $SERVICE_NAME $WATCHDOG_SERVICE_NAME $PLC_ALARM_SERVICE_NAME
 sudo systemctl restart $SERVICE_NAME $WATCHDOG_SERVICE_NAME $PLC_ALARM_SERVICE_NAME
 
+# ── Post-install health check ──
+sleep 3
+echo ""
+echo "========================================================"
+echo "  Service status:"
+for SVC in $SERVICE_NAME $WATCHDOG_SERVICE_NAME $PLC_ALARM_SERVICE_NAME; do
+    STATE=$(systemctl is-active "$SVC" 2>/dev/null || true)
+    echo "    $SVC: $STATE"
+    if [[ "$STATE" != "active" ]]; then
+        echo "    --- last 10 log lines ---"
+        journalctl -u "$SVC" -n 10 --no-pager 2>/dev/null || true
+    fi
+done
+
+APP_PORT=$(grep -m1 '^PI_ADMIN_PORT=' "$CONFIG_DIR/app.env" 2>/dev/null | cut -d= -f2 || echo "8080")
+DEVICE_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "<device-ip>")
+echo ""
+echo "  Web UI: http://${DEVICE_IP}:${APP_PORT}"
+echo "========================================================"
+echo ""
 echo "Install complete."
