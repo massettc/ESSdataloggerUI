@@ -16,24 +16,16 @@ USER_NAME=pi-network-admin
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 REPO_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 
-# ── Preflight: ensure NetworkManager is installed and active ──
+# ── Preflight: ensure NetworkManager is installed ──
+# Only install the package here. The dhcpcd-to-NetworkManager switch happens
+# after pip install so we do not drop an active Wi-Fi connection mid-install.
 if ! command -v nmcli >/dev/null 2>&1; then
     echo "NetworkManager (nmcli) not found. Installing..."
     sudo apt-get update -qq
     sudo apt-get install -y network-manager
 fi
 
-if systemctl is-active --quiet dhcpcd 2>/dev/null; then
-    echo "Disabling dhcpcd in favour of NetworkManager..."
-    sudo systemctl disable --now dhcpcd
-fi
-
-if ! systemctl is-active --quiet NetworkManager; then
-    echo "Enabling NetworkManager..."
-    sudo systemctl enable --now NetworkManager
-fi
-
-echo "Preflight OK: NetworkManager is active ($(nmcli --version))."
+echo "Preflight OK: NetworkManager is present ($(nmcli --version))."
 
 # ── Preflight: ensure Python 3 venv/pip support is available ──
 if ! python3 -m venv --help >/dev/null 2>&1; then
@@ -99,6 +91,17 @@ sudo cp "$APP_DIR/deploy/set-hostname.sh" "$HOSTNAME_HELPER_PATH"
 sudo chmod 755 "$HOSTNAME_HELPER_PATH"
 if [[ -d /etc/cloud || -d "$CI_CFG_DIR" ]]; then
     sudo cp "$APP_DIR/config/cloud-init-preserve-hostname.cfg" "$CI_CFG_DIR/$CI_PRESERVE_HOSTNAME_CFG"
+fi
+
+# ── Switch from dhcpcd to NetworkManager now that pip install is complete ──
+# Doing this after pip ensures an active Wi-Fi connection is not dropped mid-install.
+if systemctl is-active --quiet dhcpcd 2>/dev/null; then
+    echo "Disabling dhcpcd in favour of NetworkManager..."
+    sudo systemctl disable --now dhcpcd
+fi
+if ! systemctl is-active --quiet NetworkManager; then
+    echo "Enabling NetworkManager..."
+    sudo systemctl enable --now NetworkManager
 fi
 sudo systemctl restart NetworkManager
 sudo cp "$APP_DIR/config/sudoers.pi-network-admin" /etc/sudoers.d/pi-network-admin
