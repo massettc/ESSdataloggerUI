@@ -269,12 +269,16 @@ def system_settings():
     try:
         system = get_system_summary(current_app.config)
         update_status = get_update_status(current_app.config)
-        datalogger_status = _build_initial_datalogger_status(current_app.config, host=request.host.split(":")[0])
     except SystemManagerError as exc:
         current_app.logger.exception("system view error")
         flash(str(exc), "error")
         system = _default_system_summary()
         update_status = _default_update_status()
+
+    try:
+        datalogger_status = get_datalogger_status(current_app.config, host=request.host.split(":")[0])
+    except Exception:
+        current_app.logger.exception("system datalogger status error")
         datalogger_status = _default_datalogger_status()
 
     return render_template("system.html", system=system, update_status=update_status, datalogger_status=datalogger_status)
