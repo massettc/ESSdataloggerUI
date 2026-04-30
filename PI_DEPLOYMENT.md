@@ -21,87 +21,68 @@ This deployment expects:
 
 ## 2. First-time install on a new Pi
 
-### Step 1: Install git if needed
+### Step 1: Run the one-line installer
+
+Paste this into a terminal on the device (curl is pre-installed on Raspberry Pi OS and most Debian images):
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y git
+curl -fsSL https://raw.githubusercontent.com/massettc/ESSdataloggerUI/main/deploy/install-from-git.sh | bash -s -- https://github.com/massettc/ESSdataloggerUI.git
 ```
 
-### Step 2: Download the project from GitHub
+If curl is not available, use wget:
 
 ```bash
-cd ~
-git clone https://github.com/massettc/ESSdataloggerUI.git
-cd ESSdataloggerUI
+wget -qO- https://raw.githubusercontent.com/massettc/ESSdataloggerUI/main/deploy/install-from-git.sh | bash -s -- https://github.com/massettc/ESSdataloggerUI.git
 ```
 
-### Step 3: Run the installer
+This single command will:
 
-```bash
-bash deploy/install.sh
-```
-
-The installer will:
-
+- install git if not already present
+- clone the repository to a temp directory
 - install or enable NetworkManager if needed
 - disable dhcpcd if it is still active
-- tell NetworkManager to ignore Docker bridge and veth interfaces so the desktop does not spam connection popups for container networking
+- tell NetworkManager to ignore Docker bridge and veth interfaces
 - copy the app to /opt/pi-network-admin
 - create the Python virtual environment
 - install the Python dependencies
-- install the systemd services
+- install and start the systemd services
 
-### Step 4: Create the runtime configuration
+### Step 2: Set site-specific configuration
 
-Edit the runtime environment file:
+The installer creates `/etc/pi-network-admin/app.env` from the template on first install.
+Open it and set the values that vary per device:
 
 ```bash
 sudo nano /etc/pi-network-admin/app.env
 ```
 
-Set the important values:
+Key values to check:
 
-- PI_ADMIN_SECRET_KEY
-- PI_ADMIN_PORT
-- PI_ADMIN_WIFI_INTERFACE
-- PI_ADMIN_ETHERNET_INTERFACE
-- PI_ADMIN_PRIMARY_CONNECTION_NAME
-- PI_ADMIN_BACKUP_CONNECTION_NAME
+- `PI_ADMIN_WIFI_INTERFACE` — Wi-Fi interface name (default `wlan0`)
+- `PI_ADMIN_ETHERNET_INTERFACE` — Ethernet interface name (default `eth0`)
+- `PI_ADMIN_PRIMARY_CONNECTION_NAME` — NetworkManager connection name for Wi-Fi
+- `PI_ADMIN_BACKUP_CONNECTION_NAME` — NetworkManager connection name for Ethernet
+- `PI_ADMIN_PORT` — app port (default `8080`; do not use port 80)
 
-Note: use a non-privileged port such as 8080 for the app unless you later place nginx or another reverse proxy in front of it. Port 80 usually fails under the unprivileged service account.
+Authentication is disabled by default — the app is open to anyone on the local network.
 
-### Step 5: Create the admin password hash
-
-Generate a password hash:
-
-```bash
-python3 -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('ChangeThisPassword'))"
-```
-
-Copy the output and save it here:
-
-```bash
-sudo nano /etc/pi-network-admin/admin_password.hash
-```
-
-Paste the hash on a single line and save.
-
-### Step 6: Restart the services
+### Step 3: Restart the services
 
 ```bash
 sudo systemctl restart pi-network-admin
 sudo systemctl restart pi-network-failover
+sudo systemctl restart pi-plc-alarm
 ```
 
-### Step 7: Check service status
+### Step 4: Check service status
 
 ```bash
 sudo systemctl status pi-network-admin
 sudo systemctl status pi-network-failover
+sudo systemctl status pi-plc-alarm
 ```
 
-### Step 8: Open the web UI
+### Step 5: Open the web UI
 
 From another device on the same network, browse to:
 
@@ -115,17 +96,13 @@ Replace the port if you changed PI_ADMIN_PORT.
 
 ## 3. Install a specific release version
 
-If you want the Pi to run a specific tagged release instead of the latest code on main:
+Append the ref as a second argument to the one-liner:
 
 ```bash
-cd ~
-git clone https://github.com/massettc/ESSdataloggerUI.git
-cd ESSdataloggerUI
-git checkout v0.1.0
-bash deploy/install.sh
+curl -fsSL https://raw.githubusercontent.com/massettc/ESSdataloggerUI/main/deploy/install-from-git.sh | bash -s -- https://github.com/massettc/ESSdataloggerUI.git v0.3.4
 ```
 
-You can replace v0.1.0 with any later release tag.
+Replace `v0.3.4` with any release tag.
 
 ---
 
@@ -197,15 +174,17 @@ sudo bash deploy/update-from-git.sh v0.1.1
 
 After the app is deployed, verify the following:
 
-1. The web UI opens from the cabinet network.
-2. Login works with the configured admin password.
-3. The dashboard shows the Ethernet and Wi-Fi interface state.
-4. Wi-Fi scan results appear.
-5. A valid Wi-Fi change succeeds.
-6. An invalid Wi-Fi change rolls back cleanly.
-7. The Ethernet page can switch between DHCP and a static IPv4 address cleanly.
-8. The failover service starts and remains active.
-9. A reboot brings both services back automatically.
+1. The web UI opens from the cabinet network without a login prompt.
+2. The dashboard shows the Ethernet and Wi-Fi interface state.
+3. Wi-Fi scan results appear.
+4. A valid Wi-Fi change succeeds.
+5. An invalid Wi-Fi change rolls back cleanly.
+6. The Ethernet page can switch between DHCP and a static IPv4 address cleanly.
+7. The failover service starts and remains active.
+8. The datalogger page shows PLC connection and cloud delivery status.
+9. The PLC alarm service is active (`systemctl status pi-plc-alarm`).
+10. The technician tools page loads and can run a quick command.
+11. A reboot brings all three services back automatically.
 
 ---
 
@@ -214,8 +193,10 @@ After the app is deployed, verify the following:
 ```bash
 sudo systemctl status pi-network-admin
 sudo systemctl status pi-network-failover
+sudo systemctl status pi-plc-alarm
 sudo journalctl -u pi-network-admin -n 100 --no-pager
 sudo journalctl -u pi-network-failover -n 100 --no-pager
+sudo journalctl -u pi-plc-alarm -n 100 --no-pager
 nmcli device status
 ```
 

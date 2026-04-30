@@ -17,9 +17,9 @@ if ! command -v git >/dev/null 2>&1; then
 fi
 
 rm -rf "$WORK_DIR"
-git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$WORK_DIR"
+git clone --depth 1 --branch "$REF" "$REPO_URL" "$WORK_DIR"
 
 cd "$WORK_DIR"
 bash deploy/install.sh
 
-echo "Git-based install completed from $REPO_URL ($BRANCH)."
+echo "Git-based install completed from $REPO_URL ($REF)."

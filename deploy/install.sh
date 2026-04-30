@@ -110,4 +110,4 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now $SERVICE_NAME $WATCHDOG_SERVICE_NAME $PLC_ALARM_SERVICE_NAME
 sudo systemctl restart $SERVICE_NAME $WATCHDOG_SERVICE_NAME $PLC_ALARM_SERVICE_NAME
 
-echo "Install complete. Generate an admin password hash and place it at $CONFIG_DIR/admin_password.hash"
+echo "Install complete."
