@@ -3,7 +3,7 @@ from __future__ import annotations
 from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 
 from app.auth import login_required
-from app.services.datalogger_manager import DataloggerManagerError, ensure_portainer, get_datalogger_status
+from app.services.datalogger_manager import DataloggerManagerError, get_datalogger_status
 from app.services.network_apply import apply_ethernet_settings, apply_wifi_settings
 from app.services.network_manager import (
     ETHERNET_CONNECTION_TYPE,
@@ -168,10 +168,7 @@ def datalogger():
     if request.method == "POST":
         action = request.form.get("action", "").strip()
         try:
-            if action == "portainer":
-                result = ensure_portainer(current_app.config)
-            else:
-                result = {"success": False, "message": "Unknown datalogger action."}
+            result = {"success": False, "message": "Unknown datalogger action."}
         except DataloggerManagerError as exc:
             current_app.logger.exception("datalogger action error")
             flash(str(exc), "error")

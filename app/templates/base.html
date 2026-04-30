@@ -15,6 +15,7 @@
                 <p class="eyebrow">Host name</p>
                 <h1>{{ device_hostname }}</h1>
                 <p class="muted-note sidebar-subtitle">{{ config.APP_NAME }}</p>
+                {% if app_version %}<p class="muted-note sidebar-version">v{{ app_version }}</p>{% endif %}
             </div>
             <nav class="sidebar-nav">
                 <a class="{{ 'active' if request.endpoint == 'network.datalogger' else '' }}" href="{{ url_for('network.datalogger') }}">Datalogger</a>

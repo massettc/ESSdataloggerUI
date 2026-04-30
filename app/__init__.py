@@ -26,7 +26,12 @@ def create_app(config_overrides: dict[str, Any] | None = None) -> Flask:
     @app.context_processor
     def inject_shell_context() -> dict[str, str]:
         configured_hostname = str(app.config.get("DEVICE_HOSTNAME", "")).strip()
-        return {"device_hostname": configured_hostname or socket.gethostname()}
+        version_file = Path(app.root_path).parent / "VERSION"
+        try:
+            app_version = version_file.read_text(encoding="utf-8").strip()
+        except OSError:
+            app_version = ""
+        return {"device_hostname": configured_hostname or socket.gethostname(), "app_version": app_version}
 
     @app.route("/")
     def index():
