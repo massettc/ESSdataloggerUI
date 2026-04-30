@@ -203,7 +203,7 @@ def ensure_portainer(config: dict[str, Any]) -> dict[str, Any]:
         ]
     )
 
-    run_result = _run_docker_command(config, command, check=False)
+    run_result = _run_docker_command(config, command, check=False, timeout_override=120)
     if run_result.returncode != 0:
         return {"success": False, "message": _command_error(run_result, "Unable to install and start Portainer")}
 
@@ -880,13 +880,17 @@ def _run_docker_command(
     config: dict[str, Any],
     args: list[str],
     check: bool = True,
+    timeout_override: int | None = None,
 ) -> subprocess.CompletedProcess[str]:
     command = list(args)
     if config.get("USE_SUDO_FOR_DOCKER", True) and command[0] != config.get("SUDO_BIN", "sudo"):
         command.insert(0, config.get("SUDO_BIN", "sudo"))
         command.insert(1, "-n")
 
-    timeout_seconds = max(1, int(config.get("DATALOGGER_COMMAND_TIMEOUT_SECONDS", config.get("COMMAND_TIMEOUT_SECONDS", 5))))
+    if timeout_override is not None:
+        timeout_seconds = max(1, timeout_override)
+    else:
+        timeout_seconds = max(1, int(config.get("DATALOGGER_COMMAND_TIMEOUT_SECONDS", config.get("COMMAND_TIMEOUT_SECONDS", 5))))
     try:
         result = subprocess.run(command, capture_output=True, text=True, check=False, timeout=timeout_seconds)
     except subprocess.TimeoutExpired:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import threading
+
 from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 
 from app.auth import login_required
@@ -169,7 +171,11 @@ def datalogger():
         action = request.form.get("action", "").strip()
         try:
             if action == "portainer":
-                result = ensure_portainer(current_app.config)
+                config_snapshot = dict(current_app.config)
+                t = threading.Thread(target=ensure_portainer, args=(config_snapshot,), daemon=True)
+                t.start()
+                flash("Portainer install started. This may take a minute — watch the status card below.", "info")
+                return redirect(url_for("network.datalogger"))
             else:
                 result = {"success": False, "message": "Unknown datalogger action."}
         except DataloggerManagerError as exc:
