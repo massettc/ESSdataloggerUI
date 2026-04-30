@@ -26,6 +26,13 @@
     </div>
     <div class="hero-actions">
         <a id="mqtt-ui-link" class="button-link secondary-link" href="{{ datalogger_status.mqtt_ui_url or '#' }}" target="_blank" rel="noopener noreferrer" {% if not datalogger_status.mqtt_ui_url %}hidden{% endif %}>Open MQTT UI</a>
+        <a id="portainer-link" class="button-link secondary-link" href="{{ datalogger_status.portainer_url or '#' }}" target="_blank" rel="noopener noreferrer" {% if not datalogger_status.get('portainer_running') %}hidden{% endif %}>Open Portainer</a>
+        {% if not datalogger_status.get('portainer_running') %}
+        <form method="post" data-busy-label="Starting Portainer…">
+            <input type="hidden" name="action" value="portainer">
+            <button class="secondary" type="submit">{% if datalogger_status.get('portainer_installed') %}Start Portainer{% else %}Install Portainer{% endif %}</button>
+        </form>
+        {% endif %}
     </div>
 </section>
 
