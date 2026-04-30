@@ -5,7 +5,7 @@ import threading
 from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 
 from app.auth import login_required
-from app.services.datalogger_manager import DataloggerManagerError, ensure_portainer, get_datalogger_status
+from app.services.datalogger_manager import DataloggerManagerError, ensure_portainer, get_datalogger_status, install_docker
 from app.services.network_apply import apply_ethernet_settings, apply_wifi_settings
 from app.services.network_manager import (
     ETHERNET_CONNECTION_TYPE,
@@ -170,14 +170,7 @@ def datalogger():
     if request.method == "POST":
         action = request.form.get("action", "").strip()
         try:
-            if action == "portainer":
-                config_snapshot = dict(current_app.config)
-                t = threading.Thread(target=ensure_portainer, args=(config_snapshot,), daemon=True)
-                t.start()
-                flash("Portainer install started. This may take a minute — watch the status card below.", "info")
-                return redirect(url_for("network.datalogger"))
-            else:
-                result = {"success": False, "message": "Unknown datalogger action."}
+            result = {"success": False, "message": "Unknown datalogger action."}
         except DataloggerManagerError as exc:
             current_app.logger.exception("datalogger action error")
             flash(str(exc), "error")
@@ -243,6 +236,18 @@ def system_settings():
                 return redirect(url_for("network.system_settings"))
             elif action == "update":
                 result = run_system_update(current_app.config)
+            elif action == "install_docker":
+                config_snapshot = dict(current_app.config)
+                t = threading.Thread(target=install_docker, args=(config_snapshot,), daemon=True)
+                t.start()
+                flash("Docker install started. This may take a few minutes — refresh the page to check status.", "info")
+                return redirect(url_for("network.system_settings"))
+            elif action == "install_portainer":
+                config_snapshot = dict(current_app.config)
+                t = threading.Thread(target=ensure_portainer, args=(config_snapshot,), daemon=True)
+                t.start()
+                flash("Portainer install started. This may take a minute — the datalogger page will show when it is ready.", "info")
+                return redirect(url_for("network.system_settings"))
             else:
                 result = {"success": False, "message": "Unknown system action."}
         except SystemManagerError as exc:
@@ -258,13 +263,15 @@ def system_settings():
     try:
         system = get_system_summary(current_app.config)
         update_status = get_update_status(current_app.config)
+        datalogger_status = _build_initial_datalogger_status(current_app.config, host=request.host.split(":")[0])
     except SystemManagerError as exc:
         current_app.logger.exception("system view error")
         flash(str(exc), "error")
         system = _default_system_summary()
         update_status = _default_update_status()
+        datalogger_status = _default_datalogger_status()
 
-    return render_template("system.html", system=system, update_status=update_status)
+    return render_template("system.html", system=system, update_status=update_status, datalogger_status=datalogger_status)
 
 
 @network_bp.route("/tools", methods=["GET", "POST"])

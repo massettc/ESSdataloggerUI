@@ -152,6 +152,44 @@ def _set_cached_value(config: dict[str, Any], cache_name: str, value: Any, cache
     return value
 
 
+def install_docker(config: dict[str, Any]) -> dict[str, Any]:
+    """Install Docker Engine via the official convenience script."""
+    if not _is_linux_target():
+        return {"success": False, "message": "Docker install is only available on the Pi target device."}
+
+    sudo_bin = config.get("SUDO_BIN", "sudo")
+    bash_bin = config.get("BASH_BIN", "/bin/bash")
+
+    # Check if Docker is already installed
+    check = subprocess.run(["which", "docker"], capture_output=True, text=True, timeout=5)
+    if check.returncode == 0:
+        return {"success": True, "message": "Docker is already installed on this device."}
+
+    # Download and run the official Docker convenience script
+    script = (
+        "curl -fsSL https://get.docker.com -o /tmp/get-docker.sh && "
+        f"{sudo_bin} {bash_bin} /tmp/get-docker.sh && "
+        f"{sudo_bin} usermod -aG docker pi-network-admin && "
+        f"rm -f /tmp/get-docker.sh"
+    )
+    try:
+        result = subprocess.run(
+            [bash_bin, "-c", script],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=300,
+        )
+    except subprocess.TimeoutExpired:
+        return {"success": False, "message": "Docker install timed out after 5 minutes."}
+
+    if result.returncode != 0:
+        stderr = (result.stderr or "").strip()[:300]
+        return {"success": False, "message": f"Docker install failed: {stderr or 'unknown error'}"}
+
+    return {"success": True, "message": "Docker installed successfully. A service restart is needed before Docker commands work."}
+
+
 def ensure_portainer(config: dict[str, Any]) -> dict[str, Any]:
     if not _is_linux_target():
         return {"success": False, "message": "Portainer control is only available on the Pi target device."}

@@ -135,4 +135,52 @@
         <p class="muted-note">Use this when the cabinet connection path is available and the tech is ready for a short outage.</p>
     </article>
 </section>
+
+<section class="two-column system-layout">
+    <article class="panel">
+        <div class="section-heading">
+            <div>
+                <h3>Docker</h3>
+                <p>Docker is required for the datalogger containers.</p>
+            </div>
+            <span class="status-pill {{ 'status-online' if datalogger_status.get('docker_available') else 'status-warning' }}">
+                <span class="status-dot"></span>
+                {{ 'Installed' if datalogger_status.get('docker_available') else 'Not detected' }}
+            </span>
+        </div>
+        {% if not datalogger_status.get('docker_available') %}
+        <form method="post" data-busy-label="Installing Docker. This may take a few minutes...">
+            <input type="hidden" name="action" value="install_docker">
+            <button type="submit">Install Docker</button>
+        </form>
+        <p class="muted-note">Downloads and runs the official Docker install script. Requires internet access. The service will need a restart afterward.</p>
+        {% else %}
+        <p class="muted-note">Docker is available. Use the datalogger page or technician tools to manage containers.</p>
+        {% endif %}
+    </article>
+
+    <article class="panel">
+        <div class="section-heading">
+            <div>
+                <h3>Portainer</h3>
+                <p>Web-based Docker container management UI.</p>
+            </div>
+            <span class="status-pill {{ 'status-online' if datalogger_status.get('portainer_running') else ('status-neutral' if datalogger_status.get('portainer_installed') else 'status-warning') }}">
+                <span class="status-dot"></span>
+                {{ 'Running' if datalogger_status.get('portainer_running') else ('Stopped' if datalogger_status.get('portainer_installed') else 'Not installed') }}
+            </span>
+        </div>
+        {% if datalogger_status.get('portainer_running') %}
+        <a class="button-link" href="{{ datalogger_status.portainer_url }}" target="_blank" rel="noopener noreferrer">Open Portainer</a>
+        {% elif datalogger_status.get('docker_available') %}
+        <form method="post" data-busy-label="Starting Portainer install...">
+            <input type="hidden" name="action" value="install_portainer">
+            <button type="submit">{{ 'Start Portainer' if datalogger_status.get('portainer_installed') else 'Install Portainer' }}</button>
+        </form>
+        <p class="muted-note">Pulls and starts the Portainer CE container. Requires Docker to be installed first.</p>
+        {% else %}
+        <p class="muted-note">Install Docker first before installing Portainer.</p>
+        {% endif %}
+    </article>
+</section>
 {% endblock %}
