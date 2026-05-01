@@ -7,10 +7,12 @@ from typing import Any
 
 from app.services.network_apply import ensure_connection_active
 from app.services.network_manager import (
+    ETHERNET_CONNECTION_TYPE,
     NetworkManagerError,
     bring_up_connection,
     connect_device,
     get_active_connection,
+    list_connection_profiles,
     reapply_device,
     set_connection_metric,
     set_connection_never_default,
@@ -36,6 +38,7 @@ class FailoverWatchdog:
         primary_healthy = self._interface_is_healthy(self.config["PRIMARY_INTERFACE"], primary_name)
         self.using_backup = self._is_backup_active() and not primary_healthy
         self._configure_route_metrics(prefer_backup=self.using_backup)
+        self._suppress_extra_ethernet_defaults()
         logger.info(
             "watchdog started primary=%s backup=%s target=%s interval=%s using_backup=%s",
             self.config["PRIMARY_INTERFACE"],
@@ -209,3 +212,31 @@ class FailoverWatchdog:
     def _is_backup_active(self) -> bool:
         backup_name = self._configured_connection_name(self.config["BACKUP_INTERFACE"])
         return ensure_connection_active(self.config, self.config["BACKUP_INTERFACE"], backup_name)
+
+    def _suppress_extra_ethernet_defaults(self) -> None:
+        """Set never-default on ethernet connections that aren't the designated backup.
+
+        Prevents secondary ethernet ports (e.g. eth1) from adding a default route
+        and competing with wlan0 or the designated backup for internet traffic.
+        """
+        backup_interface = self.config.get("BACKUP_INTERFACE", "")
+        backup_name = self._configured_connection_name(backup_interface) or ""
+
+        try:
+            profiles = list_connection_profiles(self.config, connection_type=ETHERNET_CONNECTION_TYPE)
+        except NetworkManagerError as exc:
+            logger.warning("unable to list ethernet profiles for suppression: %s", exc)
+            return
+
+        for profile in profiles:
+            if profile["name"] == backup_name or profile["device"] == backup_interface:
+                continue
+            try:
+                set_connection_never_default(self.config, profile["name"], enabled=True)
+                logger.debug("suppressed default route on extra ethernet connection=%s", profile["name"])
+            except NetworkManagerError as exc:
+                logger.warning(
+                    "unable to suppress default route on connection=%s: %s",
+                    profile["name"],
+                    exc,
+                )

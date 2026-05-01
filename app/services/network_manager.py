@@ -284,12 +284,15 @@ def get_connection_ipv4_config(config: dict[str, Any], connection_name: str) -> 
         else:
             address = primary_address
 
+    def _strip_nmcli_unset(val: str) -> str:
+        return "" if val == "--" else val
+
     return {
         "method": method or "auto",
-        "address": address,
-        "prefix": prefix,
-        "gateway": gateway,
-        "dns": dns,
+        "address": _strip_nmcli_unset(address),
+        "prefix": _strip_nmcli_unset(prefix),
+        "gateway": _strip_nmcli_unset(gateway),
+        "dns": _strip_nmcli_unset(dns),
     }
 
 

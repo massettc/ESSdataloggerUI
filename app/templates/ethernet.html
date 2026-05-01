@@ -40,8 +40,8 @@
                 </div>
             </div>
 
-            <label for="gateway">Gateway</label>
-            <input id="gateway" name="gateway" placeholder="192.168.1.1" value="{{ ipv4_config.gateway }}">
+            <label for="gateway">Gateway <span class="muted-note">(optional)</span></label>
+            <input id="gateway" name="gateway" placeholder="e.g. 192.168.0.1" value="{{ ipv4_config.gateway }}">
 
             <label for="dns">DNS servers</label>
             <input id="dns" name="dns" placeholder="8.8.8.8,1.1.1.1" value="{{ ipv4_config.dns }}">
@@ -49,7 +49,7 @@
             <button type="submit">Save Ethernet Settings</button>
         </form>
 
-        <p class="muted-note">When Static is selected, enter the IP address and prefix. Gateway and DNS can be left blank if your network does not need them.</p>
+        <p class="muted-note">When Static is selected, enter the IP address and prefix. Gateway and DNS are optional — leave blank for direct cabinet connections where no router is present. If set, the gateway must be on the same subnet as the IP address.</p>
     </article>
 
     <article class="panel">
