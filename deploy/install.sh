@@ -22,7 +22,16 @@ REPO_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 if ! command -v nmcli >/dev/null 2>&1; then
     echo "NetworkManager (nmcli) not found. Installing..."
     sudo apt-get update -qq
-    sudo apt-get install -y network-manager
+    sudo apt-get install -y network-manager network-manager-gnome
+fi
+
+# Install nm-applet for desktop WiFi icon if a display is present and package is missing.
+# This restores the desktop WiFi menu after switching from dhcpcd to NetworkManager.
+if dpkg-query -W -f='${Status}' network-manager-gnome 2>/dev/null | grep -q "install ok installed"; then
+    true  # already installed
+elif [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
+    echo "Installing network-manager-gnome for desktop WiFi applet..."
+    sudo apt-get install -y network-manager-gnome
 fi
 
 echo "Preflight OK: NetworkManager is present ($(nmcli --version))."
