@@ -76,15 +76,6 @@ sudo -u "$USER_NAME" "$APP_DIR/.venv/bin/pip" install -r "$APP_DIR/requirements.
 if [[ ! -f "$CONFIG_DIR/app.env" ]]; then
     sudo cp "$APP_DIR/config/app.env.example" "$CONFIG_DIR/app.env"
     echo "Created $CONFIG_DIR/app.env from template."
-
-    # Auto-detect the real ethernet interface and patch app.env so the app
-    # doesn't silently use eth0 when the device name is eth1 or enp3s0, etc.
-    DETECTED_ETH=$(ip -o link show | awk -F': ' '{print $2}' | grep -E '^(eth|en)[0-9]' | grep -v '^enx' | head -1 || true)
-    if [[ -n "$DETECTED_ETH" && "$DETECTED_ETH" != "eth0" ]]; then
-        sudo sed -i "s/^PI_ADMIN_ETHERNET_INTERFACE=eth0$/PI_ADMIN_ETHERNET_INTERFACE=$DETECTED_ETH/" "$CONFIG_DIR/app.env"
-        sudo sed -i "s/^PI_ADMIN_BACKUP_INTERFACE=eth0$/PI_ADMIN_BACKUP_INTERFACE=$DETECTED_ETH/" "$CONFIG_DIR/app.env"
-        echo "Detected ethernet interface: $DETECTED_ETH (updated app.env)"
-    fi
 else
     echo "Keeping existing $CONFIG_DIR/app.env"
 fi
