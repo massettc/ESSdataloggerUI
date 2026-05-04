@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import socket
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -161,6 +162,8 @@ class PlcAlarmWorker:
             self._last_written_state = desired_alarm
             write_result = "written"
 
+        self._write_status_registers(settings, status)
+
         return {
             "status": "alarm" if desired_alarm else "normal",
             "alarm_active": desired_alarm,
@@ -196,6 +199,28 @@ class PlcAlarmWorker:
             value,
         )
 
+    def _write_status_registers(self, settings: PlcAlarmSettings, status: dict[str, Any]) -> None:
+        """Write internet online, last push age, and queue size to fixed status registers."""
+        mqtt = status.get("mqtt_logger", {})
+
+        internet_online = 1 if _check_internet() else 0
+
+        age = mqtt.get("last_push_age_seconds")
+        last_push_reg = min(int(age), 65535) if isinstance(age, (int, float)) and age >= 0 else 65535
+
+        queue = mqtt.get("queue_size")
+        queue_reg = min(int(queue), 65535) if isinstance(queue, int) and queue >= 0 else 0
+
+        for address, value in (
+            (1002, internet_online),
+            (1004, last_push_reg),
+            (1006, queue_reg),
+        ):
+            try:
+                write_modbus_register_at(settings, address, value)
+            except PlcAlarmError:
+                logger.warning("Failed to write status register %s", address, exc_info=True)
+
     def _safe_load_settings(self) -> PlcAlarmSettings | None:
         try:
             return load_plc_alarm_settings(self.config)
@@ -205,6 +230,10 @@ class PlcAlarmWorker:
 
 
 def write_modbus_register(settings: PlcAlarmSettings, value: int) -> None:
+    write_modbus_register_at(settings, settings.register_address, value)
+
+
+def write_modbus_register_at(settings: PlcAlarmSettings, address: int, value: int) -> None:
     try:
         from pymodbus.client import ModbusTcpClient
     except ImportError as exc:
@@ -214,8 +243,17 @@ def write_modbus_register(settings: PlcAlarmSettings, value: int) -> None:
     try:
         if not client.connect():
             raise PlcAlarmError(f"Unable to connect to PLC at {settings.host}:{settings.port}")
-        response = client.write_register(address=settings.register_address, value=value, slave=settings.unit_id)
+        response = client.write_register(address=address, value=value, slave=settings.unit_id)
         if response.isError():
-            raise PlcAlarmError(f"PLC write failed for register {settings.register_address}: {response}")
+            raise PlcAlarmError(f"PLC write failed for register {address}: {response}")
     finally:
         client.close()
+
+
+def _check_internet(host: str = "8.8.8.8", port: int = 53, timeout: float = 2.0) -> bool:
+    """Return True if we can open a TCP connection to the internet probe host."""
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
