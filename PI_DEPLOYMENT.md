@@ -100,10 +100,10 @@ Replace the port if you changed PI_ADMIN_PORT.
 Append the ref as a second argument to the one-liner:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/massettc/ESSdataloggerUI/main/deploy/install-from-git.sh | bash -s -- https://github.com/massettc/ESSdataloggerUI.git v0.3.4
+curl -fsSL https://raw.githubusercontent.com/massettc/ESSdataloggerUI/main/deploy/install-from-git.sh | bash -s -- https://github.com/massettc/ESSdataloggerUI.git v0.4.0
 ```
 
-Replace `v0.3.4` with any release tag.
+Replace `v0.4.0` with any release tag.
 
 ---
 
@@ -126,7 +126,7 @@ sudo git config --global --add safe.directory /opt/pi-network-admin
 
 ```bash
 cd /opt/pi-network-admin
-sudo bash deploy/update-from-git.sh v0.1.0
+sudo bash deploy/update-from-git.sh v0.4.0
 ```
 
 This lets you pin the Pi to a known-good version.
@@ -139,7 +139,7 @@ If a newer update causes problems, switch back to the previous tag:
 
 ```bash
 cd /opt/pi-network-admin
-sudo bash deploy/update-from-git.sh v0.1.0
+sudo bash deploy/update-from-git.sh v0.3.4
 ```
 
 Replace the version with whichever tag you want to restore.
@@ -159,14 +159,14 @@ git push
 When you want a formal release:
 
 ```bash
-bash deploy/create-release-tag.sh 0.1.1
+bash deploy/create-release-tag.sh 0.4.1
 ```
 
 Then update the Pi to that exact release:
 
 ```bash
 cd /opt/pi-network-admin
-sudo bash deploy/update-from-git.sh v0.1.1
+sudo bash deploy/update-from-git.sh v0.4.1
 ```
 
 ---
@@ -180,13 +180,16 @@ After the app is deployed, verify the following:
 3. Wi-Fi scan results appear.
 4. A valid Wi-Fi change succeeds.
 5. An invalid Wi-Fi change rolls back cleanly.
-6. The Ethernet page can switch between DHCP and a static IPv4 address cleanly.
-7. The failover service starts and remains active.
+6. The Ethernet page can switch between DHCP and a static IPv4 address cleanly; gateway field shows blank (not `--`) when unset.
+7. The failover service starts and remains active; confirm extra Ethernet interfaces are not stealing the default route.
 8. The datalogger page shows PLC connection and cloud delivery status.
 9. The PLC alarm service is active (`systemctl status pi-plc-alarm`).
-10. The System tab shows correct Docker and Portainer status badges.
-11. The technician tools page loads and can run a quick command.
-12. A reboot brings all three services back automatically.
+10. Confirm Modbus registers are updating: 1000 (alarm), 1002 (internet online), 1004 (last push age sec), 1006 (queue size).
+11. The System tab shows correct Docker and Portainer status badges.
+12. Click **Install update** on the System tab — the service should restart, come back on the new version, and the update log should show "Update complete".
+13. Open the Technician Tools tab, edit `/opt/opsviewer/opsviewer-env.json` with the correct `EDGE_DEVICE_ID` and `EventHub__ConnectionString`, save, then click **Redeploy opsviewer2-edge**.
+14. Confirm the opsviewer2-edge container is running with correct config: `docker inspect opsviewer2-edge | grep -A2 Env`.
+15. A reboot brings all three services back automatically.
 
 ---
 
@@ -206,9 +209,42 @@ If the Pi desktop was showing repeated notifications like `You are now connected
 
 ---
 
-## 9. Notes
+## 9. opsviewer2-edge configuration
+
+The opsviewer2-edge container delivers PLC data to the cloud EventHub. Its config lives at `/opt/opsviewer/opsviewer-env.json` on the Pi. The installer creates this file automatically on first install with placeholder values — you must set the real values before deploying:
+
+```json
+{
+  "EDGE_DEVICE_ID": "ESS-UNIT-XX",
+  "EventHub__ConnectionString": "Endpoint=sb://opsviewer2prodeventhubs.servicebus.windows.net/;SharedAccessKeyName=Publisher;SharedAccessKey=YOUR_KEY==;EntityPath=opsviewer2eventhub",
+  "IMAGE": "opsviewer2/edge:r5"
+}
+```
+
+**Setting the config from the web UI (no terminal needed):**
+
+1. Open **Technician Tools** in the web UI.
+2. Select `/opt/opsviewer/opsviewer-env.json` from the file dropdown.
+3. Edit `EDGE_DEVICE_ID` and `EventHub__ConnectionString` — paste the full connection string on a **single line** with no line breaks.
+4. Click **Save**.
+5. Click the **Redeploy opsviewer2-edge** button to recreate the container with the new config.
+
+> The connection string ends with `==;EntityPath=opsviewer2eventhub` — both `=` signs are normal base64 padding and must be included.
+
+**Verify the container is running correctly:**
+
+```bash
+docker ps | grep opsviewer2-edge
+docker logs opsviewer2-edge --tail 50
+```
+
+---
+
+## 10. Notes
 
 - The app keeps the runtime environment file in `/etc/pi-network-admin/app.env` so normal updates do not overwrite your live settings.
+- `technician_commands.json` is refreshed from the repo on every update so new tech tool buttons are always deployed.
+- Updates launched from the System tab use `systemd-run --no-block` to run in an isolated cgroup — the update script will continue running even as the web service restarts mid-update.
 - Use tagged releases for field deployments when you want a stable, repeatable version.
 - Keep Ethernet connected during first setup so the Pi stays reachable if Wi-Fi is not configured correctly.
 - **Dataplicity:** Install manually from a terminal on the Pi using the one-liner from your Dataplicity dashboard (format: `sudo curl -s https://www.dataplicity.com/xxxxxxxx.py | sudo python`). This is a one-time per-device step.

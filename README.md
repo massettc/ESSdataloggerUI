@@ -6,11 +6,15 @@ Local technician web UI for a Raspberry Pi datalogger. The ESSdataloggerUI app l
 
 - Dashboard with interface state, active connection name, IP, gateway, and DNS
 - Wi-Fi workflow with scan, select, password entry, connect, verification, and rollback to previous profile
-- Ethernet profile selection plus DHCP or static IPv4 configuration with verification and rollback
-- Background watchdog service that probes upstream connectivity, promotes the configured primary interface, and fails over to the backup interface when needed
-- Optional PLC alarm worker that writes a Modbus holding register when cloud delivery is unhealthy for a configurable duration
-- System tab: hostname management, disk usage, git-based app updates, one-click Docker install, one-click Portainer install/start, one-click Dataplicity install
-- Technician Tools tab: live terminal output for saved and custom commands
+- Ethernet profile selection plus DHCP or static IPv4 configuration with verification and rollback; gateway field normalised (nmcli `--` sentinel stripped)
+- Background watchdog service that probes upstream connectivity, promotes the configured primary interface, and fails over to the backup interface when needed; suppresses extra Ethernet interfaces from stealing the default route
+- PLC alarm worker that writes a Modbus holding register (reg 1000) when cloud delivery is unhealthy for a configurable duration, plus three live status registers every poll cycle:
+  - **1002** — internet online (1 = reachable, 0 = offline)
+  - **1004** — seconds since last opsviewer push (65535 if unknown)
+  - **1006** — opsviewer queue depth (buffered records pending upload)
+- opsviewer2-edge Docker container managed from the web UI: edit `EDGE_DEVICE_ID` and `EventHub__ConnectionString` in the JSON editor on the Technician Tools tab, then click **Redeploy opsviewer2-edge** to recreate the container with the new config
+- System tab: hostname management, disk usage, git-based app updates (isolated via `systemd-run` so the update survives the service restart), one-click Docker install, one-click Portainer install/start, one-click Dataplicity install
+- Technician Tools tab: live terminal output for saved and custom commands; JSON file editor for runtime config files
 - File-based audit logging
 - Deployment scaffolding for systemd and restricted sudo access to `nmcli`
 - Authentication disabled by default (open LAN access) — enable with `PI_ADMIN_AUTH_ENABLED=true`
@@ -69,19 +73,19 @@ sudo bash deploy/update-from-git.sh main
 
 Pin to a specific release:
 ```bash
-sudo bash deploy/update-from-git.sh v0.3.4
+sudo bash deploy/update-from-git.sh v0.4.0
 ```
 
 ## Versioned release workflow
 
 1. Make and test your changes locally.
 2. Commit and push them to GitHub.
-3. When you want a deployable milestone, create and push an annotated release tag such as `v0.1.0`:
-   - manual: `git tag -a v0.1.0 -m "Release v0.1.0" && git push origin v0.1.0`
-   - helper script: `bash deploy/create-release-tag.sh 0.1.0`
+3. When you want a deployable milestone, create and push an annotated release tag such as `v0.4.0`:
+   - manual: `git tag -a v0.4.0 -m "Release v0.4.0" && git push origin v0.4.0`
+   - helper script: `bash deploy/create-release-tag.sh 0.4.0`
 4. Install or update the Pi to that exact version:
-   - fresh install: `bash deploy/install-from-git.sh <repo-url> v0.1.0`
-   - existing install: `sudo bash deploy/update-from-git.sh v0.1.0`
+   - fresh install: `bash deploy/install-from-git.sh <repo-url> v0.4.0`
+   - existing install: `sudo bash deploy/update-from-git.sh v0.4.0`
 5. If you want the newest development state instead, use `main` as the ref.
 
 The current repository version marker is stored in `VERSION`.
@@ -91,10 +95,14 @@ The current repository version marker is stored in `VERSION`.
 1. Log in from the cabinet LAN (or confirm UI is accessible if auth is disabled).
 2. Confirm the dashboard shows `eth0` and `wlan0` state.
 3. Open the Wi-Fi page and verify SSIDs appear.
-4. Open the Ethernet page and verify saved Ethernet profiles appear.
+4. Open the Ethernet page and verify saved Ethernet profiles appear; confirm gateway field shows blank (not `--`) when unset.
 5. Attempt a valid Wi-Fi change while Ethernet remains connected.
 6. Attempt an invalid password and confirm the old Wi-Fi connection is restored.
 7. Disconnect the primary link or block the watchdog target and confirm the backup profile is activated.
 8. Restore the primary link and confirm the watchdog promotes it again.
 9. Open the System tab and verify Docker and Portainer status badges reflect the real device state.
-10. Reboot and confirm all three services (`pi-network-admin`, `pi-network-failover`, `pi-plc-alarm`) start automatically.
+10. Click **Install update** and confirm the service restarts and comes back on the new version.
+11. Open Technician Tools, edit `/opt/opsviewer/opsviewer-env.json` with the correct `EDGE_DEVICE_ID` and `EventHub__ConnectionString`, save, then click **Redeploy opsviewer2-edge**.
+12. Verify opsviewer2-edge container is running with the new config (`docker inspect opsviewer2-edge`).
+13. Confirm PLC alarm registers: 1000 (alarm), 1002 (internet), 1004 (last push age), 1006 (queue) are updating.
+14. Reboot and confirm all three services (`pi-network-admin`, `pi-network-failover`, `pi-plc-alarm`) start automatically.
