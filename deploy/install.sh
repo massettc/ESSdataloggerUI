@@ -113,6 +113,30 @@ if ! systemctl is-active --quiet NetworkManager; then
     sudo systemctl enable --now NetworkManager
 fi
 sudo systemctl restart NetworkManager
+sudo chmod +x "$APP_DIR/deploy/opsviewer-redeploy.sh"
+
+# ── OpsViewer config directory ──
+# Create /opt/opsviewer and seed opsviewer-env.json if not already present.
+# The technician edits this file via the JSON editor to set EDGE_DEVICE_ID and
+# the EventHub connection string, then runs "Redeploy opsviewer2-edge" in tech tools.
+sudo mkdir -p /opt/opsviewer
+sudo chown "$USER_NAME:$USER_NAME" /opt/opsviewer
+if [[ ! -f /opt/opsviewer/opsviewer-env.json ]]; then
+    echo '{"EDGE_DEVICE_ID":"ESS-UNIT-XX","EventHub__ConnectionString":"Endpoint=sb://opsviewer2prodeventhubs.servicebus.windows.net/;SharedAccessKeyName=Publisher;SharedAccessKey=REPLACE_ME"}' \
+        | sudo tee /opt/opsviewer/opsviewer-env.json >/dev/null
+    sudo chown "$USER_NAME:$USER_NAME" /opt/opsviewer/opsviewer-env.json
+    sudo chmod 640 /opt/opsviewer/opsviewer-env.json
+    echo "Created /opt/opsviewer/opsviewer-env.json — edit EDGE_DEVICE_ID and EventHub key before deploying."
+else
+    echo "Keeping existing /opt/opsviewer/opsviewer-env.json"
+fi
+
+# Add opsviewer-env.json to JSON_EDITOR_PATHS in existing app.env if not already present.
+if ! sudo grep -q 'opsviewer-env.json' "$CONFIG_DIR/app.env" 2>/dev/null; then
+    sudo sed -i 's|PI_ADMIN_JSON_EDITOR_PATHS=\(.*\)|\1,/opt/opsviewer/opsviewer-env.json|' "$CONFIG_DIR/app.env"
+    echo "Added /opt/opsviewer/opsviewer-env.json to PI_ADMIN_JSON_EDITOR_PATHS."
+fi
+
 sudo cp "$APP_DIR/config/sudoers.pi-network-admin" /etc/sudoers.d/pi-network-admin
 sudo chmod 440 /etc/sudoers.d/pi-network-admin
 sudo cp "$APP_DIR/systemd/$SERVICE_NAME" /etc/systemd/system/$SERVICE_NAME
