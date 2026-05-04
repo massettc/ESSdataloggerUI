@@ -83,6 +83,11 @@ if ! sudo grep -q '^PI_ADMIN_BASH_BIN=' "$CONFIG_DIR/app.env"; then
     echo 'PI_ADMIN_BASH_BIN=/bin/bash' | sudo tee -a "$CONFIG_DIR/app.env" >/dev/null
     echo "Added PI_ADMIN_BASH_BIN to $CONFIG_DIR/app.env"
 fi
+if ! sudo grep -q '^PI_ADMIN_JSON_EDITOR_PATHS=' "$CONFIG_DIR/app.env"; then
+    echo 'PI_ADMIN_JSON_EDITOR_PATHS=/var/usr/plcreader/settings.json,/etc/pi-network-admin/plc_alarm.json,/opt/opsviewer/opsviewer-env.json' \
+        | sudo tee -a "$CONFIG_DIR/app.env" >/dev/null
+    echo "Added PI_ADMIN_JSON_EDITOR_PATHS to $CONFIG_DIR/app.env"
+fi
 if [[ ! -f "$CONFIG_DIR/plc_alarm.json" ]]; then
     sudo cp "$APP_DIR/config/plc_alarm.json" "$CONFIG_DIR/plc_alarm.json"
     echo "Created $CONFIG_DIR/plc_alarm.json from template."
@@ -137,12 +142,6 @@ if [[ ! -f /opt/opsviewer/opsviewer-env.json ]]; then
     echo "Created /opt/opsviewer/opsviewer-env.json — edit EDGE_DEVICE_ID and EventHub key before deploying."
 else
     echo "Keeping existing /opt/opsviewer/opsviewer-env.json"
-fi
-
-# Add opsviewer-env.json to JSON_EDITOR_PATHS in existing app.env if not already present.
-if ! sudo grep -q 'opsviewer-env.json' "$CONFIG_DIR/app.env" 2>/dev/null; then
-    sudo sed -i 's|PI_ADMIN_JSON_EDITOR_PATHS=\(.*\)|\1,/opt/opsviewer/opsviewer-env.json|' "$CONFIG_DIR/app.env"
-    echo "Added /opt/opsviewer/opsviewer-env.json to PI_ADMIN_JSON_EDITOR_PATHS."
 fi
 
 sudo cp "$APP_DIR/config/sudoers.pi-network-admin" /etc/sudoers.d/pi-network-admin
