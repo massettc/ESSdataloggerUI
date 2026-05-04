@@ -278,11 +278,29 @@ def save_technician_json_file(config: dict[str, Any], file_id: str, content: str
             parsed = json.loads(raw_content)
         except json.JSONDecodeError as exc:
             return {"success": False, "message": f"Please enter valid JSON before saving: {exc.msg}."}
-        output_path.write_text(json.dumps(parsed, indent=2) + "\n", encoding="utf-8")
-        return {"success": True, "message": f"Saved JSON file {output_path.name}."}
+        raw_content = json.dumps(parsed, indent=2) + "\n"
 
-    output_path.write_text(raw_content, encoding="utf-8")
-    return {"success": True, "message": f"Saved file {output_path.name}."}
+    try:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(raw_content, encoding="utf-8")
+    except PermissionError:
+        # Fall back to sudo tee for paths the service account cannot write directly
+        # (e.g. /var/usr/plcreader/settings.json owned by another user/container).
+        sudo_bin = config.get("SUDO_BIN", "sudo")
+        use_sudo = config.get("USE_SUDO_FOR_SYSTEM", True)
+        if not use_sudo:
+            return {"success": False, "message": f"Permission denied writing {output_path.name}."}
+        result = subprocess.run(
+            [sudo_bin, "-n", "tee", str(output_path)],
+            input=raw_content,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            return {"success": False, "message": f"Permission denied writing {output_path.name} (even with elevated access)."}
+
+    return {"success": True, "message": f"Saved {output_path.name}."}
 
 
 def start_technician_command(config: dict[str, Any], command_id: str) -> dict[str, Any]:
