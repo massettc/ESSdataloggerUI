@@ -135,7 +135,7 @@ sudo chmod +x "$APP_DIR/deploy/opsviewer-redeploy.sh"
 sudo mkdir -p /opt/opsviewer
 sudo chown "$USER_NAME:$USER_NAME" /opt/opsviewer
 if [[ ! -f /opt/opsviewer/opsviewer-env.json ]]; then
-    echo '{"EDGE_DEVICE_ID":"ESS-UNIT-XX","EventHub__ConnectionString":"Endpoint=sb://opsviewer2prodeventhubs.servicebus.windows.net/;SharedAccessKeyName=Publisher;SharedAccessKey=REPLACE_ME"}' \
+    echo '{"EDGE_DEVICE_ID":"ESS-UNIT-XX","EventHub__ConnectionString":"Endpoint=sb://opsviewer2prodeventhubs.servicebus.windows.net/;SharedAccessKeyName=Publisher;SharedAccessKey=REPLACE_ME;EntityPath=opsviewer2eventhub","IMAGE":"opsviewer2/edge:r5"}' \
         | sudo tee /opt/opsviewer/opsviewer-env.json >/dev/null
     sudo chown "$USER_NAME:$USER_NAME" /opt/opsviewer/opsviewer-env.json
     sudo chmod 640 /opt/opsviewer/opsviewer-env.json
