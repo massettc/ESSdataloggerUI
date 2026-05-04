@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import shutil
 import socket
 import subprocess
@@ -162,10 +163,20 @@ def run_system_update(config: dict[str, Any]) -> dict[str, Any]:
     _write_update_state(config, "in-progress", f"Installing updates from {ref}...")
 
     bash_bin = config.get("BASH_BIN", "bash")
-    command = _build_command_with_optional_sudo(config, [bash_bin, str(update_script), ref], privileged=True)
+
     with open(log_path, "a", encoding="utf-8") as log_handle:
         log_handle.write("\n=== Update requested from web UI ===\n")
-        subprocess.Popen(command, stdout=log_handle, stderr=subprocess.STDOUT, close_fds=True, start_new_session=True)
+
+    # Launch the update inside a new transient systemd unit (its own cgroup) so that
+    # when install.sh calls "systemctl restart pi-network-admin", systemd does not
+    # kill this subprocess along with the rest of the service's cgroup.
+    shell_cmd = (
+        f"{shlex.quote(bash_bin)} {shlex.quote(str(update_script))} {shlex.quote(ref)}"
+        f" >> {shlex.quote(str(log_path))} 2>&1"
+    )
+    command = ["sudo", "systemd-run", "--no-block", "--unit=pi-network-admin-update",
+               "bash", "-c", shell_cmd]
+    subprocess.Popen(command, close_fds=True)
 
     return {
         "success": True,
