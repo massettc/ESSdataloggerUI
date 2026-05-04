@@ -95,6 +95,12 @@ if [[ ! -f "$CONFIG_DIR/technician_commands.json" ]]; then
 else
     echo "Keeping existing $CONFIG_DIR/technician_commands.json"
 fi
+
+# Ensure the service account can read and write all files in CONFIG_DIR
+# (plc_alarm.json, technician_commands.json, app.env are all edited via the web UI).
+sudo chown -R "$USER_NAME:$USER_NAME" "$CONFIG_DIR"
+sudo chmod 750 "$CONFIG_DIR"
+sudo chmod 640 "$CONFIG_DIR"/*.json "$CONFIG_DIR"/*.env "$CONFIG_DIR/app.env" 2>/dev/null || true
 sudo cp "$APP_DIR/config/networkmanager-unmanaged-docker.conf" "$NM_CONF_DIR/$NM_DOCKER_UNMANAGED_CONF"
 sudo cp "$APP_DIR/deploy/set-hostname.sh" "$HOSTNAME_HELPER_PATH"
 sudo chmod 755 "$HOSTNAME_HELPER_PATH"
