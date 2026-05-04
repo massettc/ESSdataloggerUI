@@ -165,7 +165,7 @@ def run_system_update(config: dict[str, Any]) -> dict[str, Any]:
     command = _build_command_with_optional_sudo(config, [bash_bin, str(update_script), ref], privileged=True)
     with open(log_path, "a", encoding="utf-8") as log_handle:
         log_handle.write("\n=== Update requested from web UI ===\n")
-        subprocess.Popen(command, stdout=log_handle, stderr=subprocess.STDOUT, close_fds=True)
+        subprocess.Popen(command, stdout=log_handle, stderr=subprocess.STDOUT, close_fds=True, start_new_session=True)
 
     return {
         "success": True,

@@ -94,12 +94,8 @@ if [[ ! -f "$CONFIG_DIR/plc_alarm.json" ]]; then
 else
     echo "Keeping existing $CONFIG_DIR/plc_alarm.json"
 fi
-if [[ ! -f "$CONFIG_DIR/technician_commands.json" ]]; then
-    sudo cp "$APP_DIR/config/technician_commands.json" "$CONFIG_DIR/technician_commands.json"
-    echo "Created $CONFIG_DIR/technician_commands.json from template."
-else
-    echo "Keeping existing $CONFIG_DIR/technician_commands.json"
-fi
+sudo cp "$APP_DIR/config/technician_commands.json" "$CONFIG_DIR/technician_commands.json"
+echo "Updated $CONFIG_DIR/technician_commands.json from repo."
 
 # Ensure the service account owns and can write all files in CONFIG_DIR.
 # Dir is 755 so the pi user (and other admins) can still read config for debugging.
