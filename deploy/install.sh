@@ -59,7 +59,7 @@ if [[ -d /etc/cloud || -d "$CI_CFG_DIR" ]]; then
 fi
 
 REPO_REALPATH=$(cd -- "$REPO_DIR" && pwd -P)
-APP_REALPATH=$(cd -- "$APP_DIR" && pwd -P)
+APP_REALPATH=$(sudo bash -c "cd -- '$APP_DIR' && pwd -P")
 
 if [[ "$REPO_REALPATH" != "$APP_REALPATH" ]]; then
     sudo cp -a "$REPO_DIR"/. "$APP_DIR/"
