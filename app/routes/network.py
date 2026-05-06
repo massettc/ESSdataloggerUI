@@ -170,7 +170,12 @@ def datalogger():
     if request.method == "POST":
         action = request.form.get("action", "").strip()
         try:
-            result = {"success": False, "message": "Unknown datalogger action."}
+            if action == "portainer":
+                result = ensure_portainer(current_app.config)
+            elif action == "install_docker":
+                result = install_docker(current_app.config)
+            else:
+                result = {"success": False, "message": "Unknown datalogger action."}
         except DataloggerManagerError as exc:
             current_app.logger.exception("datalogger action error")
             flash(str(exc), "error")

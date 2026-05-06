@@ -193,6 +193,10 @@ def test_set_connection_ipv4_config_uses_nmcli_modify(monkeypatch):
         "192.168.50.1",
         "ipv4.dns",
         "8.8.8.8,1.1.1.1",
+        "ipv4.never-default",
+        "no",
+        "ipv6.never-default",
+        "no",
     ]]
 
 

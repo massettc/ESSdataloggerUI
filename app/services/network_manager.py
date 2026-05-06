@@ -339,6 +339,11 @@ def set_connection_ipv4_config(
                 dns,
             ]
         )
+        # If a gateway is provided, ensure never-default is cleared so NM actually
+        # stores the gateway. When never-default=yes is present (e.g. from a netplan
+        # migration), NetworkManager 1.40+ silently discards the gateway value.
+        if gateway:
+            command.extend(["ipv4.never-default", "no", "ipv6.never-default", "no"])
     else:
         command.extend(["ipv4.addresses", "", "ipv4.gateway", "", "ipv4.dns", ""])
 
