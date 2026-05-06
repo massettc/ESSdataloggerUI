@@ -16,6 +16,17 @@ WIFI_CONNECTION_TYPE = "802-11-wireless"
 ETHERNET_CONNECTION_TYPE = "802-3-ethernet"
 _CACHE: dict[tuple[str, str], tuple[float, Any]] = {}
 
+# NM 1.42+ uses short type names ("ethernet", "wifi") instead of "802-3-ethernet" / "802-11-wireless"
+_CONNECTION_TYPE_ALIASES: dict[str, set[str]] = {
+    ETHERNET_CONNECTION_TYPE: {ETHERNET_CONNECTION_TYPE, "ethernet"},
+    WIFI_CONNECTION_TYPE: {WIFI_CONNECTION_TYPE, "wifi", "wireless"},
+}
+
+
+def _type_matches(profile_type: str, connection_type: str) -> bool:
+    aliases = _CONNECTION_TYPE_ALIASES.get(connection_type, {connection_type})
+    return profile_type in aliases
+
 
 def get_dashboard_state(config: dict[str, Any]) -> dict[str, Any]:
     cache_ttl = _get_cache_ttl_seconds(config, "STATUS_CACHE_SECONDS")
@@ -108,7 +119,7 @@ def list_connection_profiles(
             continue
 
         name, profile_type, device = parts[0], parts[1], ":".join(parts[2:])
-        if connection_type and profile_type != connection_type:
+        if connection_type and not _type_matches(profile_type, connection_type):
             continue
 
         normalized_device = "" if device == "--" else device
@@ -152,7 +163,7 @@ def get_active_connection(
         name, device, active_type = parts[0], parts[1], parts[2]
         if device != interface_name:
             continue
-        if connection_type and active_type != connection_type:
+        if connection_type and not _type_matches(active_type, connection_type):
             continue
         return {"name": name, "device": device, "type": active_type}
 

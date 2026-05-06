@@ -142,6 +142,22 @@ def test_list_connection_profiles_filters_by_type_and_interface(monkeypatch):
     assert profiles[1]["device"] == ""
 
 
+def test_list_connection_profiles_accepts_short_type_names(monkeypatch):
+    """NM 1.42+ outputs short type names like 'ethernet' instead of '802-3-ethernet'."""
+    sample_output = "wifi profile:wifi:wlan0\nnetplan-eth0:ethernet:eth0\nSpare LAN:ethernet:--\n"
+
+    monkeypatch.setattr(network_manager, "_run_nmcli", lambda config, arguments: sample_output)
+
+    profiles = network_manager.list_connection_profiles(
+        {"ETHERNET_INTERFACE": "eth0"},
+        connection_type=network_manager.ETHERNET_CONNECTION_TYPE,
+        interface_name="eth0",
+    )
+
+    assert [profile["name"] for profile in profiles] == ["netplan-eth0", "Spare LAN"]
+    assert profiles[0]["active"] is True
+
+
 def test_get_active_ethernet_connection_returns_matching_profile(monkeypatch):
     sample_output = "Office WiFi:wlan0:802-11-wireless\nWired connection 1:eth0:802-3-ethernet\n"
 
@@ -150,6 +166,18 @@ def test_get_active_ethernet_connection_returns_matching_profile(monkeypatch):
     active = network_manager.get_active_ethernet_connection({"ETHERNET_INTERFACE": "eth0"})
 
     assert active == {"name": "Wired connection 1", "device": "eth0", "type": "802-3-ethernet"}
+
+
+def test_get_active_ethernet_connection_accepts_short_type_name(monkeypatch):
+    """NM 1.42+ may return 'ethernet' instead of '802-3-ethernet' in active connection output."""
+    sample_output = "Office WiFi:wlan0:wifi\nnetplan-eth0:eth0:ethernet\n"
+
+    monkeypatch.setattr(network_manager, "_run_nmcli", lambda config, arguments: sample_output)
+
+    active = network_manager.get_active_ethernet_connection({"ETHERNET_INTERFACE": "eth0"})
+
+    assert active is not None
+    assert active["name"] == "netplan-eth0"
 
 
 def test_get_connection_ipv4_config_parses_manual_values(monkeypatch):
