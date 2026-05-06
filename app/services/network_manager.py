@@ -253,9 +253,12 @@ def persist_connection_to_etc(config: dict[str, Any], connection_name: str) -> N
     dest_file = f"{dest_dir}/{os.path.basename(filename)}"
     sudo_bin = config.get("SUDO_BIN", "sudo")
     try:
+        with open(filename, "rb") as fh:
+            file_content = fh.read()
+        # Use tee (allowed in sudoers) instead of cp to write the keyfile
         subprocess.run(
-            [sudo_bin, "-n", "cp", "--", filename, dest_file],
-            check=True, capture_output=True, timeout=10,
+            [sudo_bin, "-n", "tee", dest_file],
+            input=file_content, check=True, capture_output=True, timeout=10,
         )
         subprocess.run(
             [sudo_bin, "-n", "chmod", "600", dest_file],
@@ -263,8 +266,9 @@ def persist_connection_to_etc(config: dict[str, Any], connection_name: str) -> N
         )
         # Reload so NM picks up the /etc/ copy; it will then ignore the /run/ duplicate
         _run_nmcli(config, ["connection", "reload"])
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
-        pass  # Best-effort: if it fails, the in-memory modify still took effect
+        _nm_logger.info("persisted connection %r to %s", connection_name, dest_file)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError, OSError) as exc:
+        _nm_logger.warning("persist_connection_to_etc failed for %r: %s", connection_name, exc)
 
 
 def bring_up_connection(config: dict[str, Any], connection_name: str) -> None:
