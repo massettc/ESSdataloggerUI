@@ -199,6 +199,19 @@ def is_ethernet_connected(config: dict[str, Any], expected_name: str | None = No
     )
 
 
+def set_connection_autoconnect(config: dict[str, Any], connection_name: str, enabled: bool) -> None:
+    _run_nmcli(
+        config,
+        [
+            "connection",
+            "modify",
+            connection_name,
+            "connection.autoconnect",
+            "yes" if enabled else "no",
+        ],
+    )
+
+
 def bring_up_connection(config: dict[str, Any], connection_name: str) -> None:
     _run_nmcli(config, ["connection", "up", connection_name])
 
