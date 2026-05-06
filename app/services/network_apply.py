@@ -87,7 +87,11 @@ def apply_ethernet_settings(
             persist_connection_to_etc(config, target_connection)
             config_saved = True
 
-        if target_connection and config.get("PREFER_WLAN_FOR_INTERNET", False):
+        # When a manual gateway is explicitly provided, keep ethernet eligible for
+        # default route so NetworkManager does not discard the gateway.
+        prefer_wlan = config.get("PREFER_WLAN_FOR_INTERNET", False)
+        should_mark_non_default = prefer_wlan and not (ip_method == "manual" and gateway)
+        if target_connection and should_mark_non_default:
             set_connection_never_default(config, target_connection, True)
 
         try:

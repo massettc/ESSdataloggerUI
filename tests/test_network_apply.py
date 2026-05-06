@@ -72,6 +72,38 @@ def test_apply_ethernet_settings_marks_ethernet_non_default_when_wifi_preferred(
     assert calls == [("Wired connection 1", True)]
 
 
+def test_apply_ethernet_settings_keeps_default_route_when_manual_gateway_is_set(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(network_apply, "get_active_ethernet_connection", lambda config: {"name": "Wired connection 1", "device": "eth0"})
+    monkeypatch.setattr(network_apply, "get_connection_ipv4_config", lambda config, connection_name: {
+        "method": "auto",
+        "address": "",
+        "prefix": "",
+        "gateway": "",
+        "dns": "",
+    })
+    monkeypatch.setattr(network_apply, "set_connection_ipv4_config", lambda config, **kwargs: None)
+    monkeypatch.setattr(network_apply, "set_connection_autoconnect", lambda config, name, enabled: None)
+    monkeypatch.setattr(network_apply, "persist_connection_to_etc", lambda config, name: None)
+    monkeypatch.setattr(network_apply, "set_connection_never_default", lambda config, connection_name, enabled: calls.append((connection_name, enabled)))
+    monkeypatch.setattr(network_apply, "bring_up_connection", lambda config, name: None)
+    monkeypatch.setattr(network_apply, "_verify_connection", lambda config, interface_name, connection_type, expected_name=None: True)
+
+    result = network_apply.apply_ethernet_settings(
+        {"ETHERNET_INTERFACE": "eth0", "VERIFY_TIMEOUT_SECONDS": 1, "VERIFY_POLL_SECONDS": 0.01, "PREFER_WLAN_FOR_INTERNET": True},
+        connection_name="Wired connection 1",
+        ip_method="manual",
+        ip_address="192.168.0.11",
+        ip_prefix="24",
+        gateway="192.168.0.1",
+        dns="8.8.8.8",
+    )
+
+    assert result["success"] is True
+    assert calls == []
+
+
 def test_apply_ethernet_settings_rolls_back_on_failure(monkeypatch):
     calls = []
 
