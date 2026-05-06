@@ -88,7 +88,9 @@ def test_apply_ethernet_settings_rolls_back_on_failure(monkeypatch):
     assert calls == ["Static LAN", "Wired connection 1"]
 
 
-def test_apply_ethernet_settings_updates_static_ipv4_and_restores_previous_profile(monkeypatch):
+def test_apply_ethernet_settings_saves_config_even_when_verify_times_out(monkeypatch):
+    """When config is saved but the connection doesn't verify in time, settings are kept
+    (not rolled back) and success=True is returned so the gateway persists."""
     calls = []
 
     monkeypatch.setattr(network_apply, "get_active_ethernet_connection", lambda config: {"name": "Wired connection 1", "device": "eth0"})
@@ -115,12 +117,11 @@ def test_apply_ethernet_settings_updates_static_ipv4_and_restores_previous_profi
         dns="8.8.8.8",
     )
 
-    assert result["success"] is False
-    assert calls[0][0] == "modify"
-    assert calls[0][1]["method"] == "manual"
-    assert calls[-2][0] == "modify"
-    assert calls[-2][1]["method"] == "auto"
-    assert calls[-1] == ("up", "Wired connection 1")
+    # Config was saved — should NOT be rolled back, should return success=True
+    assert result["success"] is True
+    modify_calls = [c for c in calls if c[0] == "modify"]
+    assert len(modify_calls) == 1, "Should only have one modify call (no restore)"
+    assert modify_calls[0][1]["gateway"] == "192.168.2.1"
 
 
 def test_apply_ethernet_settings_saves_config_when_device_unavailable(monkeypatch):

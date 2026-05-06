@@ -122,9 +122,18 @@ def apply_ethernet_settings(
         raise NetworkManagerError("The Ethernet connection did not become active before timeout.")
     except NetworkManagerError as exc:
         logger.warning("ethernet change failed for connection=%s: %s", requested_connection, exc)
-        if target_connection and previous_ipv4_config is not None:
+        if not config_saved and target_connection and previous_ipv4_config is not None:
             _restore_ipv4_config(config, target_connection, previous_ipv4_config)
         _rollback(config, previous_connection)
+        if config_saved:
+            return {
+                "success": True,
+                "message": (
+                    f"Settings saved for {requested_connection}. "
+                    "The connection could not be verified as active — check that the cable is connected. "
+                    "Settings are stored and will apply when the connection comes up."
+                ),
+            }
         return {
             "success": False,
             "message": f"Unable to activate Ethernet connection {requested_connection}. The previous Ethernet profile was restored if available.",
