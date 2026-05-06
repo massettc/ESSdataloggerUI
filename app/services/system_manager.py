@@ -58,16 +58,6 @@ def get_update_status(config: dict[str, Any], refresh: bool = False) -> dict[str
         status["error"] = f"Git checkout not found at {repo_path}."
         return status
 
-    if refresh:
-        fetch_result = _run_command([git_bin, "-C", str(repo_path), "fetch", "origin", "--prune"], check=False)
-        if fetch_result.returncode != 0:
-            status["error"] = _command_error(fetch_result, "Unable to contact the git remote")
-            _write_update_state(config, "error", status["error"])
-            return status
-        _write_update_state(config, "idle", "Update check finished.")
-        status["state"] = "idle"
-        status["message"] = "Update check finished."
-
     branch_result = _run_command([git_bin, "-C", str(repo_path), "rev-parse", "--abbrev-ref", "HEAD"], check=False)
     if branch_result.returncode == 0:
         status["current_branch"] = branch_result.stdout.strip() or "main"
@@ -94,6 +84,20 @@ def get_update_status(config: dict[str, Any], refresh: bool = False) -> dict[str
         status["current_branch"] = f"detached ({compare_branch})"
     else:
         compare_branch = status["current_branch"]
+
+    if refresh:
+        # Fetch the specific branch so origin/<branch> ref is reliably created on shallow clones
+        fetch_result = _run_command(
+            [git_bin, "-C", str(repo_path), "fetch", "origin", compare_branch],
+            check=False,
+        )
+        if fetch_result.returncode != 0:
+            status["error"] = _command_error(fetch_result, "Unable to contact the git remote")
+            _write_update_state(config, "error", status["error"])
+            return status
+        _write_update_state(config, "idle", "Update check finished.")
+        status["state"] = "idle"
+        status["message"] = "Update check finished."
 
     behind_result = _run_command(
         [git_bin, "-C", str(repo_path), "rev-list", "--count", f"HEAD..origin/{compare_branch}"],
