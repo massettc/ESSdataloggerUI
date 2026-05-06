@@ -232,6 +232,38 @@ def set_connection_autoconnect(config: dict[str, Any], connection_name: str, ena
     )
 
 
+def persist_connection_to_etc(config: dict[str, Any], connection_name: str) -> None:
+    """If the connection keyfile lives under /run/ (netplan-managed), copy it to
+    /etc/NetworkManager/system-connections/ so it survives reboots even when
+    netplan regenerates volatile profiles on every boot."""
+    if os.name == "nt":
+        return
+    try:
+        filename = _run_nmcli(config, ["-g", "filename", "connection", "show", connection_name]).strip()
+    except NetworkManagerError:
+        return
+
+    if not filename or "/run/" not in filename:
+        return  # Already in /etc/ or unknown — nothing to do
+
+    dest_dir = "/etc/NetworkManager/system-connections"
+    dest_file = f"{dest_dir}/{os.path.basename(filename)}"
+    sudo_bin = config.get("SUDO_BIN", "sudo")
+    try:
+        subprocess.run(
+            [sudo_bin, "-n", "cp", "--", filename, dest_file],
+            check=True, capture_output=True, timeout=10,
+        )
+        subprocess.run(
+            [sudo_bin, "-n", "chmod", "600", dest_file],
+            check=True, capture_output=True, timeout=10,
+        )
+        # Reload so NM picks up the /etc/ copy; it will then ignore the /run/ duplicate
+        _run_nmcli(config, ["connection", "reload"])
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
+        pass  # Best-effort: if it fails, the in-memory modify still took effect
+
+
 def bring_up_connection(config: dict[str, Any], connection_name: str) -> None:
     _run_nmcli(config, ["connection", "up", connection_name])
 
@@ -558,6 +590,7 @@ def _build_nmcli_command(config: dict[str, Any], arguments: list[str]) -> list[s
 def _is_mutating_nmcli_command(arguments: list[str]) -> bool:
     mutating_prefixes = {
         ("connection", "modify"),
+        ("connection", "reload"),
         ("connection", "up"),
         ("device", "connect"),
         ("device", "reapply"),

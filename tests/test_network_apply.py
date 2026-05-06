@@ -101,6 +101,7 @@ def test_apply_ethernet_settings_updates_static_ipv4_and_restores_previous_profi
     })
     monkeypatch.setattr(network_apply, "set_connection_ipv4_config", lambda config, **kwargs: calls.append(("modify", kwargs)))
     monkeypatch.setattr(network_apply, "set_connection_autoconnect", lambda config, name, enabled: None)
+    monkeypatch.setattr(network_apply, "persist_connection_to_etc", lambda config, name: None)
     monkeypatch.setattr(network_apply, "bring_up_connection", lambda config, name: calls.append(("up", name)))
     monkeypatch.setattr(network_apply, "_verify_connection", lambda config, interface_name, connection_type, expected_name=None: False)
 
@@ -137,6 +138,7 @@ def test_apply_ethernet_settings_saves_config_when_device_unavailable(monkeypatc
     })
     monkeypatch.setattr(network_apply, "set_connection_ipv4_config", lambda config, **kwargs: calls.append(("modify", kwargs)))
     monkeypatch.setattr(network_apply, "set_connection_autoconnect", lambda config, name, enabled: None)
+    monkeypatch.setattr(network_apply, "persist_connection_to_etc", lambda config, name: None)
 
     def fail_bring_up(config, name):
         raise network_apply.NetworkManagerError("Error: Connection activation failed: device not available.")
