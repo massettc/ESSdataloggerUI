@@ -16,9 +16,10 @@ cd "$APP_DIR"
 sudo git fetch --all --tags --prune
 
 if sudo git show-ref --verify --quiet "refs/remotes/origin/$REF"; then
-    sudo git checkout "$REF"
-    sudo git pull --ff-only origin "$REF"
+    # Branch exists on remote — create or reset local tracking branch, then fast-forward
+    sudo git checkout -B "$REF" "origin/$REF"
 else
+    # Treat REF as a tag or specific commit
     sudo git checkout "$REF"
 fi
 
