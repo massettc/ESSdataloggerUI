@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import copy
+import logging
 import os
 import socket
 import subprocess
 import time
 from typing import Any
+
+_nm_logger = logging.getLogger("pi_network_admin.nmcli")
 
 
 class NetworkManagerError(RuntimeError):
@@ -567,6 +570,7 @@ def _get_ip_details(config: dict[str, Any], interface_name: str) -> dict[str, st
 
 def _run_nmcli(config: dict[str, Any], arguments: list[str]) -> str:
     command = _build_nmcli_command(config, arguments)
+    _nm_logger.debug("nmcli cmd: %s", " ".join(str(a) for a in command))
     try:
         completed = subprocess.run(
             command,
@@ -581,7 +585,9 @@ def _run_nmcli(config: dict[str, Any], arguments: list[str]) -> str:
         raise NetworkManagerError("Timed out while talking to NetworkManager.") from exc
     except subprocess.CalledProcessError as exc:
         error_text = exc.stderr.strip() or exc.stdout.strip() or "Unknown NetworkManager error."
+        _nm_logger.warning("nmcli failed: %s", error_text)
         raise NetworkManagerError(error_text) from exc
+    _nm_logger.debug("nmcli ok: %s", completed.stdout.strip()[:200])
 
     return completed.stdout.strip()
 
