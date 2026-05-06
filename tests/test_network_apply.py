@@ -119,3 +119,41 @@ def test_apply_ethernet_settings_updates_static_ipv4_and_restores_previous_profi
     assert calls[-2][0] == "modify"
     assert calls[-2][1]["method"] == "auto"
     assert calls[-1] == ("up", "Wired connection 1")
+
+
+def test_apply_ethernet_settings_saves_config_when_device_unavailable(monkeypatch):
+    """When bring_up_connection fails (e.g. eth0 unavailable/no cable), settings should be
+    saved to the profile and NOT rolled back. Returns success=True with an informative message."""
+    calls = []
+
+    monkeypatch.setattr(network_apply, "get_active_ethernet_connection", lambda config: None)
+    monkeypatch.setattr(network_apply, "get_connection_ipv4_config", lambda config, connection_name: {
+        "method": "auto",
+        "address": "",
+        "prefix": "",
+        "gateway": "",
+        "dns": "",
+    })
+    monkeypatch.setattr(network_apply, "set_connection_ipv4_config", lambda config, **kwargs: calls.append(("modify", kwargs)))
+
+    def fail_bring_up(config, name):
+        raise network_apply.NetworkManagerError("Error: Connection activation failed: device not available.")
+
+    monkeypatch.setattr(network_apply, "bring_up_connection", fail_bring_up)
+
+    result = network_apply.apply_ethernet_settings(
+        {"ETHERNET_INTERFACE": "eth0", "VERIFY_TIMEOUT_SECONDS": 1, "VERIFY_POLL_SECONDS": 0.01},
+        connection_name="netplan-eth0",
+        ip_method="manual",
+        ip_address="192.168.0.11",
+        ip_prefix="24",
+        gateway="192.168.0.1",
+        dns="8.8.8.8",
+    )
+
+    # Config should have been saved once (not rolled back)
+    assert len([c for c in calls if c[0] == "modify"]) == 1
+    assert calls[0][1]["gateway"] == "192.168.0.1"
+    assert result["success"] is True
+    assert "saved" in result["message"].lower()
+    assert "unavailable" in result["message"].lower() or "cable" in result["message"].lower()

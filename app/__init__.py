@@ -26,7 +26,8 @@ def create_app(config_overrides: dict[str, Any] | None = None) -> Flask:
     @app.context_processor
     def inject_shell_context() -> dict[str, str]:
         configured_hostname = str(app.config.get("DEVICE_HOSTNAME", "")).strip()
-        version_file = Path(app.root_path).parent / "VERSION"
+        repo_path = app.config.get("REPO_PATH") or str(Path(app.root_path).parent)
+        version_file = Path(repo_path) / "VERSION"
         try:
             app_version = version_file.read_text(encoding="utf-8").strip()
         except OSError:

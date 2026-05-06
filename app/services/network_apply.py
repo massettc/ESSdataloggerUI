@@ -63,6 +63,7 @@ def apply_ethernet_settings(
 
     requested_connection = target_connection or config["ETHERNET_INTERFACE"]
     previous_ipv4_config = None
+    config_saved = False
     logger.info("ethernet change requested for connection=%s method=%s", requested_connection, ip_method or "unchanged")
 
     if ip_method == "manual" and not ip_address:
@@ -80,14 +81,30 @@ def apply_ethernet_settings(
                 gateway=gateway,
                 dns=dns,
             )
+            config_saved = True
 
         if target_connection and config.get("PREFER_WLAN_FOR_INTERNET", False):
             set_connection_never_default(config, target_connection, True)
 
-        if target_connection:
-            bring_up_connection(config, target_connection)
-        else:
-            connect_device(config, config["ETHERNET_INTERFACE"])
+        try:
+            if target_connection:
+                bring_up_connection(config, target_connection)
+            else:
+                connect_device(config, config["ETHERNET_INTERFACE"])
+        except NetworkManagerError as activate_exc:
+            logger.warning(
+                "ethernet activation failed for connection=%s (settings were saved): %s",
+                requested_connection,
+                activate_exc,
+            )
+            return {
+                "success": True,
+                "message": (
+                    f"Settings saved for {requested_connection}. "
+                    "The connection could not be activated — the device may be unavailable or no cable is connected. "
+                    "Settings will apply automatically when the cable is plugged in."
+                ),
+            }
 
         if _verify_connection(
             config,

@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import shlex
 import shutil
 import socket
 import subprocess
@@ -163,20 +162,10 @@ def run_system_update(config: dict[str, Any]) -> dict[str, Any]:
     _write_update_state(config, "in-progress", f"Installing updates from {ref}...")
 
     bash_bin = config.get("BASH_BIN", "bash")
-
+    command = _build_command_with_optional_sudo(config, [bash_bin, str(update_script), ref], privileged=True)
     with open(log_path, "a", encoding="utf-8") as log_handle:
         log_handle.write("\n=== Update requested from web UI ===\n")
-
-    # Launch the update inside a new transient systemd unit (its own cgroup) so that
-    # when install.sh calls "systemctl restart pi-network-admin", systemd does not
-    # kill this subprocess along with the rest of the service's cgroup.
-    shell_cmd = (
-        f"{shlex.quote(bash_bin)} {shlex.quote(str(update_script))} {shlex.quote(ref)}"
-        f" >> {shlex.quote(str(log_path))} 2>&1"
-    )
-    command = ["sudo", "systemd-run", "--no-block", "--unit=pi-network-admin-update",
-               "bash", "-c", shell_cmd]
-    subprocess.Popen(command, close_fds=True)
+        subprocess.Popen(command, stdout=log_handle, stderr=subprocess.STDOUT, close_fds=True)
 
     return {
         "success": True,
@@ -278,29 +267,11 @@ def save_technician_json_file(config: dict[str, Any], file_id: str, content: str
             parsed = json.loads(raw_content)
         except json.JSONDecodeError as exc:
             return {"success": False, "message": f"Please enter valid JSON before saving: {exc.msg}."}
-        raw_content = json.dumps(parsed, indent=2) + "\n"
+        output_path.write_text(json.dumps(parsed, indent=2) + "\n", encoding="utf-8")
+        return {"success": True, "message": f"Saved JSON file {output_path.name}."}
 
-    try:
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(raw_content, encoding="utf-8")
-    except PermissionError:
-        # Fall back to sudo tee for paths the service account cannot write directly
-        # (e.g. /var/usr/plcreader/settings.json owned by another user/container).
-        sudo_bin = config.get("SUDO_BIN", "sudo")
-        use_sudo = config.get("USE_SUDO_FOR_SYSTEM", True)
-        if not use_sudo:
-            return {"success": False, "message": f"Permission denied writing {output_path.name}."}
-        result = subprocess.run(
-            [sudo_bin, "-n", "tee", str(output_path)],
-            input=raw_content,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if result.returncode != 0:
-            return {"success": False, "message": f"Permission denied writing {output_path.name} (even with elevated access)."}
-
-    return {"success": True, "message": f"Saved {output_path.name}."}
+    output_path.write_text(raw_content, encoding="utf-8")
+    return {"success": True, "message": f"Saved file {output_path.name}."}
 
 
 def start_technician_command(config: dict[str, Any], command_id: str) -> dict[str, Any]:
@@ -313,13 +284,13 @@ def start_technician_command(config: dict[str, Any], command_id: str) -> dict[st
     return start_custom_technician_command(config, selected.get("label", "Saved command"), selected.get("command", ""))
 
 
-def start_custom_technician_command(config: dict[str, Any], label: str, command: str, allow_sudo: bool = False) -> dict[str, Any]:
+def start_custom_technician_command(config: dict[str, Any], label: str, command: str) -> dict[str, Any]:
     label = label.strip() or "Custom command"
     command = command.strip()
     if not command:
         return {"success": False, "message": "A command is required."}
 
-    if not allow_sudo and command.startswith("sudo "):
+    if command.startswith("sudo "):
         _write_technician_output(
             config,
             {
