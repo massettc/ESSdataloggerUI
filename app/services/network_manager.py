@@ -374,32 +374,38 @@ def set_connection_ipv4_config(
     if normalized_method not in {"auto", "manual"}:
         raise NetworkManagerError("Unsupported IPv4 method. Use auto or manual.")
 
-    command = ["connection", "modify", connection_name, "ipv4.method", normalized_method]
-
     if normalized_method == "manual":
         if not address:
             raise NetworkManagerError("Static IP address is required for manual Ethernet mode.")
 
         prefix_value = prefix or "24"
-        command.extend(
-            [
-                "ipv4.addresses",
-                f"{address}/{prefix_value}",
-                "ipv4.gateway",
-                gateway,
-                "ipv4.dns",
-                dns,
-            ]
-        )
-        # If a gateway is provided, ensure never-default is cleared so NM actually
-        # stores the gateway. When never-default=yes is present (e.g. from a netplan
-        # migration), NetworkManager 1.40+ silently discards the gateway value.
-        if gateway:
-            command.extend(["ipv4.never-default", "no", "ipv6.never-default", "no"])
-    else:
-        command.extend(["ipv4.addresses", "", "ipv4.gateway", "", "ipv4.dns", ""])
 
-    _run_nmcli(config, command)
+        # Step 1: set method, address, dns, and never-default (clear it unconditionally
+        # so a previously-set never-default=yes doesn't silently discard the gateway)
+        _run_nmcli(config, [
+            "connection", "modify", connection_name,
+            "ipv4.method", "manual",
+            "ipv4.addresses", f"{address}/{prefix_value}",
+            "ipv4.dns", dns,
+            "ipv4.never-default", "no",
+            "ipv6.never-default", "no",
+        ])
+
+        # Step 2: set the gateway in its own dedicated modify call.
+        # NM 1.40+ can silently drop ipv4.gateway when combined with ipv4.addresses
+        # in a single modify (ordering/interaction bug observed on NM 1.52).
+        _run_nmcli(config, [
+            "connection", "modify", connection_name,
+            "ipv4.gateway", gateway,
+        ])
+    else:
+        _run_nmcli(config, [
+            "connection", "modify", connection_name,
+            "ipv4.method", "auto",
+            "ipv4.addresses", "",
+            "ipv4.gateway", "",
+            "ipv4.dns", "",
+        ])
 
 
 def has_internet_access(config: dict[str, Any]) -> bool:

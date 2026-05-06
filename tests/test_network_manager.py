@@ -222,23 +222,21 @@ def test_set_connection_ipv4_config_uses_nmcli_modify(monkeypatch):
         dns="8.8.8.8,1.1.1.1",
     )
 
-    assert calls == [[
-        "connection",
-        "modify",
-        "Wired connection 1",
-        "ipv4.method",
-        "manual",
-        "ipv4.addresses",
-        "192.168.50.20/24",
-        "ipv4.gateway",
-        "192.168.50.1",
-        "ipv4.dns",
-        "8.8.8.8,1.1.1.1",
-        "ipv4.never-default",
-        "no",
-        "ipv6.never-default",
-        "no",
-    ]]
+    # Two separate modify calls: first sets address/dns/never-default,
+    # second sets gateway in isolation (avoids NM 1.52 silent-drop bug)
+    assert len(calls) == 2
+    assert calls[0] == [
+        "connection", "modify", "Wired connection 1",
+        "ipv4.method", "manual",
+        "ipv4.addresses", "192.168.50.20/24",
+        "ipv4.dns", "8.8.8.8,1.1.1.1",
+        "ipv4.never-default", "no",
+        "ipv6.never-default", "no",
+    ]
+    assert calls[1] == [
+        "connection", "modify", "Wired connection 1",
+        "ipv4.gateway", "192.168.50.1",
+    ]
 
 
 def test_set_connection_never_default_uses_nmcli_modify(monkeypatch):
