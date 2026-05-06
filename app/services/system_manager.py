@@ -78,13 +78,29 @@ def get_update_status(config: dict[str, Any], refresh: bool = False) -> dict[str
     if commit_result.returncode == 0:
         status["current_commit"] = commit_result.stdout.strip() or "unknown"
 
+    # Detached HEAD — find the default remote branch to compare against
+    detached = status["current_branch"] == "HEAD"
+    if detached:
+        remote_ref_result = _run_command(
+            [git_bin, "-C", str(repo_path), "symbolic-ref", "--short", "refs/remotes/origin/HEAD"],
+            check=False,
+        )
+        compare_branch = (
+            remote_ref_result.stdout.strip().removeprefix("origin/")
+            if remote_ref_result.returncode == 0
+            else "main"
+        )
+        status["current_branch"] = f"detached ({compare_branch})"
+    else:
+        compare_branch = status["current_branch"]
+
     behind_result = _run_command(
-        [git_bin, "-C", str(repo_path), "rev-list", "--count", f"HEAD..origin/{status['current_branch']}"],
+        [git_bin, "-C", str(repo_path), "rev-list", "--count", f"HEAD..origin/{compare_branch}"],
         check=False,
     )
     if behind_result.returncode == 0:
         status["behind_by"] = int((behind_result.stdout or "0").strip() or "0")
-        status["update_available"] = status["behind_by"] > 0
+        status["update_available"] = status["behind_by"] > 0 or detached
 
     status["log_excerpt"] = _read_update_log(config)
     return status
@@ -155,7 +171,12 @@ def run_system_update(config: dict[str, Any]) -> dict[str, Any]:
         return {"success": False, "message": f"Update script not found at {update_script}."}
 
     repo_status = get_update_status(config, refresh=True)
-    ref = repo_status.get("current_branch") or "main"
+    raw_branch = repo_status.get("current_branch") or "main"
+    # If detached HEAD, current_branch is "detached (main)" — extract the real branch name
+    if raw_branch.startswith("detached (") and raw_branch.endswith(")"):
+        ref = raw_branch[len("detached ("):-1]
+    else:
+        ref = raw_branch
     log_path = Path(config.get("UPDATE_LOG_PATH", BASE_DIR / "update.log"))
 
     log_path.parent.mkdir(parents=True, exist_ok=True)
