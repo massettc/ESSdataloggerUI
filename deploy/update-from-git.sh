@@ -15,11 +15,14 @@ sudo git config --global --add safe.directory "$APP_DIR" >/dev/null 2>&1 || true
 cd "$APP_DIR"
 sudo git fetch --all --tags --prune
 
-if sudo git show-ref --verify --quiet "refs/remotes/origin/$REF"; then
-    # Branch exists on remote — create or reset local tracking branch, then fast-forward
+# Try to fetch the ref as a branch from origin directly to populate FETCH_HEAD.
+# This works on shallow clones where 'git fetch --all' may not create tracking refs.
+if sudo git fetch origin "$REF" 2>/dev/null; then
+    sudo git checkout -B "$REF" FETCH_HEAD
+elif sudo git show-ref --verify --quiet "refs/remotes/origin/$REF"; then
     sudo git checkout -B "$REF" "origin/$REF"
 else
-    # Treat REF as a tag or specific commit
+    # REF is a tag or specific commit
     sudo git checkout "$REF"
 fi
 
