@@ -134,7 +134,6 @@ def ethernet_settings():
         ethernet_profiles = list_connection_profiles(
             current_app.config,
             connection_type=ETHERNET_CONNECTION_TYPE,
-            interface_name=current_app.config["ETHERNET_INTERFACE"],
         )
         active_ethernet = get_active_ethernet_connection(current_app.config)
         selected_profile = request.args.get("profile", "").strip() or (

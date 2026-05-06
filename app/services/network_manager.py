@@ -175,7 +175,16 @@ def get_active_wifi_connection(config: dict[str, Any]) -> dict[str, str] | None:
 
 
 def get_active_ethernet_connection(config: dict[str, Any]) -> dict[str, str] | None:
-    return get_active_connection(config, config["ETHERNET_INTERFACE"], ETHERNET_CONNECTION_TYPE)
+    """Return the first active ethernet connection on any interface (eth0, eth1, etc.)."""
+    output = _run_nmcli(config, ["-t", "-f", "NAME,DEVICE,TYPE", "connection", "show", "--active"])
+    for line in output.splitlines():
+        parts = _split_escaped_fields(line)
+        if len(parts) < 3:
+            continue
+        name, device, active_type = parts[0], parts[1], parts[2]
+        if _type_matches(active_type, ETHERNET_CONNECTION_TYPE):
+            return {"name": name, "device": device, "type": active_type}
+    return None
 
 
 def is_connection_active(

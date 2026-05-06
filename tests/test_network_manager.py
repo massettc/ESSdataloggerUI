@@ -163,7 +163,7 @@ def test_get_active_ethernet_connection_returns_matching_profile(monkeypatch):
 
     monkeypatch.setattr(network_manager, "_run_nmcli", lambda config, arguments: sample_output)
 
-    active = network_manager.get_active_ethernet_connection({"ETHERNET_INTERFACE": "eth0"})
+    active = network_manager.get_active_ethernet_connection({})
 
     assert active == {"name": "Wired connection 1", "device": "eth0", "type": "802-3-ethernet"}
 
@@ -174,10 +174,23 @@ def test_get_active_ethernet_connection_accepts_short_type_name(monkeypatch):
 
     monkeypatch.setattr(network_manager, "_run_nmcli", lambda config, arguments: sample_output)
 
-    active = network_manager.get_active_ethernet_connection({"ETHERNET_INTERFACE": "eth0"})
+    active = network_manager.get_active_ethernet_connection({})
 
     assert active is not None
     assert active["name"] == "netplan-eth0"
+
+
+def test_get_active_ethernet_connection_finds_profile_on_eth1(monkeypatch):
+    """Profile connected to eth1 should be found even if ETHERNET_INTERFACE=eth0."""
+    sample_output = "Office WiFi:wlan0:wifi\nnetplan-eth0:eth1:ethernet\n"
+
+    monkeypatch.setattr(network_manager, "_run_nmcli", lambda config, arguments: sample_output)
+
+    active = network_manager.get_active_ethernet_connection({})
+
+    assert active is not None
+    assert active["name"] == "netplan-eth0"
+    assert active["device"] == "eth1"
 
 
 def test_get_connection_ipv4_config_parses_manual_values(monkeypatch):

@@ -19,7 +19,7 @@
             <label for="connection_name">Saved profile</label>
             <select id="connection_name" name="connection_name">
                 {% for profile in ethernet_profiles %}
-                <option value="{{ profile.name }}" {% if profile.name == selected_profile %}selected{% endif %}>{{ profile.name }}{% if profile.active %} (active){% endif %}</option>
+                <option value="{{ profile.name }}" {% if profile.name == selected_profile %}selected{% endif %}>{{ profile.name }}{% if profile.device %} ({{ profile.device }}){% endif %}</option>
                 {% endfor %}
             </select>
 

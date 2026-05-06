@@ -110,7 +110,7 @@ def apply_ethernet_settings(
 
         if _verify_connection(
             config,
-            interface_name=config["ETHERNET_INTERFACE"],
+            interface_name=None,
             connection_type=ETHERNET_CONNECTION_TYPE,
             expected_name=target_connection,
         ):
@@ -140,13 +140,18 @@ def _verify_wifi_connection(config: dict[str, Any], expected_ssid: str) -> bool:
 
 def _verify_connection(
     config: dict[str, Any],
-    interface_name: str,
+    interface_name: str | None,
     connection_type: str,
     expected_name: str | None = None,
 ) -> bool:
     deadline = time.monotonic() + config["VERIFY_TIMEOUT_SECONDS"]
     while time.monotonic() < deadline:
-        if is_connection_active(
+        if interface_name is None and connection_type == ETHERNET_CONNECTION_TYPE:
+            # Any ethernet interface — used when profile may roam between eth0/eth1
+            active = get_active_ethernet_connection(config)
+            if active and (expected_name is None or active["name"] == expected_name):
+                return True
+        elif interface_name and is_connection_active(
             config,
             interface_name,
             expected_name=expected_name,
