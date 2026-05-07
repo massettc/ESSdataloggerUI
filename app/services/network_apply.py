@@ -248,16 +248,32 @@ def apply_ethernet_settings(
 
 
 def _verify_wifi_connection(config: dict[str, Any], expected_ssid: str) -> bool:
-    # Check that wlan0 has *any* active WiFi connection — not by profile name, which
-    # may differ from the SSID (e.g. NM may store the profile as "ESS 1" while the
-    # SSID is "ESS").  nmcli device wifi connect already confirmed the SSID, so we
-    # just need to confirm the interface is up.
-    return _verify_connection(
-        config,
-        interface_name=config["WIFI_INTERFACE"],
-        connection_type=WIFI_CONNECTION_TYPE,
-        expected_name=None,
-    )
+    # Verify that wlan0 is connected to a WiFi network.  We check by verifying that
+    # an active connection exists on wlan0 and that the connected profile's SSID
+    # matches expected_ssid (when available). This is more robust than checking
+    # profile name, since NM may store the profile as "ESS 1" while SSID is "ESS".
+    deadline = time.monotonic() + config["VERIFY_TIMEOUT_SECONDS"]
+    while time.monotonic() < deadline:
+        active = get_active_wifi_connection(config)
+        if not active:
+            time.sleep(config["VERIFY_POLL_SECONDS"])
+            continue
+        
+        # We have an active WiFi connection on wlan0. Try to get its SSID to verify
+        # it's the one we just connected to.
+        try:
+            connected_ssid = get_connection_wifi_ssid(config, active["name"])
+            if connected_ssid == expected_ssid:
+                return True
+        except NetworkManagerError:
+            # If we can't get the SSID, assume the connection worked (it's active at least)
+            pass
+        
+        # If SSID check failed but wlan0 is still active, it might just not have settled
+        # yet or the SSID lookup had a transient error. Keep trying within the timeout.
+        time.sleep(config["VERIFY_POLL_SECONDS"])
+    
+    return False
 
 
 def _verify_connection(
