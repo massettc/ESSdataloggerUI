@@ -244,6 +244,46 @@ def test_wifi_post_can_restart_network_manager(client, monkeypatch):
     assert calls == [True]
 
 
+def test_wifi_post_rejects_blank_password_for_secured_unsaved_network(client, monkeypatch):
+    apply_calls = []
+    monkeypatch.setattr(network_routes, "get_saved_wifi_ssids", lambda config: set())
+    monkeypatch.setattr(
+        network_routes,
+        "apply_wifi_settings",
+        lambda config, ssid, password, hidden: apply_calls.append((ssid, password, hidden)) or {"success": True, "message": "ok"},
+    )
+
+    _login(client)
+    response = client.post(
+        "/wifi",
+        data={"ssid": "Staff2019", "security": "WPA2", "password": ""},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert apply_calls == []
+
+
+def test_wifi_post_allows_blank_password_for_secured_saved_network(client, monkeypatch):
+    apply_calls = []
+    monkeypatch.setattr(network_routes, "get_saved_wifi_ssids", lambda config: {"Staff2019"})
+    monkeypatch.setattr(
+        network_routes,
+        "apply_wifi_settings",
+        lambda config, ssid, password, hidden: apply_calls.append((ssid, password, hidden)) or {"success": True, "message": "ok"},
+    )
+
+    _login(client)
+    response = client.post(
+        "/wifi",
+        data={"ssid": "Staff2019", "security": "WPA2", "password": ""},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert apply_calls == [("Staff2019", "", False)]
+
+
 def test_datalogger_page_handles_unexpected_status_errors(client, monkeypatch):
     monkeypatch.setattr(network_routes, "get_datalogger_status", lambda config, host=None: (_ for _ in ()).throw(RuntimeError("boom")))
 

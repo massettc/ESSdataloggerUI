@@ -79,11 +79,17 @@ def wifi_settings():
 
         ssid = request.form.get("ssid", "").strip()
         password = request.form.get("password", "")
+        security = request.form.get("security", "").strip()
         hidden = request.form.get("hidden") == "on"
 
         if not ssid:
             flash("SSID is required.", "error")
             return redirect(url_for("network.wifi_settings"))
+
+        saved_ssids = get_saved_wifi_ssids(current_app.config)
+        if _is_secured_wifi_security(security) and not password and ssid not in saved_ssids:
+            flash(f"Password is required for secured Wi-Fi network {ssid}.", "error")
+            return redirect(url_for("network.wifi_settings", ssid=ssid))
 
         try:
             result = apply_wifi_settings(current_app.config, ssid=ssid, password=password, hidden=hidden)
@@ -119,6 +125,12 @@ def wifi_settings():
         selected_ssid=selected_ssid,
         wifi_interface=current_app.config["WIFI_INTERFACE"],
     )
+
+
+
+def _is_secured_wifi_security(security: str) -> bool:
+    normalized = (security or "").strip().lower()
+    return normalized not in {"", "--", "open", "none"}
 
 
 @network_bp.route("/ethernet", methods=["GET", "POST"])
