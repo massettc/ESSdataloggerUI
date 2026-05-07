@@ -142,6 +142,15 @@ def list_connection_profiles(
     return profiles
 
 
+def get_connection_wifi_ssid(config: dict[str, Any], connection_name: str) -> str:
+    """Return the SSID configured for a WiFi connection profile."""
+    return _run_nmcli(config, ["-g", "802-11-wireless.ssid", "connection", "show", connection_name]).strip()
+
+
+def delete_connection_profile(config: dict[str, Any], connection_name: str) -> None:
+    _run_nmcli(config, ["connection", "delete", connection_name])
+
+
 def get_active_connection(
     config: dict[str, Any],
     interface_name: str,

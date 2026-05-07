@@ -5,6 +5,7 @@ import time
 from typing import Any
 
 from app.services.network_manager import (
+    delete_connection_profile,
     ETHERNET_CONNECTION_TYPE,
     WIFI_CONNECTION_TYPE,
     NetworkManagerError,
@@ -15,9 +16,11 @@ from app.services.network_manager import (
     get_active_ethernet_connection,
     get_active_wifi_connection,
     get_connection_ipv4_config,
+    get_connection_wifi_ssid,
     is_connection_active,
     is_ethernet_connected,
     is_wifi_connected,
+    list_connection_profiles,
     persist_connection_to_etc,
     set_connection_autoconnect,
     set_connection_ipv4_config,
@@ -33,12 +36,9 @@ def apply_wifi_settings(config: dict[str, Any], ssid: str, password: str, hidden
     logger.info("wifi change requested for ssid=%s hidden=%s", ssid, hidden)
 
     try:
-        connect_wifi(config, ssid=ssid, password=password, hidden=hidden)
-        if _verify_wifi_connection(config, ssid):
-            logger.info("wifi change succeeded for ssid=%s", ssid)
-            return {"success": True, "message": f"Connected to {ssid}."}
-
-        raise NetworkManagerError("The new Wi-Fi connection did not become active before timeout.")
+        _connect_wifi_with_profile_recovery(config, ssid=ssid, password=password, hidden=hidden)
+        logger.info("wifi change succeeded for ssid=%s", ssid)
+        return {"success": True, "message": f"Connected to {ssid}."}
     except NetworkManagerError as exc:
         logger.warning("wifi change failed for ssid=%s: %s", ssid, exc)
         _rollback(config, previous_connection)
@@ -47,6 +47,51 @@ def apply_wifi_settings(config: dict[str, Any], ssid: str, password: str, hidden
             "success": False,
             "message": f"Unable to switch to {ssid}. {detail} Previous network settings were restored if available.",
         }
+
+
+def _connect_wifi_with_profile_recovery(config: dict[str, Any], ssid: str, password: str, hidden: bool) -> None:
+    try:
+        connect_wifi(config, ssid=ssid, password=password, hidden=hidden)
+    except NetworkManagerError as exc:
+        if not _is_missing_key_mgmt_error(exc):
+            raise
+
+        if not password:
+            raise NetworkManagerError(
+                f"Saved Wi-Fi profile for {ssid} is invalid. Enter the Wi-Fi password and try again."
+            ) from exc
+
+        logger.warning("detected invalid key-mgmt profile for ssid=%s, removing stale profile(s) and retrying", ssid)
+        _delete_wifi_profiles_for_ssid(config, ssid)
+        connect_wifi(config, ssid=ssid, password=password, hidden=hidden)
+
+    if _verify_wifi_connection(config, ssid):
+        return
+
+    raise NetworkManagerError("The new Wi-Fi connection did not become active before timeout.")
+
+
+def _is_missing_key_mgmt_error(exc: NetworkManagerError) -> bool:
+    return "802-11-wireless-security.key-mgmt" in str(exc)
+
+
+def _delete_wifi_profiles_for_ssid(config: dict[str, Any], ssid: str) -> None:
+    profiles = list_connection_profiles(config, connection_type=WIFI_CONNECTION_TYPE)
+    target_ssid = ssid.strip()
+    for profile in profiles:
+        profile_name = profile.get("name", "").strip()
+        matches = profile_name == target_ssid
+        if not matches and profile_name:
+            try:
+                matches = get_connection_wifi_ssid(config, profile_name) == target_ssid
+            except NetworkManagerError:
+                matches = False
+        if not matches or not profile_name:
+            continue
+        try:
+            delete_connection_profile(config, profile_name)
+        except NetworkManagerError as delete_exc:
+            logger.warning("failed to delete stale wifi profile=%s for ssid=%s: %s", profile_name, target_ssid, delete_exc)
 
 
 def apply_ethernet_settings(

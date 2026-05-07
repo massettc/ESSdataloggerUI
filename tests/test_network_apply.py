@@ -42,6 +42,59 @@ def test_apply_wifi_settings_succeeds(monkeypatch):
     assert "Connected to NewWiFi" in result["message"]
 
 
+def test_apply_wifi_settings_recovers_from_missing_key_mgmt_when_password_supplied(monkeypatch):
+    connect_attempts = []
+    deleted_profiles = []
+
+    monkeypatch.setattr(network_apply, "get_active_wifi_connection", lambda config: {"name": "OldWiFi", "device": "wlan0"})
+
+    def flaky_connect(config, ssid, password, hidden):
+        connect_attempts.append((ssid, password, hidden))
+        if len(connect_attempts) == 1:
+            raise network_apply.NetworkManagerError("802-11-wireless-security.key-mgmt: property is missing")
+
+    monkeypatch.setattr(network_apply, "connect_wifi", flaky_connect)
+    monkeypatch.setattr(
+        network_apply,
+        "list_connection_profiles",
+        lambda config, connection_type=None, interface_name=None: [{"name": "Staff2019", "type": "wifi", "device": "", "active": False}],
+    )
+    monkeypatch.setattr(network_apply, "get_connection_wifi_ssid", lambda config, connection_name: "Staff2019")
+    monkeypatch.setattr(network_apply, "delete_connection_profile", lambda config, name: deleted_profiles.append(name))
+    monkeypatch.setattr(network_apply, "_verify_wifi_connection", lambda config, expected_ssid: True)
+
+    result = network_apply.apply_wifi_settings(
+        {"VERIFY_TIMEOUT_SECONDS": 1, "VERIFY_POLL_SECONDS": 0.01},
+        "Staff2019",
+        "goodpass",
+        False,
+    )
+
+    assert result["success"] is True
+    assert len(connect_attempts) == 2
+    assert deleted_profiles == ["Staff2019"]
+
+
+def test_apply_wifi_settings_missing_key_mgmt_without_password_prompts_for_password(monkeypatch):
+    monkeypatch.setattr(network_apply, "get_active_wifi_connection", lambda config: {"name": "OldWiFi", "device": "wlan0"})
+    monkeypatch.setattr(network_apply, "bring_up_connection", lambda config, name: None)
+
+    def fail_connect(config, ssid, password, hidden):
+        raise network_apply.NetworkManagerError("802-11-wireless-security.key-mgmt: property is missing")
+
+    monkeypatch.setattr(network_apply, "connect_wifi", fail_connect)
+
+    result = network_apply.apply_wifi_settings(
+        {"VERIFY_TIMEOUT_SECONDS": 1, "VERIFY_POLL_SECONDS": 0.01},
+        "Staff2019",
+        "",
+        False,
+    )
+
+    assert result["success"] is False
+    assert "Enter the Wi-Fi password" in result["message"]
+
+
 def test_apply_ethernet_settings_reconnects_device(monkeypatch):
     calls = []
 
