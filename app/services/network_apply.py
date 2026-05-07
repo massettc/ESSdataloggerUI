@@ -248,11 +248,15 @@ def apply_ethernet_settings(
 
 
 def _verify_wifi_connection(config: dict[str, Any], expected_ssid: str) -> bool:
+    # Check that wlan0 has *any* active WiFi connection — not by profile name, which
+    # may differ from the SSID (e.g. NM may store the profile as "ESS 1" while the
+    # SSID is "ESS").  nmcli device wifi connect already confirmed the SSID, so we
+    # just need to confirm the interface is up.
     return _verify_connection(
         config,
         interface_name=config["WIFI_INTERFACE"],
         connection_type=WIFI_CONNECTION_TYPE,
-        expected_name=expected_ssid,
+        expected_name=None,
     )
 
 
