@@ -62,11 +62,11 @@
                 <label for="password-{{ loop.index }}">Passphrase</label>
                 <div class="password-row">
                     {% if network.has_saved_password %}
-                    <input id="password-{{ loop.index }}" name="password" type="password" autocomplete="new-password" placeholder="••••••••" value="••••••••" readonly class="saved-password-field">
+                    <input id="password-{{ loop.index }}" name="password" type="password" autocomplete="off" placeholder="••••••••" class="saved-password-field">
                     {% else %}
-                    <input id="password-{{ loop.index }}" name="password" type="password" autocomplete="new-password" placeholder="Enter Wi-Fi password">
+                    <input id="password-{{ loop.index }}" name="password" type="password" autocomplete="off" placeholder="Enter Wi-Fi password">
                     {% endif %}
-                    <button type="button" class="secondary small-button" data-password-target="password-{{ loop.index }}" {% if network.has_saved_password %}data-saved-password="true"{% endif %}>Show</button>
+                    <button type="button" class="secondary small-button" data-password-target="password-{{ loop.index }}">Show</button>
                     <button type="submit">Connect</button>
                 </div>
             </form>
@@ -97,7 +97,7 @@
 
         <label for="password">Password</label>
         <div class="password-row single-submit-row">
-            <input id="password" name="password" type="password" autocomplete="new-password" placeholder="Enter Wi-Fi password">
+            <input id="password" name="password" type="password" autocomplete="off" placeholder="Enter Wi-Fi password">
             <button type="button" class="secondary small-button" data-password-target="password">Show</button>
         </div>
 
