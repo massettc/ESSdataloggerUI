@@ -26,6 +26,25 @@ def test_wifi_page_shows_explicit_scan_and_connect_flow(client, monkeypatch):
     assert b"Internet access" in response.data
     assert b"Connect" in response.data
     assert b"PlantWiFi" in response.data
+    assert scan_calls == [False]
+
+
+def test_wifi_page_scan_button_requests_force_refresh(client, monkeypatch):
+    wifi_networks = [{"ssid": "PlantWiFi", "signal": "81", "security": "WPA2", "in_use": False}]
+    scan_calls = []
+
+    monkeypatch.setattr(network_routes, "scan_wifi_networks", lambda config, force_refresh=False: scan_calls.append(force_refresh) or wifi_networks)
+    monkeypatch.setattr(network_routes, "get_saved_wifi_ssids", lambda config: set())
+    monkeypatch.setattr(
+        network_routes,
+        "get_dashboard_state",
+        lambda config: {"hostname": "pi", "interfaces": [], "wifi_networks": wifi_networks, "internet_access": True},
+    )
+
+    _login(client)
+    response = client.get("/wifi?scan=1")
+
+    assert response.status_code == 200
     assert scan_calls == [True]
 
 

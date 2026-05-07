@@ -63,6 +63,7 @@ def dashboard():
 @login_required
 def wifi_settings():
     selected_ssid = request.args.get("ssid", "").strip()
+    scan_requested = request.args.get("scan", "0") == "1"
 
     if request.method == "POST":
         action = request.form.get("action", "connect").strip()
@@ -106,7 +107,7 @@ def wifi_settings():
         return redirect(url_for("network.wifi_settings"))
 
     try:
-        wifi_networks = scan_wifi_networks(current_app.config, force_refresh=True)
+        wifi_networks = scan_wifi_networks(current_app.config, force_refresh=scan_requested)
         saved_ssids = get_saved_wifi_ssids(current_app.config)
         # Enrich networks with saved password status
         for network in wifi_networks:
