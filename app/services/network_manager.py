@@ -151,6 +151,31 @@ def delete_connection_profile(config: dict[str, Any], connection_name: str) -> N
     _run_nmcli(config, ["connection", "delete", connection_name])
 
 
+def find_wifi_profile_names_for_ssid(config: dict[str, Any], ssid: str) -> list[str]:
+    """Return WiFi connection profile names that map to the provided SSID."""
+    target_ssid = (ssid or "").strip()
+    if not target_ssid:
+        return []
+
+    output = _run_nmcli(config, ["-t", "-f", "NAME,TYPE,802-11-wireless.ssid", "connection", "show"])
+    matches: list[str] = []
+    for line in output.splitlines():
+        parts = _split_escaped_fields(line)
+        if len(parts) < 2:
+            continue
+
+        profile_name = parts[0].strip()
+        profile_type = parts[1].strip()
+        profile_ssid = parts[2].strip() if len(parts) >= 3 else ""
+
+        if not _type_matches(profile_type, WIFI_CONNECTION_TYPE):
+            continue
+        if profile_name == target_ssid or profile_ssid == target_ssid:
+            matches.append(profile_name)
+
+    return matches
+
+
 def get_active_connection(
     config: dict[str, Any],
     interface_name: str,

@@ -7,6 +7,7 @@ from typing import Any
 from app.services.network_manager import (
     delete_connection_profile,
     ETHERNET_CONNECTION_TYPE,
+    find_wifi_profile_names_for_ssid,
     WIFI_CONNECTION_TYPE,
     NetworkManagerError,
     bring_up_connection,
@@ -63,7 +64,13 @@ def _connect_wifi_with_profile_recovery(config: dict[str, Any], ssid: str, passw
 
         logger.warning("detected invalid key-mgmt profile for ssid=%s, removing stale profile(s) and retrying", ssid)
         _delete_wifi_profiles_for_ssid(config, ssid)
-        connect_wifi(config, ssid=ssid, password=password, hidden=hidden)
+        try:
+            connect_wifi(config, ssid=ssid, password=password, hidden=hidden)
+        except NetworkManagerError as retry_exc:
+            if not _is_missing_key_mgmt_error(retry_exc):
+                raise
+            logger.warning("retry still failing with key-mgmt for ssid=%s, forcing clean profile rebuild", ssid)
+            _rebuild_wifi_profile_and_connect(config, ssid=ssid, password=password, hidden=hidden)
 
     if _verify_wifi_connection(config, ssid):
         return
@@ -76,22 +83,73 @@ def _is_missing_key_mgmt_error(exc: NetworkManagerError) -> bool:
 
 
 def _delete_wifi_profiles_for_ssid(config: dict[str, Any], ssid: str) -> None:
-    profiles = list_connection_profiles(config, connection_type=WIFI_CONNECTION_TYPE)
     target_ssid = ssid.strip()
+    candidate_profiles = set(find_wifi_profile_names_for_ssid(config, target_ssid))
+
+    # Fallback to legacy matching in case profile query has missing SSID fields.
+    profiles = list_connection_profiles(config, connection_type=WIFI_CONNECTION_TYPE)
     for profile in profiles:
         profile_name = profile.get("name", "").strip()
-        matches = profile_name == target_ssid
-        if not matches and profile_name:
-            try:
-                matches = get_connection_wifi_ssid(config, profile_name) == target_ssid
-            except NetworkManagerError:
-                matches = False
-        if not matches or not profile_name:
+        if not profile_name:
             continue
+        if profile_name == target_ssid:
+            candidate_profiles.add(profile_name)
+            continue
+        try:
+            if get_connection_wifi_ssid(config, profile_name) == target_ssid:
+                candidate_profiles.add(profile_name)
+        except NetworkManagerError:
+            pass
+
+    for profile_name in sorted(candidate_profiles):
         try:
             delete_connection_profile(config, profile_name)
         except NetworkManagerError as delete_exc:
             logger.warning("failed to delete stale wifi profile=%s for ssid=%s: %s", profile_name, target_ssid, delete_exc)
+
+
+def _rebuild_wifi_profile_and_connect(config: dict[str, Any], ssid: str, password: str, hidden: bool) -> None:
+    if not password:
+        raise NetworkManagerError(f"Cannot rebuild Wi-Fi profile for {ssid} without a password.")
+
+    _delete_wifi_profiles_for_ssid(config, ssid)
+    interface = config["WIFI_INTERFACE"]
+
+    # Build a clean profile with explicit key-mgmt so NetworkManager cannot inherit a broken security block.
+    from app.services.network_manager import _run_nmcli  # local import to avoid widening public API
+
+    _run_nmcli(
+        config,
+        [
+            "connection",
+            "add",
+            "type",
+            "wifi",
+            "ifname",
+            interface,
+            "con-name",
+            ssid,
+            "ssid",
+            ssid,
+        ],
+    )
+    _run_nmcli(
+        config,
+        [
+            "connection",
+            "modify",
+            ssid,
+            "802-11-wireless-security.key-mgmt",
+            "wpa-psk",
+            "802-11-wireless-security.psk",
+            password,
+            "802-11-wireless.hidden",
+            "yes" if hidden else "no",
+            "connection.autoconnect",
+            "yes",
+        ],
+    )
+    bring_up_connection(config, ssid)
 
 
 def apply_ethernet_settings(
