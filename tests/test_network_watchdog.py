@@ -93,7 +93,7 @@ def test_watchdog_prefers_backup_routes_after_failover(monkeypatch):
 
     assert result["status"] == "failed-over"
     assert route_metrics == [("Wired connection 1", 200), ("PlantWiFi", 100)]
-    assert default_route_flags == [("Wired connection 1", True), ("PlantWiFi", False)]
+    assert default_route_flags == [("Wired connection 1", False), ("PlantWiFi", False)]
 
 
 def test_watchdog_restores_primary_route_priority_after_recovery(monkeypatch):
@@ -121,7 +121,7 @@ def test_watchdog_restores_primary_route_priority_after_recovery(monkeypatch):
 
     assert result["status"] == "restored-primary"
     assert route_metrics == [("PlantWiFi", 100), ("Wired connection 1", 200)]
-    assert default_route_flags == [("PlantWiFi", False), ("Wired connection 1", True)]
+    assert default_route_flags == [("PlantWiFi", False), ("Wired connection 1", False)]
 
 
 def test_activate_interface_skips_reconnect_when_already_active(monkeypatch):

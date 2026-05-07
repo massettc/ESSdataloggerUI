@@ -137,7 +137,9 @@ class FailoverWatchdog:
 
     def _should_never_default(self, interface_name: str, prefer_backup: bool) -> bool:
         if self.config.get("PREFER_WLAN_FOR_INTERNET", False):
-            return interface_name == self.config["ETHERNET_INTERFACE"]
+            # Preserve manual Ethernet gateways: prefer Wi-Fi via route metrics,
+            # not by forcing ethernet never-default=yes.
+            return False
         if prefer_backup:
             return interface_name == self.config["PRIMARY_INTERFACE"]
         return interface_name == self.config["BACKUP_INTERFACE"]
