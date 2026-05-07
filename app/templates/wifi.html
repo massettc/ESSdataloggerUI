@@ -14,6 +14,10 @@
             </span>
             <span class="status-pill status-neutral">{{ wifi_interface }} up</span>
             <a class="button-link" href="{{ url_for('network.wifi_settings') }}">Scan Available Networks</a>
+            <form method="post" data-confirm="Restart NetworkManager now? Connected sessions may briefly drop." data-busy-label="Restarting NetworkManager...">
+                <input type="hidden" name="action" value="restart_network_manager">
+                <button class="secondary" type="submit">Restart NetworkManager</button>
+            </form>
         </div>
     </div>
 

@@ -110,7 +110,22 @@ def test_datalogger_page_hides_plc_card_when_mode_is_mqtt(client, monkeypatch):
             "internet_access": True,
         },
     )
-    monkeypatch.setattr(network_routes, "get_logger_mode", lambda config: "mqtt")
+    monkeypatch.setattr(
+        network_routes,
+        "_build_initial_datalogger_status",
+        lambda config, host: {
+            "mqtt_logger": {},
+            "plc_logger": {},
+            "warnings": [],
+            "logger_mode": "mqtt",
+            "system_status_label": "Checking status",
+            "system_status_class": "status-neutral",
+            "system_status_detail": "Waiting",
+            "mqtt_ui_url": "",
+            "portainer_running": False,
+            "portainer_url": "",
+        },
+    )
 
     _login(client)
     response = client.get("/datalogger")
@@ -120,16 +135,40 @@ def test_datalogger_page_hides_plc_card_when_mode_is_mqtt(client, monkeypatch):
     assert b'id="plc-card-title">' not in response.data
 
 
-def test_datalogger_post_can_set_logger_mode(client, monkeypatch):
+def test_system_post_can_set_logger_mode(client, monkeypatch):
     calls = []
     monkeypatch.setattr(
         network_routes,
         "set_logger_mode",
         lambda config, mode: calls.append(mode) or {"success": True, "message": "Logger mode set."},
     )
+    monkeypatch.setattr(network_routes, "get_system_summary", lambda config: {
+        "hostname": "ess-pi",
+        "disk_total": "1.0 GB",
+        "disk_used": "0.5 GB",
+        "disk_free": "0.5 GB",
+        "disk_percent": 50,
+    })
+    monkeypatch.setattr(network_routes, "get_update_status", lambda config: {
+        "current_branch": "main",
+        "current_commit": "abc123",
+        "update_available": False,
+        "behind_by": 0,
+        "error": "",
+        "state": "idle",
+        "message": "",
+        "log_excerpt": "",
+    })
+    monkeypatch.setattr(network_routes, "get_datalogger_status", lambda config, host=None: {
+        "docker_available": True,
+        "portainer_running": False,
+        "portainer_installed": False,
+        "portainer_url": "",
+        "logger_mode": "auto",
+    })
 
     _login(client)
-    response = client.post("/datalogger", data={"action": "set_logger_mode", "logger_mode": "mqtt"}, follow_redirects=False)
+    response = client.post("/system", data={"action": "set_logger_mode", "logger_mode": "mqtt"}, follow_redirects=False)
 
     assert response.status_code == 302
     assert calls == ["mqtt"]
@@ -188,7 +227,7 @@ def test_datalogger_post_can_start_portainer(client, monkeypatch):
     assert calls == [True]
 
 
-def test_ethernet_post_can_restart_network_manager(client, monkeypatch):
+def test_wifi_post_can_restart_network_manager(client, monkeypatch):
     calls = []
     monkeypatch.setattr(
         network_routes,
@@ -197,7 +236,7 @@ def test_ethernet_post_can_restart_network_manager(client, monkeypatch):
     )
 
     _login(client)
-    response = client.post("/ethernet", data={"action": "restart_network_manager"}, follow_redirects=False)
+    response = client.post("/wifi", data={"action": "restart_network_manager"}, follow_redirects=False)
 
     assert response.status_code == 302
     assert calls == [True]

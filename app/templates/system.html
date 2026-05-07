@@ -183,4 +183,23 @@
         {% endif %}
     </article>
 </section>
+
+<section class="panel">
+    <div class="section-heading">
+        <div>
+            <h3>Logger mode</h3>
+            <p>Choose which logger this unit is intended to run. The Datalogger page hides non-selected logger cards.</p>
+        </div>
+    </div>
+    <form method="post" class="stack-form" data-busy-label="Saving logger mode...">
+        <input type="hidden" name="action" value="set_logger_mode">
+        <label for="logger_mode">Visible logger cards</label>
+        <select id="logger_mode" name="logger_mode">
+            <option value="auto" {% if datalogger_status.get('logger_mode', 'auto') == 'auto' %}selected{% endif %}>Auto (show both)</option>
+            <option value="mqtt" {% if datalogger_status.get('logger_mode', 'auto') == 'mqtt' %}selected{% endif %}>MQTT only</option>
+            <option value="plc" {% if datalogger_status.get('logger_mode', 'auto') == 'plc' %}selected{% endif %}>PLC only</option>
+        </select>
+        <button type="submit">Save logger mode</button>
+    </form>
+</section>
 {% endblock %}

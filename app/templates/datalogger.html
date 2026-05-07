@@ -36,31 +36,6 @@
 <section class="panel">
     <div class="section-heading">
         <div>
-            <h3>Installed logger mode</h3>
-            <p>Select which logger this unit is expected to run. Non-selected logger cards are hidden to reduce confusion.</p>
-        </div>
-    </div>
-    <form method="post" class="stack-form" data-busy-label="Saving logger mode...">
-        <input type="hidden" name="action" value="set_logger_mode">
-        <input type="hidden" id="logger_mode" name="logger_mode" value="{{ logger_mode }}">
-        <label for="logger_mode_slider">Logger mode: <strong id="logger-mode-label">{{ logger_mode|upper }}</strong></label>
-        <input
-            id="logger_mode_slider"
-            type="range"
-            min="0"
-            max="2"
-            step="1"
-            value="{{ 0 if logger_mode == 'plc' else (2 if logger_mode == 'mqtt' else 1) }}"
-            aria-describedby="logger-mode-help"
-        >
-        <div class="muted-note" id="logger-mode-help">Left = PLC only, center = Auto (show both), right = MQTT only.</div>
-        <button type="submit">Save logger mode</button>
-    </form>
-</section>
-
-<section class="panel">
-    <div class="section-heading">
-        <div>
             <h3>Logger health</h3>
             <p>Live technician view of recent push activity. This section refreshes every 5 seconds while the page is open.</p>
         </div>
@@ -158,36 +133,6 @@
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const endpoint = "{{ url_for('network.datalogger_status_api') }}";
-    const modeSlider = document.getElementById('logger_mode_slider');
-    const modeHidden = document.getElementById('logger_mode');
-    const modeLabel = document.getElementById('logger-mode-label');
-
-    function sliderValueToMode(value) {
-        if (Number(value) <= 0) return 'plc';
-        if (Number(value) >= 2) return 'mqtt';
-        return 'auto';
-    }
-
-    function modeToSliderValue(mode) {
-        if (mode === 'plc') return 0;
-        if (mode === 'mqtt') return 2;
-        return 1;
-    }
-
-    function setLoggerModeUI(mode) {
-        const normalized = mode || 'auto';
-        if (modeHidden) modeHidden.value = normalized;
-        if (modeLabel) modeLabel.textContent = normalized.toUpperCase();
-        if (modeSlider) modeSlider.value = String(modeToSliderValue(normalized));
-    }
-
-    if (modeSlider) {
-        modeSlider.addEventListener('input', function () {
-            setLoggerModeUI(sliderValueToMode(modeSlider.value));
-        });
-    }
-
-    setLoggerModeUI(modeHidden ? modeHidden.value : 'auto');
 
     function setPill(elementId, label, statusClass) {
         const element = document.getElementById(elementId);
@@ -327,9 +272,6 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!response.ok) return;
             const status = await response.json();
             const connectivity = status.connectivity || {};
-            if (status.logger_mode) {
-                setLoggerModeUI(status.logger_mode);
-            }
             setLink('mqtt-ui-link', (status.mqtt_logger && status.mqtt_logger.mqtt_ui_url) || status.mqtt_ui_url || '');
             setPill('internet-pill', connectivity.internet_label || 'Unknown', connectivity.internet_class || 'status-neutral');
             setPill('wifi-pill', connectivity.wifi_label || 'Unknown', connectivity.wifi_class || 'status-neutral');
