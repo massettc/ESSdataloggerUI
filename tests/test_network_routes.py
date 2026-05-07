@@ -322,6 +322,46 @@ def test_wifi_post_forgets_saved_network(client, monkeypatch):
     assert delete_calls == ["OldNetwork"]
 
 
+def test_wifi_post_connects_to_new_open_network(client, monkeypatch):
+    apply_calls = []
+    monkeypatch.setattr(network_routes, "get_saved_wifi_ssids", lambda config: set())
+    monkeypatch.setattr(
+        network_routes,
+        "apply_wifi_settings",
+        lambda config, ssid, password, hidden: apply_calls.append((ssid, password, hidden)) or {"success": True, "message": "ok"},
+    )
+
+    _login(client)
+    response = client.post(
+        "/wifi",
+        data={"ssid": "OpenNetwork", "security": "open", "password": ""},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert apply_calls == [("OpenNetwork", "", False)]
+
+
+def test_wifi_post_connects_via_manual_form_without_password(client, monkeypatch):
+    apply_calls = []
+    monkeypatch.setattr(network_routes, "get_saved_wifi_ssids", lambda config: set())
+    monkeypatch.setattr(
+        network_routes,
+        "apply_wifi_settings",
+        lambda config, ssid, password, hidden: apply_calls.append((ssid, password, hidden)) or {"success": True, "message": "ok"},
+    )
+
+    _login(client)
+    response = client.post(
+        "/wifi",
+        data={"ssid": "ManualOpenNetwork", "password": ""},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert apply_calls == [("ManualOpenNetwork", "", False)]
+
+
 def test_datalogger_page_handles_unexpected_status_errors(client, monkeypatch):
     monkeypatch.setattr(network_routes, "get_datalogger_status", lambda config, host=None: (_ for _ in ()).throw(RuntimeError("boom")))
 
