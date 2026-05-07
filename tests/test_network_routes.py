@@ -454,7 +454,7 @@ def test_system_page_shows_hostname_disk_and_updates(client, monkeypatch):
     monkeypatch.setattr(
         network_routes,
         "get_update_status",
-        lambda config: {"current_branch": "main", "current_commit": "abc1234", "update_available": True, "behind_by": 2, "error": ""},
+        lambda config, refresh=False: {"current_branch": "main", "current_commit": "abc1234", "update_available": True, "behind_by": 2, "error": ""},
     )
 
     _login(client)
@@ -482,7 +482,7 @@ def test_system_hostname_post_calls_update(client, monkeypatch):
     monkeypatch.setattr(
         network_routes,
         "get_update_status",
-        lambda config: {"current_branch": "main", "current_commit": "abc1234", "update_available": False, "behind_by": 0, "error": ""},
+        lambda config, refresh=False: {"current_branch": "main", "current_commit": "abc1234", "update_available": False, "behind_by": 0, "error": ""},
     )
 
     _login(client)
@@ -507,7 +507,7 @@ def test_system_update_post_runs_update(client, monkeypatch):
     monkeypatch.setattr(
         network_routes,
         "get_update_status",
-        lambda config: {"current_branch": "main", "current_commit": "abc1234", "update_available": False, "behind_by": 0, "error": ""},
+        lambda config, refresh=False: {"current_branch": "main", "current_commit": "abc1234", "update_available": False, "behind_by": 0, "error": ""},
     )
 
     _login(client)
@@ -515,3 +515,28 @@ def test_system_update_post_runs_update(client, monkeypatch):
 
     assert response.status_code == 302
     assert update_calls == [True]
+
+
+def test_system_check_updates_redirects_with_refresh_flag(client, monkeypatch):
+    monkeypatch.setattr(
+        network_routes,
+        "get_update_status",
+        lambda config, refresh=False: {
+            "current_branch": "main",
+            "current_commit": "abc1234",
+            "update_available": True,
+            "behind_by": 1,
+            "error": "",
+        },
+    )
+    monkeypatch.setattr(
+        network_routes,
+        "get_system_summary",
+        lambda config: {"hostname": "ess-pi", "disk_total": "64 GB", "disk_used": "18 GB", "disk_free": "46 GB", "disk_percent": 28},
+    )
+
+    _login(client)
+    response = client.post("/system", data={"action": "check_updates"}, follow_redirects=False)
+
+    assert response.status_code == 302
+    assert "/system?refresh=1" in response.headers["Location"]

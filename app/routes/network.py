@@ -256,7 +256,7 @@ def system_settings():
                     )
                 else:
                     flash("System is already up to date.", "success")
-                return redirect(url_for("network.system_settings"))
+                return redirect(url_for("network.system_settings", refresh="1"))
             elif action == "update":
                 result = run_system_update(current_app.config)
             elif action == "install_docker":
@@ -287,7 +287,8 @@ def system_settings():
 
     try:
         system = get_system_summary(current_app.config)
-        update_status = get_update_status(current_app.config)
+        force_refresh = request.args.get("refresh", "").strip() == "1"
+        update_status = get_update_status(current_app.config, refresh=force_refresh)
     except SystemManagerError as exc:
         current_app.logger.exception("system view error")
         flash(str(exc), "error")
