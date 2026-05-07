@@ -157,7 +157,9 @@ def find_wifi_profile_names_for_ssid(config: dict[str, Any], ssid: str) -> list[
     if not target_ssid:
         return []
 
-    output = _run_nmcli(config, ["-t", "-f", "NAME,TYPE,802-11-wireless.ssid", "connection", "show"])
+    # Some NetworkManager builds only allow generic fields in this listing call,
+    # so fetch NAME/TYPE first and resolve SSID per profile.
+    output = _run_nmcli(config, ["-t", "-f", "NAME,TYPE", "connection", "show"])
     matches: list[str] = []
     for line in output.splitlines():
         parts = _split_escaped_fields(line)
@@ -166,11 +168,19 @@ def find_wifi_profile_names_for_ssid(config: dict[str, Any], ssid: str) -> list[
 
         profile_name = parts[0].strip()
         profile_type = parts[1].strip()
-        profile_ssid = parts[2].strip() if len(parts) >= 3 else ""
 
         if not _type_matches(profile_type, WIFI_CONNECTION_TYPE):
             continue
-        if profile_name == target_ssid or profile_ssid == target_ssid:
+
+        if profile_name == target_ssid:
+            matches.append(profile_name)
+            continue
+
+        try:
+            profile_ssid = get_connection_wifi_ssid(config, profile_name)
+        except NetworkManagerError:
+            continue
+        if profile_ssid == target_ssid:
             matches.append(profile_name)
 
     return matches
