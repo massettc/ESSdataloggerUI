@@ -303,6 +303,25 @@ def test_wifi_post_allows_blank_password_for_secured_saved_network(client, monke
     assert apply_calls == [("Staff2019", "", False)]
 
 
+def test_wifi_post_forgets_saved_network(client, monkeypatch):
+    delete_calls = []
+    monkeypatch.setattr(
+        network_routes,
+        "delete_saved_wifi_profiles_for_ssid",
+        lambda config, ssid: delete_calls.append(ssid),
+    )
+
+    _login(client)
+    response = client.post(
+        "/wifi",
+        data={"action": "forget_wifi", "ssid": "OldNetwork"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert delete_calls == ["OldNetwork"]
+
+
 def test_datalogger_page_handles_unexpected_status_errors(client, monkeypatch):
     monkeypatch.setattr(network_routes, "get_datalogger_status", lambda config, host=None: (_ for _ in ()).throw(RuntimeError("boom")))
 

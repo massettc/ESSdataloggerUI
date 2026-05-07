@@ -72,6 +72,14 @@
                 </div>
             </form>
 
+            {% if network.has_saved_password %}
+            <form method="post" style="display: inline;">
+                <input type="hidden" name="action" value="forget_wifi">
+                <input type="hidden" name="ssid" value="{{ network.ssid }}">
+                <button type="submit" class="secondary" data-confirm="Forget saved Wi-Fi network {{ network.ssid }}?">Forget</button>
+            </form>
+            {% endif %}
+
             {% if network.in_use %}
             <span class="badge">Connected</span>
             {% elif network.has_saved_password %}

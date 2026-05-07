@@ -400,6 +400,33 @@ def get_saved_wifi_ssids(config: dict[str, Any]) -> set[str]:
     return saved_ssids
 
 
+def delete_saved_wifi_profiles_for_ssid(config: dict[str, Any], ssid: str) -> None:
+    """Delete all WiFi connection profiles for a given SSID."""
+    target_ssid = ssid.strip()
+    candidate_profiles = set(find_wifi_profile_names_for_ssid(config, target_ssid))
+
+    # Fallback to legacy matching in case profile query has missing SSID fields.
+    profiles = list_connection_profiles(config, connection_type=WIFI_CONNECTION_TYPE)
+    for profile in profiles:
+        profile_name = profile.get("name", "").strip()
+        if not profile_name:
+            continue
+        if profile_name == target_ssid:
+            candidate_profiles.add(profile_name)
+            continue
+        try:
+            if get_connection_wifi_ssid(config, profile_name) == target_ssid:
+                candidate_profiles.add(profile_name)
+        except NetworkManagerError:
+            pass
+
+    for profile_name in sorted(candidate_profiles):
+        try:
+            delete_connection_profile(config, profile_name)
+        except NetworkManagerError as exc:
+            raise NetworkManagerError(f"Failed to delete Wi-Fi profile '{profile_name}': {exc}") from exc
+
+
 def get_connection_ipv4_config(config: dict[str, Any], connection_name: str) -> dict[str, str]:
     output = _run_nmcli(
         config,

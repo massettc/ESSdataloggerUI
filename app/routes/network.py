@@ -15,6 +15,7 @@ from app.services.datalogger_manager import (
 )
 from app.services.network_apply import apply_ethernet_settings, apply_wifi_settings
 from app.services.network_manager import (
+    delete_saved_wifi_profiles_for_ssid,
     ETHERNET_CONNECTION_TYPE,
     NetworkManagerError,
     get_active_ethernet_connection,
@@ -76,6 +77,20 @@ def wifi_settings():
                 return redirect(url_for("network.wifi_settings"))
 
             flash(result["message"], "success" if result["success"] else "error")
+            return redirect(url_for("network.wifi_settings"))
+        
+        if action == "forget_wifi":
+            ssid = request.form.get("ssid", "").strip()
+            if not ssid:
+                flash("SSID is required.", "error")
+                return redirect(url_for("network.wifi_settings"))
+            
+            try:
+                delete_saved_wifi_profiles_for_ssid(current_app.config, ssid)
+                flash(f"Forgot Wi-Fi network {ssid}.", "success")
+            except NetworkManagerError as exc:
+                current_app.logger.exception("wifi forget error")
+                flash(str(exc), "error")
             return redirect(url_for("network.wifi_settings"))
 
         ssid = request.form.get("ssid", "").strip()
