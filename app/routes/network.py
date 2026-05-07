@@ -20,6 +20,7 @@ from app.services.network_manager import (
     get_active_ethernet_connection,
     get_connection_ipv4_config,
     get_dashboard_state,
+    get_saved_wifi_ssids,
     list_connection_profiles,
     scan_wifi_networks,
 )
@@ -100,6 +101,10 @@ def wifi_settings():
 
     try:
         wifi_networks = scan_wifi_networks(current_app.config, force_refresh=True)
+        saved_ssids = get_saved_wifi_ssids(current_app.config)
+        # Enrich networks with saved password status
+        for network in wifi_networks:
+            network["has_saved_password"] = network["ssid"] in saved_ssids
         state = get_dashboard_state(current_app.config)
     except NetworkManagerError as exc:
         current_app.logger.exception("wifi view error")

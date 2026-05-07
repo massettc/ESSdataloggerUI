@@ -329,6 +329,35 @@ def connect_wifi(config: dict[str, Any], ssid: str, password: str, hidden: bool)
     _run_nmcli(config, command)
 
 
+def get_saved_wifi_ssids(config: dict[str, Any]) -> set[str]:
+    """Return a set of SSIDs for WiFi connections that have saved passwords."""
+    saved_ssids = set()
+    
+    # Get all WiFi connection profiles
+    wifi_profiles = list_connection_profiles(config, connection_type=WIFI_CONNECTION_TYPE)
+    
+    for profile in wifi_profiles:
+        try:
+            # Check if profile has a saved password (802-11-wireless.psk)
+            output = _run_nmcli(
+                config,
+                ["-t", "-f", "802-11-wireless.ssid,802-11-wireless.psk", "connection", "show", profile["name"]]
+            )
+            
+            lines = output.strip().splitlines()
+            if len(lines) >= 2:
+                ssid = lines[0].strip()
+                psk = lines[1].strip()
+                # If psk is not empty (and not just --), this is a saved network with password
+                if ssid and psk and psk != "--":
+                    saved_ssids.add(ssid)
+        except NetworkManagerError:
+            # Skip profiles that can't be read
+            pass
+    
+    return saved_ssids
+
+
 def get_connection_ipv4_config(config: dict[str, Any], connection_name: str) -> dict[str, str]:
     output = _run_nmcli(
         config,

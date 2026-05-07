@@ -61,14 +61,20 @@
 
                 <label for="password-{{ loop.index }}">Passphrase</label>
                 <div class="password-row">
+                    {% if network.has_saved_password %}
+                    <input id="password-{{ loop.index }}" name="password" type="password" autocomplete="new-password" placeholder="••••••••" value="••••••••" readonly class="saved-password-field">
+                    {% else %}
                     <input id="password-{{ loop.index }}" name="password" type="password" autocomplete="new-password" placeholder="Enter Wi-Fi password">
-                    <button type="button" class="secondary small-button" data-password-target="password-{{ loop.index }}">Show</button>
+                    {% endif %}
+                    <button type="button" class="secondary small-button" data-password-target="password-{{ loop.index }}" {% if network.has_saved_password %}data-saved-password="true"{% endif %}>Show</button>
                     <button type="submit">Connect</button>
                 </div>
             </form>
 
             {% if network.in_use %}
             <span class="badge">Connected</span>
+            {% elif network.has_saved_password %}
+            <span class="badge">Saved</span>
             {% endif %}
         </article>
         {% else %}

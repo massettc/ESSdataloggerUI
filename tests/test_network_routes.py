@@ -11,6 +11,7 @@ def test_wifi_page_shows_explicit_scan_and_connect_flow(client, monkeypatch):
     scan_calls = []
 
     monkeypatch.setattr(network_routes, "scan_wifi_networks", lambda config, force_refresh=False: scan_calls.append(force_refresh) or wifi_networks)
+    monkeypatch.setattr(network_routes, "get_saved_wifi_ssids", lambda config: set())
     monkeypatch.setattr(
         network_routes,
         "get_dashboard_state",
@@ -32,6 +33,7 @@ def test_wifi_page_prefills_selected_network_from_query(client, monkeypatch):
     wifi_networks = [{"ssid": "CabinetWiFi", "signal": "75", "security": "WPA2", "in_use": False}]
 
     monkeypatch.setattr(network_routes, "scan_wifi_networks", lambda config, force_refresh=False: wifi_networks)
+    monkeypatch.setattr(network_routes, "get_saved_wifi_ssids", lambda config: set())
     monkeypatch.setattr(
         network_routes,
         "get_dashboard_state",
