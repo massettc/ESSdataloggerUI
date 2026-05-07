@@ -676,8 +676,11 @@ def _build_nmcli_command(config: dict[str, Any], arguments: list[str]) -> list[s
 
 def _is_mutating_nmcli_command(arguments: list[str]) -> bool:
     mutating_prefixes = {
+        ("connection", "add"),
+        ("connection", "delete"),
         ("connection", "modify"),
         ("connection", "reload"),
+        ("connection", "down"),
         ("connection", "up"),
         ("device", "connect"),
         ("device", "reapply"),

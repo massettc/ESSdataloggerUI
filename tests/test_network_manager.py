@@ -266,6 +266,15 @@ def test_build_nmcli_command_uses_sudo_for_mutating_commands():
     assert command[:3] == ["sudo", "-n", "nmcli"]
 
 
+def test_build_nmcli_command_uses_sudo_for_connection_add():
+    command = network_manager._build_nmcli_command(
+        {"NMCLI_BIN": "nmcli", "USE_SUDO_FOR_NMCLI": True},
+        ["connection", "add", "type", "wifi", "ifname", "wlan0", "con-name", "Staff2019", "ssid", "Staff2019"],
+    )
+
+    assert command[:3] == ["sudo", "-n", "nmcli"]
+
+
 def test_build_nmcli_command_skips_sudo_for_read_only_commands():
     command = network_manager._build_nmcli_command(
         {"NMCLI_BIN": "nmcli", "USE_SUDO_FOR_NMCLI": True},
