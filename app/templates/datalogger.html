@@ -52,7 +52,7 @@
 
     <div class="logger-health-grid">
         {% if show_mqtt %}
-        <article class="stat-card logger-health-card">
+        <article id="mqtt-logger-card" class="stat-card logger-health-card">
             <div class="logger-card-header">
                 <strong id="mqtt-card-title">MQTT logger</strong>
                 <span id="mqtt-push-pill" class="status-pill {{ mqtt_logger.get('status_class', 'status-neutral') }}"><span class="status-dot"></span>{{ mqtt_logger.get('last_push_label', 'Waiting for data') }}</span>
@@ -98,7 +98,7 @@
         {% endif %}
 
         {% if show_plc %}
-        <article class="stat-card logger-health-card">
+        <article id="plc-logger-card" class="stat-card logger-health-card">
             <div class="logger-card-header">
                 <strong id="plc-card-title">PLC logger</strong>
                 <span id="plc-push-pill" class="status-pill {{ plc_logger.get('status_class', 'status-neutral') }}"><span class="status-dot"></span>{{ plc_logger.get('last_push_label', 'Waiting for data') }}</span>
@@ -158,6 +158,14 @@ document.addEventListener('DOMContentLoaded', function () {
             element.hidden = true;
             element.textContent = '';
         }
+    }
+
+    function applyLoggerMode(mode) {
+        const normalized = (mode || 'auto').toLowerCase();
+        const mqttCard = document.getElementById('mqtt-logger-card');
+        const plcCard = document.getElementById('plc-logger-card');
+        if (mqttCard) mqttCard.hidden = normalized === 'plc';
+        if (plcCard) plcCard.hidden = normalized === 'mqtt';
     }
 
     function setLink(linkId, href) {
@@ -272,6 +280,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!response.ok) return;
             const status = await response.json();
             const connectivity = status.connectivity || {};
+            applyLoggerMode(status.logger_mode || 'auto');
             setLink('mqtt-ui-link', (status.mqtt_logger && status.mqtt_logger.mqtt_ui_url) || status.mqtt_ui_url || '');
             setPill('internet-pill', connectivity.internet_label || 'Unknown', connectivity.internet_class || 'status-neutral');
             setPill('wifi-pill', connectivity.wifi_label || 'Unknown', connectivity.wifi_class || 'status-neutral');
@@ -287,6 +296,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    applyLoggerMode("{{ logger_mode }}");
     refreshLoggerHealth();
     window.setInterval(refreshLoggerHealth, 5000);
 });

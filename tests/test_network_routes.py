@@ -117,7 +117,6 @@ def test_datalogger_page_hides_plc_card_when_mode_is_mqtt(client, monkeypatch):
             "mqtt_logger": {},
             "plc_logger": {},
             "warnings": [],
-            "logger_mode": "mqtt",
             "system_status_label": "Checking status",
             "system_status_class": "status-neutral",
             "system_status_detail": "Waiting",
@@ -126,6 +125,7 @@ def test_datalogger_page_hides_plc_card_when_mode_is_mqtt(client, monkeypatch):
             "portainer_url": "",
         },
     )
+    monkeypatch.setattr(network_routes, "get_logger_mode", lambda config: "mqtt")
 
     _login(client)
     response = client.get("/datalogger")

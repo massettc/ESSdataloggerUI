@@ -9,6 +9,7 @@ from app.services.datalogger_manager import (
     DataloggerManagerError,
     ensure_portainer,
     get_datalogger_status,
+    get_logger_mode,
     install_docker,
     set_logger_mode,
 )
@@ -210,6 +211,7 @@ def datalogger():
         state = _default_state()
 
     datalogger_status = _build_initial_datalogger_status(current_app.config, host=request.host.split(":")[0])
+    datalogger_status["logger_mode"] = get_logger_mode(current_app.config)
     connectivity = _build_connectivity_badges(state, current_app.config)
     return render_template("datalogger.html", datalogger_status=datalogger_status, state=state, connectivity=connectivity)
 
