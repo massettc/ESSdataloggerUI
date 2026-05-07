@@ -99,6 +99,42 @@ def test_datalogger_page_shows_portainer_status(client, monkeypatch):
     assert b":9443" in response.data
 
 
+def test_datalogger_page_hides_plc_card_when_mode_is_mqtt(client, monkeypatch):
+    monkeypatch.setattr(
+        network_routes,
+        "get_dashboard_state",
+        lambda config: {
+            "hostname": "ess-pi",
+            "interfaces": [{"device": "wlan0", "type": "wifi", "state": "connected", "connection": "PlantWiFi"}],
+            "wifi_networks": [],
+            "internet_access": True,
+        },
+    )
+    monkeypatch.setattr(network_routes, "get_logger_mode", lambda config: "mqtt")
+
+    _login(client)
+    response = client.get("/datalogger")
+
+    assert response.status_code == 200
+    assert b"MQTT logger" in response.data
+    assert b'id="plc-card-title">' not in response.data
+
+
+def test_datalogger_post_can_set_logger_mode(client, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        network_routes,
+        "set_logger_mode",
+        lambda config, mode: calls.append(mode) or {"success": True, "message": "Logger mode set."},
+    )
+
+    _login(client)
+    response = client.post("/datalogger", data={"action": "set_logger_mode", "logger_mode": "mqtt"}, follow_redirects=False)
+
+    assert response.status_code == 302
+    assert calls == ["mqtt"]
+
+
 def test_datalogger_page_renders_without_live_status_probe(client, monkeypatch):
     monkeypatch.setattr(
         network_routes,
@@ -147,6 +183,21 @@ def test_datalogger_post_can_start_portainer(client, monkeypatch):
 
     _login(client)
     response = client.post("/datalogger", data={"action": "portainer"}, follow_redirects=False)
+
+    assert response.status_code == 302
+    assert calls == [True]
+
+
+def test_ethernet_post_can_restart_network_manager(client, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        network_routes,
+        "restart_network_manager",
+        lambda config: calls.append(True) or {"success": True, "message": "NetworkManager restarted."},
+    )
+
+    _login(client)
+    response = client.post("/ethernet", data={"action": "restart_network_manager"}, follow_redirects=False)
 
     assert response.status_code == 302
     assert calls == [True]

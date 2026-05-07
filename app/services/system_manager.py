@@ -85,6 +85,7 @@ def get_update_status(config: dict[str, Any], refresh: bool = False) -> dict[str
     else:
         compare_branch = status["current_branch"]
 
+    compare_target_ref = f"origin/{compare_branch}"
     if refresh:
         # Fetch the specific branch so origin/<branch> ref is reliably created on shallow clones
         fetch_result = _run_command(
@@ -95,12 +96,15 @@ def get_update_status(config: dict[str, Any], refresh: bool = False) -> dict[str
             status["error"] = _command_error(fetch_result, "Unable to contact the git remote")
             _write_update_state(config, "error", status["error"])
             return status
+        # Always compare against the freshly-fetched ref to avoid stale/missing
+        # origin/<branch> refs on shallow clones.
+        compare_target_ref = "FETCH_HEAD"
         _write_update_state(config, "idle", "Update check finished.")
         status["state"] = "idle"
         status["message"] = "Update check finished."
 
     behind_result = _run_command(
-        [git_bin, "-C", str(repo_path), "rev-list", "--count", f"HEAD..origin/{compare_branch}"],
+        [git_bin, "-C", str(repo_path), "rev-list", "--count", f"HEAD..{compare_target_ref}"],
         check=False,
     )
     if behind_result.returncode == 0:
@@ -165,6 +169,21 @@ def request_system_reboot(config: dict[str, Any]) -> dict[str, Any]:
         return {"success": False, "message": _command_error(result, "Unable to request a reboot")}
 
     return {"success": True, "message": "Reboot requested. The device may disconnect shortly."}
+
+
+def restart_network_manager(config: dict[str, Any]) -> dict[str, Any]:
+    if not _is_linux_target():
+        return {"success": False, "message": "NetworkManager restart is only available on the Pi target device."}
+
+    result = _run_privileged_command(
+        config,
+        [config.get("SYSTEMCTL_BIN", "systemctl"), "restart", "NetworkManager"],
+        check=False,
+    )
+    if result.returncode != 0:
+        return {"success": False, "message": _command_error(result, "Unable to restart NetworkManager")}
+
+    return {"success": True, "message": "NetworkManager restarted."}
 
 
 def run_system_update(config: dict[str, Any]) -> dict[str, Any]:

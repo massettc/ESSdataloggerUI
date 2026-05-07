@@ -38,6 +38,7 @@ class Config:
     PORTAINER_HOSTNAME = os.getenv("PI_ADMIN_PORTAINER_HOSTNAME", "")
     MQTT_UI_HOSTNAME = os.getenv("PI_ADMIN_MQTT_UI_HOSTNAME", "")
     MQTT_UI_PORT = os.getenv("PI_ADMIN_MQTT_UI_PORT", "")
+    DATALOGGER_MODE_FILE = os.getenv("PI_ADMIN_DATALOGGER_MODE_FILE", "/etc/pi-network-admin/datalogger_mode.json")
     PLC_ALARM_CONFIG_FILE = os.getenv(
         "PI_ADMIN_PLC_ALARM_CONFIG_FILE", str(BASE_DIR / "config" / "plc_alarm.json")
     )

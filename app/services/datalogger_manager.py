@@ -9,8 +9,11 @@ import subprocess
 import time
 from datetime import datetime, timezone
 from html import unescape
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
+
+from app.config import BASE_DIR
 
 
 class DataloggerManagerError(RuntimeError):
@@ -48,6 +51,7 @@ def get_datalogger_status(config: dict[str, Any], host: str | None = None) -> di
         "mqtt_logger": _default_logger_state("MQTT Logger", mqtt_container_name),
         "plc_logger": _default_logger_state("PLC Logger", plc_container_name),
         "error": "",
+        "logger_mode": get_logger_mode(config),
     }
 
     version_result = _run_docker_command(config, [docker_bin, "version", "--format", "{{.Server.Version}}"], check=False)
@@ -150,6 +154,63 @@ def _set_cached_value(config: dict[str, Any], cache_name: str, value: Any, cache
     if cache_ttl > 0:
         _CACHE[(_get_cache_scope(config), cache_name)] = (time.monotonic() + cache_ttl, copy.deepcopy(value))
     return value
+
+
+def get_logger_mode(config: dict[str, Any]) -> str:
+    mode_file = _logger_mode_file(config)
+    if not mode_file.exists():
+        return "auto"
+    try:
+        payload = json.loads(mode_file.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return "auto"
+
+    mode = str(payload.get("mode", "auto")).strip().lower()
+    if mode in {"auto", "mqtt", "plc"}:
+        return mode
+    return "auto"
+
+
+def set_logger_mode(config: dict[str, Any], mode: str) -> dict[str, Any]:
+    normalized = str(mode or "").strip().lower()
+    if normalized not in {"auto", "mqtt", "plc"}:
+        return {"success": False, "message": "Select Auto, MQTT, or PLC logger mode."}
+
+    mode_file = _logger_mode_file(config)
+    mode_file.parent.mkdir(parents=True, exist_ok=True)
+    body = json.dumps({"mode": normalized}, indent=2) + "\n"
+
+    try:
+        mode_file.write_text(body, encoding="utf-8")
+    except PermissionError:
+        sudo_bin = config.get("SUDO_BIN", "sudo")
+        use_sudo = config.get("USE_SUDO_FOR_SYSTEM", True)
+        if not use_sudo:
+            return {"success": False, "message": "Permission denied saving logger mode."}
+        result = subprocess.run(
+            [sudo_bin, "-n", "tee", str(mode_file)],
+            input=body,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            return {"success": False, "message": "Unable to save logger mode with elevated access."}
+
+    _clear_datalogger_cache(config)
+    return {"success": True, "message": f"Logger mode set to {normalized.upper()}."}
+
+
+def _logger_mode_file(config: dict[str, Any]) -> Path:
+    default_path = Path("/etc/pi-network-admin/datalogger_mode.json") if os.name != "nt" else (BASE_DIR / "config" / "datalogger_mode.json")
+    return Path(str(config.get("DATALOGGER_MODE_FILE", default_path)))
+
+
+def _clear_datalogger_cache(config: dict[str, Any]) -> None:
+    scope = _get_cache_scope(config)
+    for key in list(_CACHE.keys()):
+        if key[0] == scope:
+            _CACHE.pop(key, None)
 
 
 def install_docker(config: dict[str, Any]) -> dict[str, Any]:

@@ -5,7 +5,14 @@ import threading
 from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 
 from app.auth import login_required
-from app.services.datalogger_manager import DataloggerManagerError, ensure_portainer, get_datalogger_status, install_docker
+from app.services.datalogger_manager import (
+    DataloggerManagerError,
+    ensure_portainer,
+    get_datalogger_status,
+    get_logger_mode,
+    install_docker,
+    set_logger_mode,
+)
 from app.services.network_apply import apply_ethernet_settings, apply_wifi_settings
 from app.services.network_manager import (
     ETHERNET_CONNECTION_TYPE,
@@ -26,6 +33,7 @@ from app.services.system_manager import (
     request_system_reboot,
     run_custom_technician_command,
     run_system_update,
+    restart_network_manager,
     run_technician_command,
     save_technician_json_file,
     set_system_hostname,
@@ -100,6 +108,18 @@ def wifi_settings():
 @login_required
 def ethernet_settings():
     if request.method == "POST":
+        action = request.form.get("action", "save").strip()
+        if action == "restart_network_manager":
+            try:
+                result = restart_network_manager(current_app.config)
+            except SystemManagerError as exc:
+                current_app.logger.exception("network manager restart error")
+                flash(str(exc), "error")
+                return redirect(url_for("network.ethernet_settings"))
+
+            flash(result["message"], "success" if result["success"] else "error")
+            return redirect(url_for("network.ethernet_settings"))
+
         connection_name = request.form.get("connection_name", "").strip() or None
         ip_method = request.form.get("ip_method", "").strip() or None
         ip_address = request.form.get("ip_address", "").strip()
@@ -173,6 +193,8 @@ def datalogger():
                 result = ensure_portainer(current_app.config)
             elif action == "install_docker":
                 result = install_docker(current_app.config)
+            elif action == "set_logger_mode":
+                result = set_logger_mode(current_app.config, request.form.get("logger_mode", "auto"))
             else:
                 result = {"success": False, "message": "Unknown datalogger action."}
         except DataloggerManagerError as exc:
@@ -191,6 +213,7 @@ def datalogger():
         state = _default_state()
 
     datalogger_status = _build_initial_datalogger_status(current_app.config, host=request.host.split(":")[0])
+    datalogger_status["logger_mode"] = get_logger_mode(current_app.config)
     connectivity = _build_connectivity_badges(state, current_app.config)
     return render_template("datalogger.html", datalogger_status=datalogger_status, state=state, connectivity=connectivity)
 
@@ -483,5 +506,6 @@ def _default_datalogger_status() -> dict[str, object]:
             "error": "",
         },
         "containers": [],
+        "logger_mode": "auto",
         "error": "",
     }

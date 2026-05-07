@@ -1,5 +1,6 @@
 import subprocess
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from app.services import datalogger_manager
 
@@ -142,6 +143,26 @@ def test_get_datalogger_status_uses_short_cache(monkeypatch):
     assert first["portainer_running"] is True
     assert second["portainer_running"] is True
     assert calls["count"] == 2
+
+
+def test_get_logger_mode_defaults_to_auto(tmp_path: Path):
+    mode = datalogger_manager.get_logger_mode({"DATALOGGER_MODE_FILE": str(tmp_path / "datalogger_mode.json")})
+    assert mode == "auto"
+
+
+def test_set_logger_mode_persists_mode(tmp_path: Path):
+    mode_file = tmp_path / "datalogger_mode.json"
+
+    result = datalogger_manager.set_logger_mode(
+        {
+            "DATALOGGER_MODE_FILE": str(mode_file),
+            "REPO_PATH": str(tmp_path),
+        },
+        "mqtt",
+    )
+
+    assert result["success"] is True
+    assert datalogger_manager.get_logger_mode({"DATALOGGER_MODE_FILE": str(mode_file)}) == "mqtt"
 
 
 def test_run_docker_command_returns_timeout_result_when_probe_hangs(monkeypatch):

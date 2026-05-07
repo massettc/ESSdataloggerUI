@@ -67,6 +67,52 @@ def test_set_system_hostname_reports_missing_helper_script(monkeypatch, tmp_path
     assert "script not found" in result["message"].lower()
 
 
+def test_get_update_status_refresh_compares_against_fetch_head(monkeypatch, tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    git_dir = repo_path / ".git"
+    git_dir.mkdir(parents=True)
+
+    calls = []
+
+    def fake_run(args, check=True):
+        calls.append(args)
+        cmd = " ".join(args)
+        if "rev-parse --abbrev-ref HEAD" in cmd:
+            return DummyResult(returncode=0, stdout="main\n")
+        if "rev-parse --short HEAD" in cmd:
+            return DummyResult(returncode=0, stdout="abc123\n")
+        if "fetch origin main" in cmd:
+            return DummyResult(returncode=0, stdout="")
+        if "rev-list --count HEAD..FETCH_HEAD" in cmd:
+            return DummyResult(returncode=0, stdout="2\n")
+        return DummyResult(returncode=0, stdout="")
+
+    monkeypatch.setattr(system_manager, "_run_command", fake_run)
+
+    status = system_manager.get_update_status(
+        {
+            "REPO_PATH": str(repo_path),
+            "UPDATE_STATUS_FILE": str(tmp_path / "update-status.txt"),
+            "UPDATE_LOG_PATH": str(tmp_path / "update.log"),
+        },
+        refresh=True,
+    )
+
+    assert status["update_available"] is True
+    assert status["behind_by"] == 2
+    assert any("HEAD..FETCH_HEAD" in " ".join(cmd) for cmd in calls)
+
+
+def test_restart_network_manager_uses_systemctl(monkeypatch):
+    monkeypatch.setattr(system_manager, "_is_linux_target", lambda: True)
+    monkeypatch.setattr(system_manager, "_run_privileged_command", lambda config, args, check=False: DummyResult(returncode=0))
+
+    result = system_manager.restart_network_manager({"SYSTEMCTL_BIN": "systemctl"})
+
+    assert result["success"] is True
+    assert "restarted" in result["message"].lower()
+
+
 def test_start_custom_technician_command_creates_running_state(monkeypatch, tmp_path: Path):
     captured = {}
 

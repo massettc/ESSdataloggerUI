@@ -16,6 +16,7 @@
             <p>Use Automatic for DHCP or Static to set the address manually.</p>
         </div>
         <form method="post" class="stack-form">
+            <input type="hidden" name="action" value="save">
             <label for="connection_name">Saved profile</label>
             <select id="connection_name" name="connection_name">
                 {% for profile in ethernet_profiles %}
@@ -47,6 +48,11 @@
             <input id="dns" name="dns" placeholder="8.8.8.8,1.1.1.1" value="{{ ipv4_config.dns }}">
 
             <button type="submit">Save Ethernet Settings</button>
+        </form>
+
+        <form method="post" class="stack-form" data-confirm="Restart NetworkManager now? Connected sessions may briefly drop." data-busy-label="Restarting NetworkManager...">
+            <input type="hidden" name="action" value="restart_network_manager">
+            <button class="secondary" type="submit">Restart NetworkManager</button>
         </form>
 
         <p class="muted-note">When Static is selected, enter the IP address and prefix. Gateway and DNS are optional — leave blank for direct cabinet connections where no router is present. If set, the gateway must be on the same subnet as the IP address.</p>
