@@ -58,6 +58,7 @@ def _connect_wifi_with_profile_recovery(config: dict[str, Any], ssid: str, passw
         if saved_profile_names is None:
             try:
                 saved_profile_names = find_wifi_profile_names_for_ssid(config, ssid)
+                logger.debug("found %d saved profile(s) for ssid=%s: %s", len(saved_profile_names), ssid, saved_profile_names)
             except NetworkManagerError as exc:
                 logger.warning("failed to query saved profiles for ssid=%s: %s", ssid, exc)
                 saved_profile_names = []
@@ -72,11 +73,15 @@ def _connect_wifi_with_profile_recovery(config: dict[str, Any], ssid: str, passw
             return
 
     if password and _saved_profiles():
-        logger.info("attempting saved profile password update for ssid=%s", ssid)
-        if _try_update_saved_profiles_and_activate(config, ssid, password, hidden, _saved_profiles()):
+        saved_profiles = _saved_profiles()
+        logger.info("attempting saved profile password update for ssid=%s with %d profile(s): %s", ssid, len(saved_profiles), saved_profiles)
+        if _try_update_saved_profiles_and_activate(config, ssid, password, hidden, saved_profiles):
+            logger.info("saved profile password update succeeded for ssid=%s", ssid)
             return
+        logger.info("saved profile password update did not succeed for ssid=%s, falling back to connect_wifi", ssid)
 
     try:
+        logger.debug("calling connect_wifi for ssid=%s with password_provided=%s hidden=%s", ssid, bool(password), hidden)
         connect_wifi(config, ssid=ssid, password=password, hidden=hidden)
     except NetworkManagerError as exc:
         if _is_secrets_required_error(exc) and not password and _saved_profiles():
@@ -152,8 +157,11 @@ def _try_update_saved_profiles_and_activate(
 ) -> bool:
     from app.services.network_manager import _run_nmcli  # local import to avoid widening public API
 
+    logger.debug("_try_update_saved_profiles_and_activate: updating %d profile(s) for ssid=%s", len(profile_names), ssid)
+    
     for profile_name in profile_names:
         try:
+            logger.debug("modifying profile=%s with psk and hidden=%s", profile_name, hidden)
             _run_nmcli(
                 config,
                 [
@@ -170,7 +178,10 @@ def _try_update_saved_profiles_and_activate(
                     "yes",
                 ],
             )
+            logger.debug("profile modification succeeded for profile=%s", profile_name)
+            logger.debug("bringing up connection for profile=%s", profile_name)
             bring_up_connection(config, profile_name)
+            logger.debug("bring_up_connection completed for profile=%s", profile_name)
         except NetworkManagerError as profile_exc:
             logger.warning(
                 "saved profile update failed for profile=%s ssid=%s: %s",
@@ -180,9 +191,12 @@ def _try_update_saved_profiles_and_activate(
             )
             continue
 
+        logger.debug("verifying wifi connection for ssid=%s after profile activation", ssid)
         if _verify_wifi_connection(config, ssid):
+            logger.info("wifi connection verified for ssid=%s", ssid)
             return True
 
+    logger.warning("no saved profiles succeeded for ssid=%s", ssid)
     return False
 
 
