@@ -51,14 +51,32 @@ def apply_wifi_settings(config: dict[str, Any], ssid: str, password: str, hidden
 
 
 def _connect_wifi_with_profile_recovery(config: dict[str, Any], ssid: str, password: str, hidden: bool) -> None:
+    saved_profile_names: list[str] | None = None
+
+    def _saved_profiles() -> list[str]:
+        nonlocal saved_profile_names
+        if saved_profile_names is None:
+            saved_profile_names = find_wifi_profile_names_for_ssid(config, ssid)
+        return saved_profile_names
+
     try:
         connect_wifi(config, ssid=ssid, password=password, hidden=hidden)
     except NetworkManagerError as exc:
+        if _is_secrets_required_error(exc) and not password and _saved_profiles():
+            raise NetworkManagerError(
+                f"Saved Wi-Fi profile for {ssid} needs a password. Enter the Wi-Fi password and try again."
+            ) from exc
+
+        if _is_ssid_not_found_error(exc) and _saved_profiles():
+            logger.warning("ssid lookup failed for ssid=%s, trying saved profile activation fallback", ssid)
+            if _try_activate_saved_profiles(config, ssid, _saved_profiles()):
+                return
+
         if not _should_retry_after_profile_cleanup(exc):
             raise
 
         if not password:
-            if _is_missing_key_mgmt_error(exc):
+            if _is_missing_key_mgmt_error(exc) or _is_secrets_required_error(exc):
                 raise NetworkManagerError(
                     f"Saved Wi-Fi profile for {ssid} is invalid. Enter the Wi-Fi password and try again."
                 ) from exc
@@ -83,6 +101,29 @@ def _connect_wifi_with_profile_recovery(config: dict[str, Any], ssid: str, passw
 
 def _is_missing_key_mgmt_error(exc: NetworkManagerError) -> bool:
     return "802-11-wireless-security.key-mgmt" in str(exc)
+
+
+def _is_secrets_required_error(exc: NetworkManagerError) -> bool:
+    error_text = str(exc).lower()
+    return "secrets were required" in error_text or "no secrets" in error_text
+
+
+def _is_ssid_not_found_error(exc: NetworkManagerError) -> bool:
+    return "no network with ssid" in str(exc).lower()
+
+
+def _try_activate_saved_profiles(config: dict[str, Any], ssid: str, profile_names: list[str]) -> bool:
+    for profile_name in profile_names:
+        try:
+            bring_up_connection(config, profile_name)
+        except NetworkManagerError as profile_exc:
+            logger.warning("saved profile activation failed for profile=%s ssid=%s: %s", profile_name, ssid, profile_exc)
+            continue
+
+        if _verify_wifi_connection(config, ssid):
+            return True
+
+    return False
 
 
 def _should_retry_after_profile_cleanup(exc: NetworkManagerError) -> bool:

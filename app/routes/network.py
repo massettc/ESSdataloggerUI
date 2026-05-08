@@ -94,7 +94,7 @@ def wifi_settings():
             return redirect(url_for("network.wifi_settings"))
 
         ssid = request.form.get("ssid", "").strip()
-        password = request.form.get("password", "")
+        password = request.form.get("wifi_password", request.form.get("password", ""))
         security = request.form.get("security", "").strip()
         hidden = request.form.get("hidden") == "on"
 
