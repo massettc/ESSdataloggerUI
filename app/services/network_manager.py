@@ -104,7 +104,14 @@ def scan_wifi_networks(config: dict[str, Any], force_refresh: bool = False) -> l
         key=lambda item: (not item["in_use"], -_safe_int(item["signal"]), item["ssid"].lower()),
     )
     if not networks:
+        _nm_logger.warning("WiFi scan returned no networks - scanning may be disabled or no APs available")
         return networks
+    
+    connected_count = sum(1 for n in networks if n.get("in_use"))
+    _nm_logger.debug("WiFi scan found %d network(s), %d connected", len(networks), connected_count)
+    if len(networks) <= 2 and connected_count == 1:
+        _nm_logger.warning("WiFi scan returned very few networks (%d total, only 1 connected) - scanning may be partially broken", len(networks))
+    
     return _set_cached_value(config, cache_key, networks, cache_ttl)
 
 

@@ -19,6 +19,9 @@ def create_app(config_overrides: dict[str, Any] | None = None) -> Flask:
         app.config.update(config_overrides)
 
     _configure_logging(app)
+    
+    logger = logging.getLogger("pi_network_admin")
+    logger.info("pi-network-admin app initialization started")
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(network_bp)
