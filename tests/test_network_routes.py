@@ -12,6 +12,7 @@ def test_wifi_page_shows_explicit_scan_and_connect_flow(client, monkeypatch):
 
     monkeypatch.setattr(network_routes, "scan_wifi_networks", lambda config, force_refresh=False: scan_calls.append(force_refresh) or wifi_networks)
     monkeypatch.setattr(network_routes, "get_saved_wifi_ssids", lambda config: set())
+    monkeypatch.setattr(network_routes, "get_saved_wifi_password_ssids", lambda config: set())
     monkeypatch.setattr(
         network_routes,
         "get_dashboard_state",
@@ -35,6 +36,7 @@ def test_wifi_page_scan_button_requests_force_refresh(client, monkeypatch):
 
     monkeypatch.setattr(network_routes, "scan_wifi_networks", lambda config, force_refresh=False: scan_calls.append(force_refresh) or wifi_networks)
     monkeypatch.setattr(network_routes, "get_saved_wifi_ssids", lambda config: set())
+    monkeypatch.setattr(network_routes, "get_saved_wifi_password_ssids", lambda config: set())
     monkeypatch.setattr(
         network_routes,
         "get_dashboard_state",
@@ -53,6 +55,7 @@ def test_wifi_page_prefills_selected_network_from_query(client, monkeypatch):
 
     monkeypatch.setattr(network_routes, "scan_wifi_networks", lambda config, force_refresh=False: wifi_networks)
     monkeypatch.setattr(network_routes, "get_saved_wifi_ssids", lambda config: set())
+    monkeypatch.setattr(network_routes, "get_saved_wifi_password_ssids", lambda config: set())
     monkeypatch.setattr(
         network_routes,
         "get_dashboard_state",
@@ -266,6 +269,7 @@ def test_wifi_post_can_restart_network_manager(client, monkeypatch):
 def test_wifi_post_rejects_blank_password_for_secured_unsaved_network(client, monkeypatch):
     apply_calls = []
     monkeypatch.setattr(network_routes, "get_saved_wifi_ssids", lambda config: set())
+    monkeypatch.setattr(network_routes, "get_saved_wifi_password_ssids", lambda config: set())
     monkeypatch.setattr(
         network_routes,
         "apply_wifi_settings",
@@ -286,6 +290,7 @@ def test_wifi_post_rejects_blank_password_for_secured_unsaved_network(client, mo
 def test_wifi_post_allows_blank_password_for_secured_saved_network(client, monkeypatch):
     apply_calls = []
     monkeypatch.setattr(network_routes, "get_saved_wifi_ssids", lambda config: {"Staff2019"})
+    monkeypatch.setattr(network_routes, "get_saved_wifi_password_ssids", lambda config: {"Staff2019"})
     monkeypatch.setattr(
         network_routes,
         "apply_wifi_settings",
@@ -325,6 +330,7 @@ def test_wifi_post_forgets_saved_network(client, monkeypatch):
 def test_wifi_post_connects_to_new_open_network(client, monkeypatch):
     apply_calls = []
     monkeypatch.setattr(network_routes, "get_saved_wifi_ssids", lambda config: set())
+    monkeypatch.setattr(network_routes, "get_saved_wifi_password_ssids", lambda config: set())
     monkeypatch.setattr(
         network_routes,
         "apply_wifi_settings",
@@ -345,6 +351,7 @@ def test_wifi_post_connects_to_new_open_network(client, monkeypatch):
 def test_wifi_post_connects_via_manual_form_without_password(client, monkeypatch):
     apply_calls = []
     monkeypatch.setattr(network_routes, "get_saved_wifi_ssids", lambda config: set())
+    monkeypatch.setattr(network_routes, "get_saved_wifi_password_ssids", lambda config: set())
     monkeypatch.setattr(
         network_routes,
         "apply_wifi_settings",
@@ -360,6 +367,48 @@ def test_wifi_post_connects_via_manual_form_without_password(client, monkeypatch
 
     assert response.status_code == 302
     assert apply_calls == [("ManualOpenNetwork", "", False)]
+
+
+def test_wifi_post_rejects_blank_password_for_saved_profile_without_saved_secret(client, monkeypatch):
+    apply_calls = []
+    monkeypatch.setattr(network_routes, "get_saved_wifi_ssids", lambda config: {"Unit 81 Starlink"})
+    monkeypatch.setattr(network_routes, "get_saved_wifi_password_ssids", lambda config: set())
+    monkeypatch.setattr(
+        network_routes,
+        "apply_wifi_settings",
+        lambda config, ssid, password, hidden: apply_calls.append((ssid, password, hidden)) or {"success": True, "message": "ok"},
+    )
+
+    _login(client)
+    response = client.post(
+        "/wifi",
+        data={"ssid": "Unit 81 Starlink", "security": "WPA2", "password": ""},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert apply_calls == []
+
+
+def test_wifi_page_shows_saved_badge_without_saved_password_placeholder(client, monkeypatch):
+    wifi_networks = [{"ssid": "Unit 81 Starlink", "signal": "81", "security": "WPA2", "in_use": False}]
+
+    monkeypatch.setattr(network_routes, "scan_wifi_networks", lambda config, force_refresh=False: wifi_networks)
+    monkeypatch.setattr(network_routes, "get_saved_wifi_ssids", lambda config: {"Unit 81 Starlink"})
+    monkeypatch.setattr(network_routes, "get_saved_wifi_password_ssids", lambda config: set())
+    monkeypatch.setattr(
+        network_routes,
+        "get_dashboard_state",
+        lambda config: {"hostname": "pi", "interfaces": [], "wifi_networks": wifi_networks, "internet_access": True},
+    )
+
+    _login(client)
+    response = client.get("/wifi")
+
+    assert response.status_code == 200
+    assert b"Saved" in response.data
+    assert b"Forget" in response.data
+    assert b"Enter Wi-Fi password" in response.data
 
 
 def test_datalogger_page_handles_unexpected_status_errors(client, monkeypatch):

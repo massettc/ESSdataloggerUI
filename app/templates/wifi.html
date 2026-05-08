@@ -74,7 +74,7 @@
                 </div>
             </form>
 
-            {% if network.has_saved_password %}
+            {% if network.has_saved_profile %}
             <form method="post" style="display: inline;">
                 <input type="hidden" name="action" value="forget_wifi">
                 <input type="hidden" name="ssid" value="{{ network.ssid }}">
@@ -84,7 +84,7 @@
 
             {% if network.in_use %}
             <span class="badge">Connected</span>
-            {% elif network.has_saved_password %}
+            {% elif network.has_saved_profile %}
             <span class="badge">Saved</span>
             {% endif %}
         </article>

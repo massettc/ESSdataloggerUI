@@ -400,6 +400,53 @@ def get_saved_wifi_ssids(config: dict[str, Any]) -> set[str]:
     return saved_ssids
 
 
+def get_saved_wifi_password_ssids(config: dict[str, Any]) -> set[str]:
+    """Return SSIDs whose WiFi profiles also have a stored password/PSK."""
+    saved_password_ssids = set()
+    wifi_profiles = list_connection_profiles(config, connection_type=WIFI_CONNECTION_TYPE)
+
+    for profile in wifi_profiles:
+        profile_name = profile.get("name", "").strip()
+        if not profile_name:
+            continue
+
+        if not _wifi_profile_has_stored_secret(config, profile_name):
+            continue
+
+        saved_password_ssids.add(profile_name)
+        try:
+            ssid = get_connection_wifi_ssid(config, profile_name)
+            if ssid:
+                saved_password_ssids.add(ssid)
+        except NetworkManagerError:
+            pass
+
+    return saved_password_ssids
+
+
+def _wifi_profile_has_stored_secret(config: dict[str, Any], profile_name: str) -> bool:
+    try:
+        flags = _run_nmcli(
+            config,
+            ["-g", "802-11-wireless-security.psk-flags", "connection", "show", profile_name],
+        ).strip()
+    except NetworkManagerError:
+        return False
+
+    if not flags or flags == "--":
+        return False
+
+    try:
+        flag_value = int(flags)
+    except ValueError:
+        return False
+
+    # 0 means the secret is stored normally. Other values indicate agent-owned,
+    # not-saved, or not-required behavior that should not be treated as a
+    # reusable saved password for this UI.
+    return flag_value == 0
+
+
 def delete_saved_wifi_profiles_for_ssid(config: dict[str, Any], ssid: str) -> None:
     """Delete all WiFi connection profiles for a given SSID."""
     target_ssid = ssid.strip()

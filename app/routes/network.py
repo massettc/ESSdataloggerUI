@@ -21,6 +21,7 @@ from app.services.network_manager import (
     get_active_ethernet_connection,
     get_connection_ipv4_config,
     get_dashboard_state,
+    get_saved_wifi_password_ssids,
     get_saved_wifi_ssids,
     list_connection_profiles,
     scan_wifi_networks,
@@ -105,7 +106,8 @@ def wifi_settings():
             return redirect(url_for("network.wifi_settings"))
 
         saved_ssids = get_saved_wifi_ssids(current_app.config)
-        if _is_secured_wifi_security(security) and not password and ssid not in saved_ssids:
+        saved_password_ssids = get_saved_wifi_password_ssids(current_app.config)
+        if _is_secured_wifi_security(security) and not password and ssid not in saved_password_ssids:
             flash(f"Password is required for secured Wi-Fi network {ssid}.", "error")
             return redirect(url_for("network.wifi_settings", ssid=ssid))
 
@@ -126,9 +128,10 @@ def wifi_settings():
     try:
         wifi_networks = scan_wifi_networks(current_app.config, force_refresh=scan_requested)
         saved_ssids = get_saved_wifi_ssids(current_app.config)
-        # Enrich networks with saved password status
+        saved_password_ssids = get_saved_wifi_password_ssids(current_app.config)
         for network in wifi_networks:
-            network["has_saved_password"] = network["ssid"] in saved_ssids
+            network["has_saved_profile"] = network["ssid"] in saved_ssids
+            network["has_saved_password"] = network["ssid"] in saved_password_ssids
         state = get_dashboard_state(current_app.config)
     except NetworkManagerError as exc:
         current_app.logger.exception("wifi view error")

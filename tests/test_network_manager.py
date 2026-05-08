@@ -284,6 +284,27 @@ def test_build_nmcli_command_skips_sudo_for_read_only_commands():
     assert command == ["nmcli", "device", "wifi", "list"]
 
 
+def test_get_saved_wifi_password_ssids_only_includes_profiles_with_stored_secret(monkeypatch):
+    monkeypatch.setattr(
+        network_manager,
+        "list_connection_profiles",
+        lambda config, connection_type=None, interface_name=None: [
+            {"name": "Unit 81 Starlink", "type": "wifi", "device": "", "active": False},
+            {"name": "Staff2019", "type": "wifi", "device": "", "active": False},
+        ],
+    )
+    monkeypatch.setattr(
+        network_manager,
+        "_wifi_profile_has_stored_secret",
+        lambda config, profile_name: profile_name == "Staff2019",
+    )
+    monkeypatch.setattr(network_manager, "get_connection_wifi_ssid", lambda config, profile_name: profile_name)
+
+    saved_password_ssids = network_manager.get_saved_wifi_password_ssids({})
+
+    assert saved_password_ssids == {"Staff2019"}
+
+
 def test_connect_wifi_uses_dedicated_connect_timeout(monkeypatch):
     captured = {}
 
