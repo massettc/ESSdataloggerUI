@@ -56,16 +56,16 @@
                 </div>
             </dl>
 
-            <form method="post" class="stack-form compact-form">
+            <form method="post" class="stack-form compact-form" autocomplete="off">
                 <input type="hidden" name="ssid" value="{{ network.ssid }}">
                 <input type="hidden" name="security" value="{{ network.security }}">
 
                 <label for="password-{{ loop.index }}">Passphrase</label>
                 <div class="password-row">
                     {% if network.has_saved_password %}
-                    <input id="password-{{ loop.index }}" name="password" type="password" autocomplete="off" placeholder="••••••••" class="saved-password-field">
+                    <input id="password-{{ loop.index }}" name="password" type="password" autocomplete="new-password" autocapitalize="none" autocorrect="off" spellcheck="false" data-lpignore="true" placeholder="••••••••" class="saved-password-field">
                     {% else %}
-                    <input id="password-{{ loop.index }}" name="password" type="password" autocomplete="off" placeholder="Enter Wi-Fi password" {% if network.security and network.security != '--' and network.security|lower != 'open' and network.security|lower != 'none' %}required{% endif %}>
+                    <input id="password-{{ loop.index }}" name="password" type="password" autocomplete="new-password" autocapitalize="none" autocorrect="off" spellcheck="false" data-lpignore="true" placeholder="Enter Wi-Fi password" {% if network.security and network.security != '--' and network.security|lower != 'open' and network.security|lower != 'none' %}required{% endif %}>
                     {% endif %}
                     <button type="button" class="secondary small-button" data-password-target="password-{{ loop.index }}">Show</button>
                     <button type="submit">Connect</button>
@@ -100,13 +100,13 @@
         </div>
     </div>
 
-    <form method="post" class="stack-form manual-network-form">
+    <form method="post" class="stack-form manual-network-form" autocomplete="off">
         <label for="ssid">Network name</label>
         <input id="ssid" name="ssid" placeholder="Type SSID manually" value="{{ selected_ssid }}" required>
 
         <label for="password">Password</label>
         <div class="password-row single-submit-row">
-            <input id="password" name="password" type="password" autocomplete="off" placeholder="Enter Wi-Fi password">
+            <input id="password" name="password" type="password" autocomplete="new-password" autocapitalize="none" autocorrect="off" spellcheck="false" data-lpignore="true" placeholder="Enter Wi-Fi password">
             <button type="button" class="secondary small-button" data-password-target="password">Show</button>
         </div>
 

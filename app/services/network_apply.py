@@ -54,23 +54,26 @@ def _connect_wifi_with_profile_recovery(config: dict[str, Any], ssid: str, passw
     try:
         connect_wifi(config, ssid=ssid, password=password, hidden=hidden)
     except NetworkManagerError as exc:
-        if not _is_missing_key_mgmt_error(exc):
+        if not _should_retry_after_profile_cleanup(exc):
             raise
 
         if not password:
-            raise NetworkManagerError(
-                f"Saved Wi-Fi profile for {ssid} is invalid. Enter the Wi-Fi password and try again."
-            ) from exc
+            if _is_missing_key_mgmt_error(exc):
+                raise NetworkManagerError(
+                    f"Saved Wi-Fi profile for {ssid} is invalid. Enter the Wi-Fi password and try again."
+                ) from exc
+            raise
 
-        logger.warning("detected invalid key-mgmt profile for ssid=%s, removing stale profile(s) and retrying", ssid)
+        logger.warning("detected stale wifi profile for ssid=%s, removing profile(s) and retrying", ssid)
         _delete_wifi_profiles_for_ssid(config, ssid)
         try:
             connect_wifi(config, ssid=ssid, password=password, hidden=hidden)
         except NetworkManagerError as retry_exc:
-            if not _is_missing_key_mgmt_error(retry_exc):
+            if _is_missing_key_mgmt_error(retry_exc):
+                logger.warning("retry still failing with key-mgmt for ssid=%s, forcing clean profile rebuild", ssid)
+                _rebuild_wifi_profile_and_connect(config, ssid=ssid, password=password, hidden=hidden)
+            else:
                 raise
-            logger.warning("retry still failing with key-mgmt for ssid=%s, forcing clean profile rebuild", ssid)
-            _rebuild_wifi_profile_and_connect(config, ssid=ssid, password=password, hidden=hidden)
 
     if _verify_wifi_connection(config, ssid):
         return
@@ -80,6 +83,18 @@ def _connect_wifi_with_profile_recovery(config: dict[str, Any], ssid: str, passw
 
 def _is_missing_key_mgmt_error(exc: NetworkManagerError) -> bool:
     return "802-11-wireless-security.key-mgmt" in str(exc)
+
+
+def _should_retry_after_profile_cleanup(exc: NetworkManagerError) -> bool:
+    error_text = str(exc).lower()
+    retry_markers = (
+        "802-11-wireless-security.key-mgmt",
+        "secrets were required",
+        "no secrets",
+        "activation: (wifi) association took too long",
+        "wrong password",
+    )
+    return any(marker in error_text for marker in retry_markers)
 
 
 def _delete_wifi_profiles_for_ssid(config: dict[str, Any], ssid: str) -> None:
