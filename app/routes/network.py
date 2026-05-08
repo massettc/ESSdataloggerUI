@@ -100,6 +100,9 @@ def wifi_settings():
             password = request.form.get("password", "")
         security = request.form.get("security", "").strip()
         hidden = request.form.get("hidden") == "on"
+        
+        current_app.logger.info("WiFi connect form submission: ssid=%s security=%s password_provided=%s hidden=%s", 
+                                ssid, security, bool(password), hidden)
 
         if not ssid:
             flash("SSID is required.", "error")

@@ -34,7 +34,7 @@ logger = logging.getLogger("pi_network_admin")
 
 def apply_wifi_settings(config: dict[str, Any], ssid: str, password: str, hidden: bool) -> dict[str, Any]:
     previous_connection = get_active_wifi_connection(config)
-    logger.info("wifi change requested for ssid=%s hidden=%s", ssid, hidden)
+    logger.info("wifi change requested for ssid=%s hidden=%s password_len=%d", ssid, hidden, len(password) if password else 0)
 
     try:
         _connect_wifi_with_profile_recovery(config, ssid=ssid, password=password, hidden=hidden)

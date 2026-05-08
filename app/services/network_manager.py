@@ -162,6 +162,7 @@ def find_wifi_profile_names_for_ssid(config: dict[str, Any], ssid: str) -> list[
     """Return WiFi connection profile names that map to the provided SSID."""
     target_ssid = (ssid or "").strip()
     if not target_ssid:
+        _nm_logger.debug("find_wifi_profile_names_for_ssid: empty SSID provided")
         return []
 
     # Some NetworkManager builds only allow generic fields in this listing call,
@@ -180,16 +181,20 @@ def find_wifi_profile_names_for_ssid(config: dict[str, Any], ssid: str) -> list[
             continue
 
         if profile_name == target_ssid:
+            _nm_logger.debug("found profile %s by name match for ssid=%s", profile_name, target_ssid)
             matches.append(profile_name)
             continue
 
         try:
             profile_ssid = get_connection_wifi_ssid(config, profile_name)
-        except NetworkManagerError:
+        except NetworkManagerError as exc:
+            _nm_logger.debug("failed to get SSID from profile %s: %s", profile_name, exc)
             continue
         if profile_ssid == target_ssid:
+            _nm_logger.debug("found profile %s by SSID match for ssid=%s", profile_name, target_ssid)
             matches.append(profile_name)
 
+    _nm_logger.debug("find_wifi_profile_names_for_ssid: found %d profile(s) for ssid=%s: %s", len(matches), target_ssid, matches)
     return matches
 
 
