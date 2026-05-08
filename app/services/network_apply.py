@@ -56,8 +56,20 @@ def _connect_wifi_with_profile_recovery(config: dict[str, Any], ssid: str, passw
     def _saved_profiles() -> list[str]:
         nonlocal saved_profile_names
         if saved_profile_names is None:
-            saved_profile_names = find_wifi_profile_names_for_ssid(config, ssid)
+            try:
+                saved_profile_names = find_wifi_profile_names_for_ssid(config, ssid)
+            except NetworkManagerError as exc:
+                logger.warning("failed to query saved profiles for ssid=%s: %s", ssid, exc)
+                saved_profile_names = []
         return saved_profile_names
+
+    # For saved networks, first try activating the existing profile when no new
+    # password was supplied. This avoids nmcli "secrets were required" behavior
+    # from `device wifi connect` on certain AP/profile combinations.
+    if not password and _saved_profiles():
+        logger.info("attempting saved profile activation first for ssid=%s", ssid)
+        if _try_activate_saved_profiles(config, ssid, _saved_profiles()):
+            return
 
     try:
         connect_wifi(config, ssid=ssid, password=password, hidden=hidden)

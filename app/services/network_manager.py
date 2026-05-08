@@ -673,7 +673,7 @@ def _get_ip_details(config: dict[str, Any], interface_name: str) -> dict[str, st
 def _run_nmcli(config: dict[str, Any], arguments: list[str], timeout_seconds: int | float | None = None) -> str:
     command = _build_nmcli_command(config, arguments)
     _nm_logger.debug("nmcli cmd: %s", " ".join(str(a) for a in command))
-    timeout = timeout_seconds if timeout_seconds is not None else config["COMMAND_TIMEOUT_SECONDS"]
+    timeout = timeout_seconds if timeout_seconds is not None else config.get("COMMAND_TIMEOUT_SECONDS", 15)
     try:
         completed = subprocess.run(
             command,

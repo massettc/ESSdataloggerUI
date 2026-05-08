@@ -215,6 +215,32 @@ def test_apply_wifi_settings_prompts_for_password_when_saved_profile_needs_secre
     assert "needs a password" in result["message"]
 
 
+def test_apply_wifi_settings_uses_saved_profile_first_when_password_blank(monkeypatch):
+    connect_calls = []
+    bring_up_calls = []
+
+    monkeypatch.setattr(network_apply, "get_active_wifi_connection", lambda config: {"name": "ESS", "device": "wlan0"})
+    monkeypatch.setattr(network_apply, "find_wifi_profile_names_for_ssid", lambda config, ssid: ["Unit 81 Starlink"])
+    monkeypatch.setattr(network_apply, "bring_up_connection", lambda config, name: bring_up_calls.append(name))
+    monkeypatch.setattr(network_apply, "_verify_wifi_connection", lambda config, expected_ssid: True)
+    monkeypatch.setattr(
+        network_apply,
+        "connect_wifi",
+        lambda config, ssid, password, hidden: connect_calls.append((ssid, password, hidden)),
+    )
+
+    result = network_apply.apply_wifi_settings(
+        {"VERIFY_TIMEOUT_SECONDS": 1, "VERIFY_POLL_SECONDS": 0.01},
+        "Unit 81 Starlink",
+        "",
+        False,
+    )
+
+    assert result["success"] is True
+    assert bring_up_calls == ["Unit 81 Starlink"]
+    assert connect_calls == []
+
+
 def test_apply_ethernet_settings_reconnects_device(monkeypatch):
     calls = []
 

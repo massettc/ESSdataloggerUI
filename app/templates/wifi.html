@@ -59,13 +59,15 @@
             <form method="post" class="stack-form compact-form" autocomplete="off">
                 <input type="hidden" name="ssid" value="{{ network.ssid }}">
                 <input type="hidden" name="security" value="{{ network.security }}">
+                <input type="text" name="fake_username" autocomplete="username" style="position:absolute;left:-9999px;opacity:0;width:1px;height:1px;" tabindex="-1" aria-hidden="true">
+                <input type="password" name="password" autocomplete="new-password" style="position:absolute;left:-9999px;opacity:0;width:1px;height:1px;" tabindex="-1" aria-hidden="true">
 
                 <label for="wifi-passphrase-{{ loop.index }}">Passphrase</label>
                 <div class="password-row">
                     {% if network.has_saved_password %}
-                    <input id="wifi-passphrase-{{ loop.index }}" name="wifi_password" type="password" autocomplete="new-password" autocapitalize="none" autocorrect="off" spellcheck="false" data-lpignore="true" placeholder="••••••••" class="saved-password-field">
+                    <input id="wifi-passphrase-{{ loop.index }}" name="wifi_password" type="password" autocomplete="new-password" autocapitalize="none" autocorrect="off" spellcheck="false" data-lpignore="true" placeholder="••••••••" class="saved-password-field" readonly onfocus="this.removeAttribute('readonly');">
                     {% else %}
-                    <input id="wifi-passphrase-{{ loop.index }}" name="wifi_password" type="password" autocomplete="new-password" autocapitalize="none" autocorrect="off" spellcheck="false" data-lpignore="true" placeholder="Enter Wi-Fi password" {% if network.security and network.security != '--' and network.security|lower != 'open' and network.security|lower != 'none' %}required{% endif %}>
+                    <input id="wifi-passphrase-{{ loop.index }}" name="wifi_password" type="password" autocomplete="new-password" autocapitalize="none" autocorrect="off" spellcheck="false" data-lpignore="true" placeholder="Enter Wi-Fi password" readonly onfocus="this.removeAttribute('readonly');" {% if network.security and network.security != '--' and network.security|lower != 'open' and network.security|lower != 'none' %}required{% endif %}>
                     {% endif %}
                     <button type="button" class="secondary small-button" data-password-target="wifi-passphrase-{{ loop.index }}">Show</button>
                     <button type="submit">Connect</button>
@@ -101,12 +103,14 @@
     </div>
 
     <form method="post" class="stack-form manual-network-form" autocomplete="off">
+        <input type="text" name="fake_username_manual" autocomplete="username" style="position:absolute;left:-9999px;opacity:0;width:1px;height:1px;" tabindex="-1" aria-hidden="true">
+        <input type="password" name="password" autocomplete="new-password" style="position:absolute;left:-9999px;opacity:0;width:1px;height:1px;" tabindex="-1" aria-hidden="true">
         <label for="ssid">Network name</label>
         <input id="ssid" name="ssid" placeholder="Type SSID manually" value="{{ selected_ssid }}" required>
 
         <label for="wifi-passphrase-manual">Password</label>
         <div class="password-row single-submit-row">
-            <input id="wifi-passphrase-manual" name="wifi_password" type="password" autocomplete="new-password" autocapitalize="none" autocorrect="off" spellcheck="false" data-lpignore="true" placeholder="Enter Wi-Fi password">
+            <input id="wifi-passphrase-manual" name="wifi_password" type="password" autocomplete="new-password" autocapitalize="none" autocorrect="off" spellcheck="false" data-lpignore="true" placeholder="Enter Wi-Fi password" readonly onfocus="this.removeAttribute('readonly');">
             <button type="button" class="secondary small-button" data-password-target="wifi-passphrase-manual">Show</button>
         </div>
 
