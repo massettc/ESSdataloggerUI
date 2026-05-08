@@ -370,7 +370,7 @@ def connect_wifi(config: dict[str, Any], ssid: str, password: str, hidden: bool)
         command.extend(["password", password])
     if hidden:
         command.extend(["hidden", "yes"])
-    _run_nmcli(config, command)
+    _run_nmcli(config, command, timeout_seconds=config.get("WIFI_CONNECT_TIMEOUT_SECONDS"))
 
 
 def get_saved_wifi_ssids(config: dict[str, Any]) -> set[str]:
@@ -670,16 +670,17 @@ def _get_ip_details(config: dict[str, Any], interface_name: str) -> dict[str, st
     }
 
 
-def _run_nmcli(config: dict[str, Any], arguments: list[str]) -> str:
+def _run_nmcli(config: dict[str, Any], arguments: list[str], timeout_seconds: int | float | None = None) -> str:
     command = _build_nmcli_command(config, arguments)
     _nm_logger.debug("nmcli cmd: %s", " ".join(str(a) for a in command))
+    timeout = timeout_seconds if timeout_seconds is not None else config["COMMAND_TIMEOUT_SECONDS"]
     try:
         completed = subprocess.run(
             command,
             capture_output=True,
             text=True,
             check=True,
-            timeout=config["COMMAND_TIMEOUT_SECONDS"],
+            timeout=timeout,
         )
     except FileNotFoundError as exc:
         raise NetworkManagerError("nmcli is not installed on this system.") from exc

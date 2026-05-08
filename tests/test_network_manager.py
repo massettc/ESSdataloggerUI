@@ -282,3 +282,33 @@ def test_build_nmcli_command_skips_sudo_for_read_only_commands():
     )
 
     assert command == ["nmcli", "device", "wifi", "list"]
+
+
+def test_connect_wifi_uses_dedicated_connect_timeout(monkeypatch):
+    captured = {}
+
+    def fake_run_nmcli(config, arguments, timeout_seconds=None):
+        captured["arguments"] = arguments
+        captured["timeout_seconds"] = timeout_seconds
+        return ""
+
+    monkeypatch.setattr(network_manager, "_run_nmcli", fake_run_nmcli)
+
+    network_manager.connect_wifi(
+        {"WIFI_INTERFACE": "wlan0", "WIFI_CONNECT_TIMEOUT_SECONDS": 60},
+        "Unit 81 Starlink",
+        "pw",
+        False,
+    )
+
+    assert captured["arguments"] == [
+        "device",
+        "wifi",
+        "connect",
+        "Unit 81 Starlink",
+        "ifname",
+        "wlan0",
+        "password",
+        "pw",
+    ]
+    assert captured["timeout_seconds"] == 60
