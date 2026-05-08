@@ -464,7 +464,28 @@ def _wifi_profile_has_stored_secret(config: dict[str, Any], profile_name: str) -
     # 0 means the secret is stored normally. Other values indicate agent-owned,
     # not-saved, or not-required behavior that should not be treated as a
     # reusable saved password for this UI.
-    return flag_value == 0
+    if flag_value != 0:
+        return False
+
+    # psk-flags=0 only means "stored normally" — the actual PSK may still be
+    # empty if the profile was created without a password (e.g. after a Forget).
+    # Verify the PSK value is actually non-empty using sudo nmcli -s.
+    try:
+        sudo_bin = config.get("SUDO_BIN", "sudo")
+        nmcli_bin = config.get("NMCLI_BIN", "nmcli")
+        result = subprocess.run(
+            [sudo_bin, "-n", nmcli_bin, "-s", "-g", "802-11-wireless-security.psk",
+             "connection", "show", profile_name],
+            capture_output=True,
+            text=True,
+            timeout=config.get("COMMAND_TIMEOUT_SECONDS", 15),
+        )
+        if result.returncode == 0:
+            return bool(result.stdout.strip())
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        pass
+
+    return True  # couldn't verify the value; assume stored
 
 
 def delete_saved_wifi_profiles_for_ssid(config: dict[str, Any], ssid: str) -> None:
