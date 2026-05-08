@@ -24,6 +24,7 @@ from app.services.network_manager import (
     is_wifi_connected,
     list_connection_profiles,
     persist_connection_to_etc,
+    scan_wifi_networks,
     set_connection_autoconnect,
     set_connection_ipv4_config,
     set_connection_never_default,
@@ -136,13 +137,20 @@ def _is_secrets_required_error(exc: NetworkManagerError) -> bool:
 
 
 def _is_ssid_not_found_error(exc: NetworkManagerError) -> bool:
-    return "no network with ssid" in str(exc).lower()
+    error_text = str(exc).lower()
+    return "no network with ssid" in error_text or "wi-fi network could not be found" in error_text or "network could not be found" in error_text
 
 
 def _try_activate_saved_profiles(config: dict[str, Any], ssid: str, profile_names: list[str]) -> bool:
+    wifi_connect_timeout = config.get("WIFI_CONNECT_TIMEOUT_SECONDS")
+    try:
+        force_rescan_wifi(config)
+    except Exception:
+        pass
+    _wait_for_ssid_in_scan(config, ssid)
     for profile_name in profile_names:
         try:
-            bring_up_connection(config, profile_name)
+            bring_up_connection(config, profile_name, timeout_seconds=wifi_connect_timeout)
         except NetworkManagerError as profile_exc:
             logger.warning("saved profile activation failed for profile=%s ssid=%s: %s", profile_name, ssid, profile_exc)
             continue
@@ -151,6 +159,23 @@ def _try_activate_saved_profiles(config: dict[str, Any], ssid: str, profile_name
             return True
 
     return False
+
+
+def _wait_for_ssid_in_scan(config: dict[str, Any], ssid: str, timeout_seconds: float = 8.0) -> None:
+    """Poll scan results until the SSID is visible or the timeout elapses."""
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        try:
+            networks = scan_wifi_networks(config, force_refresh=True)
+            if any(n.get("ssid") == ssid for n in networks):
+                logger.debug("ssid=%s visible in scan results", ssid)
+                return
+        except Exception:
+            pass
+        remaining = deadline - time.monotonic()
+        if remaining > 0:
+            time.sleep(min(2.0, remaining))
+    logger.warning("ssid=%s not visible in scan after %.0fs wait", ssid, timeout_seconds)
 
 
 def _try_update_saved_profiles_and_activate(
@@ -198,6 +223,7 @@ def _try_update_saved_profiles_and_activate(
                 force_rescan_wifi(config)
             except Exception:
                 pass  # rescan is best-effort; proceed regardless
+            _wait_for_ssid_in_scan(config, ssid)
             logger.debug("bringing up connection for profile=%s (timeout=%s)", profile_name, wifi_connect_timeout)
             bring_up_connection(config, profile_name, timeout_seconds=wifi_connect_timeout)
             logger.debug("bring_up_connection completed for profile=%s", profile_name)
