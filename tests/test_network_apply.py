@@ -6,7 +6,7 @@ def test_apply_wifi_settings_rolls_back_on_failed_verify(monkeypatch):
 
     monkeypatch.setattr(network_apply, "get_active_wifi_connection", lambda config: {"name": "OldWiFi", "device": "wlan0"})
     monkeypatch.setattr(network_apply, "connect_wifi", lambda config, ssid, password, hidden: calls.append((ssid, hidden)))
-    monkeypatch.setattr(network_apply, "bring_up_connection", lambda config, name: calls.append(("rollback", name)))
+    monkeypatch.setattr(network_apply, "bring_up_connection", lambda config, name, **kw: calls.append(("rollback", name)))
     monkeypatch.setattr(network_apply, "_verify_wifi_connection", lambda config, expected_ssid: False)
 
     result = network_apply.apply_wifi_settings({"VERIFY_TIMEOUT_SECONDS": 1, "VERIFY_POLL_SECONDS": 0.01}, "NewWiFi", "badpass", False)
@@ -18,7 +18,7 @@ def test_apply_wifi_settings_rolls_back_on_failed_verify(monkeypatch):
 
 def test_apply_wifi_settings_returns_nmcli_error_details(monkeypatch):
     monkeypatch.setattr(network_apply, "get_active_wifi_connection", lambda config: {"name": "OldWiFi", "device": "wlan0"})
-    monkeypatch.setattr(network_apply, "bring_up_connection", lambda config, name: None)
+    monkeypatch.setattr(network_apply, "bring_up_connection", lambda config, name, **kw: None)
 
     def raise_error(config, ssid, password, hidden):
         raise network_apply.NetworkManagerError("Not authorized to control networking.")
@@ -78,7 +78,7 @@ def test_apply_wifi_settings_recovers_from_missing_key_mgmt_when_password_suppli
 
 def test_apply_wifi_settings_missing_key_mgmt_without_password_prompts_for_password(monkeypatch):
     monkeypatch.setattr(network_apply, "get_active_wifi_connection", lambda config: {"name": "OldWiFi", "device": "wlan0"})
-    monkeypatch.setattr(network_apply, "bring_up_connection", lambda config, name: None)
+    monkeypatch.setattr(network_apply, "bring_up_connection", lambda config, name, **kw: None)
 
     def fail_connect(config, ssid, password, hidden):
         raise network_apply.NetworkManagerError("802-11-wireless-security.key-mgmt: property is missing")
@@ -180,7 +180,7 @@ def test_apply_wifi_settings_falls_back_to_saved_profile_when_ssid_lookup_fails(
 
     monkeypatch.setattr(network_apply, "connect_wifi", fail_connect)
     monkeypatch.setattr(network_apply, "find_wifi_profile_names_for_ssid", lambda config, ssid: ["Unit 81 Starlink"])
-    monkeypatch.setattr(network_apply, "bring_up_connection", lambda config, name: bring_up_calls.append(name))
+    monkeypatch.setattr(network_apply, "bring_up_connection", lambda config, name, **kw: bring_up_calls.append(name))
     monkeypatch.setattr(network_apply, "_verify_wifi_connection", lambda config, expected_ssid: True)
 
     result = network_apply.apply_wifi_settings(
@@ -202,7 +202,7 @@ def test_apply_wifi_settings_prompts_for_password_when_saved_profile_needs_secre
 
     monkeypatch.setattr(network_apply, "connect_wifi", fail_connect)
     monkeypatch.setattr(network_apply, "find_wifi_profile_names_for_ssid", lambda config, ssid: ["Unit 81 Starlink"])
-    monkeypatch.setattr(network_apply, "bring_up_connection", lambda config, name: None)
+    monkeypatch.setattr(network_apply, "bring_up_connection", lambda config, name, **kw: None)
 
     result = network_apply.apply_wifi_settings(
         {"VERIFY_TIMEOUT_SECONDS": 1, "VERIFY_POLL_SECONDS": 0.01},
@@ -221,7 +221,7 @@ def test_apply_wifi_settings_uses_saved_profile_first_when_password_blank(monkey
 
     monkeypatch.setattr(network_apply, "get_active_wifi_connection", lambda config: {"name": "ESS", "device": "wlan0"})
     monkeypatch.setattr(network_apply, "find_wifi_profile_names_for_ssid", lambda config, ssid: ["Unit 81 Starlink"])
-    monkeypatch.setattr(network_apply, "bring_up_connection", lambda config, name: bring_up_calls.append(name))
+    monkeypatch.setattr(network_apply, "bring_up_connection", lambda config, name, **kw: bring_up_calls.append(name))
     monkeypatch.setattr(network_apply, "_verify_wifi_connection", lambda config, expected_ssid: True)
     monkeypatch.setattr(
         network_apply,
@@ -248,7 +248,7 @@ def test_apply_wifi_settings_updates_saved_profile_when_password_is_supplied(mon
 
     monkeypatch.setattr(network_apply, "get_active_wifi_connection", lambda config: {"name": "ESS", "device": "wlan0"})
     monkeypatch.setattr(network_apply, "find_wifi_profile_names_for_ssid", lambda config, ssid: ["Unit 81 Starlink"])
-    monkeypatch.setattr(network_apply, "bring_up_connection", lambda config, name: bring_up_calls.append(name))
+    monkeypatch.setattr(network_apply, "bring_up_connection", lambda config, name, **kw: bring_up_calls.append(name))
     monkeypatch.setattr(network_apply, "_verify_wifi_connection", lambda config, expected_ssid: True)
     monkeypatch.setattr(
         network_apply,
@@ -312,7 +312,7 @@ def test_apply_ethernet_settings_marks_ethernet_non_default_when_wifi_preferred(
 
     monkeypatch.setattr(network_apply, "get_active_ethernet_connection", lambda config: {"name": "Wired connection 1", "device": "eth0"})
     monkeypatch.setattr(network_apply, "set_connection_never_default", lambda config, connection_name, enabled: calls.append((connection_name, enabled)))
-    monkeypatch.setattr(network_apply, "bring_up_connection", lambda config, name: None)
+    monkeypatch.setattr(network_apply, "bring_up_connection", lambda config, name, **kw: None)
     monkeypatch.setattr(network_apply, "_verify_connection", lambda config, interface_name, connection_type, expected_name=None: True)
 
     result = network_apply.apply_ethernet_settings(
@@ -337,9 +337,9 @@ def test_apply_ethernet_settings_keeps_default_route_when_manual_gateway_is_set(
     })
     monkeypatch.setattr(network_apply, "set_connection_ipv4_config", lambda config, **kwargs: None)
     monkeypatch.setattr(network_apply, "set_connection_autoconnect", lambda config, name, enabled: None)
-    monkeypatch.setattr(network_apply, "persist_connection_to_etc", lambda config, name: None)
+    monkeypatch.setattr(network_apply, "persist_connection_to_etc", lambda config, name, **kw: None)
     monkeypatch.setattr(network_apply, "set_connection_never_default", lambda config, connection_name, enabled: calls.append((connection_name, enabled)))
-    monkeypatch.setattr(network_apply, "bring_up_connection", lambda config, name: None)
+    monkeypatch.setattr(network_apply, "bring_up_connection", lambda config, name, **kw: None)
     monkeypatch.setattr(network_apply, "_verify_connection", lambda config, interface_name, connection_type, expected_name=None: True)
 
     result = network_apply.apply_ethernet_settings(
@@ -360,7 +360,7 @@ def test_apply_ethernet_settings_rolls_back_on_failure(monkeypatch):
     calls = []
 
     monkeypatch.setattr(network_apply, "get_active_ethernet_connection", lambda config: {"name": "Wired connection 1", "device": "eth0"})
-    monkeypatch.setattr(network_apply, "bring_up_connection", lambda config, name: calls.append(name))
+    monkeypatch.setattr(network_apply, "bring_up_connection", lambda config, name, **kw: calls.append(name))
     monkeypatch.setattr(network_apply, "_verify_connection", lambda config, interface_name, connection_type, expected_name=None: False)
 
     result = network_apply.apply_ethernet_settings(
@@ -387,8 +387,8 @@ def test_apply_ethernet_settings_saves_config_even_when_verify_times_out(monkeyp
     })
     monkeypatch.setattr(network_apply, "set_connection_ipv4_config", lambda config, **kwargs: calls.append(("modify", kwargs)))
     monkeypatch.setattr(network_apply, "set_connection_autoconnect", lambda config, name, enabled: None)
-    monkeypatch.setattr(network_apply, "persist_connection_to_etc", lambda config, name: None)
-    monkeypatch.setattr(network_apply, "bring_up_connection", lambda config, name: calls.append(("up", name)))
+    monkeypatch.setattr(network_apply, "persist_connection_to_etc", lambda config, name, **kw: None)
+    monkeypatch.setattr(network_apply, "bring_up_connection", lambda config, name, **kw: calls.append(("up", name)))
     monkeypatch.setattr(network_apply, "_verify_connection", lambda config, interface_name, connection_type, expected_name=None: False)
 
     result = network_apply.apply_ethernet_settings(
@@ -423,7 +423,7 @@ def test_apply_ethernet_settings_saves_config_when_device_unavailable(monkeypatc
     })
     monkeypatch.setattr(network_apply, "set_connection_ipv4_config", lambda config, **kwargs: calls.append(("modify", kwargs)))
     monkeypatch.setattr(network_apply, "set_connection_autoconnect", lambda config, name, enabled: None)
-    monkeypatch.setattr(network_apply, "persist_connection_to_etc", lambda config, name: None)
+    monkeypatch.setattr(network_apply, "persist_connection_to_etc", lambda config, name, **kw: None)
 
     def fail_bring_up(config, name):
         raise network_apply.NetworkManagerError("Error: Connection activation failed: device not available.")

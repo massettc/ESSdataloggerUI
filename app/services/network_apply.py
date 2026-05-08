@@ -13,6 +13,7 @@ from app.services.network_manager import (
     bring_up_connection,
     connect_device,
     connect_wifi,
+    force_rescan_wifi,
     get_active_connection,
     get_active_ethernet_connection,
     get_active_wifi_connection,
@@ -162,7 +163,8 @@ def _try_update_saved_profiles_and_activate(
     from app.services.network_manager import _run_nmcli  # local import to avoid widening public API
 
     logger.debug("_try_update_saved_profiles_and_activate: updating %d profile(s) for ssid=%s", len(profile_names), ssid)
-    
+    wifi_connect_timeout = config.get("WIFI_CONNECT_TIMEOUT_SECONDS")
+
     for profile_name in profile_names:
         try:
             logger.debug("modifying profile=%s with psk and hidden=%s", profile_name, hidden)
@@ -182,9 +184,13 @@ def _try_update_saved_profiles_and_activate(
                     "yes",
                 ],
             )
-            logger.debug("profile modification succeeded for profile=%s", profile_name)
-            logger.debug("bringing up connection for profile=%s", profile_name)
-            bring_up_connection(config, profile_name)
+            logger.debug("profile modification succeeded for profile=%s - forcing WiFi rescan before activation", profile_name)
+            try:
+                force_rescan_wifi(config)
+            except Exception:
+                pass  # rescan is best-effort; proceed regardless
+            logger.debug("bringing up connection for profile=%s (timeout=%s)", profile_name, wifi_connect_timeout)
+            bring_up_connection(config, profile_name, timeout_seconds=wifi_connect_timeout)
             logger.debug("bring_up_connection completed for profile=%s", profile_name)
         except NetworkManagerError as profile_exc:
             logger.warning(

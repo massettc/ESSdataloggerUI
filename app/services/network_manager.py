@@ -327,8 +327,16 @@ def persist_connection_to_etc(config: dict[str, Any], connection_name: str) -> N
         _nm_logger.warning("persist_connection_to_etc failed for %r: %s", connection_name, exc)
 
 
-def bring_up_connection(config: dict[str, Any], connection_name: str) -> None:
-    _run_nmcli(config, ["connection", "up", connection_name])
+def bring_up_connection(config: dict[str, Any], connection_name: str, timeout_seconds: int | float | None = None) -> None:
+    _run_nmcli(config, ["connection", "up", connection_name], timeout_seconds=timeout_seconds)
+
+
+def force_rescan_wifi(config: dict[str, Any]) -> None:
+    """Force a WiFi rescan and wait briefly for results to populate."""
+    wifi_interface = config["WIFI_INTERFACE"]
+    cache_key = f"wifi_scan:{wifi_interface}"
+    _CACHE.pop((_get_cache_scope(config), cache_key), None)
+    _rescan_wifi(config, wifi_interface)
 
 
 def connect_device(config: dict[str, Any], interface_name: str) -> None:
