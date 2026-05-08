@@ -241,6 +241,59 @@ def test_apply_wifi_settings_uses_saved_profile_first_when_password_blank(monkey
     assert connect_calls == []
 
 
+def test_apply_wifi_settings_updates_saved_profile_when_password_is_supplied(monkeypatch):
+    run_nmcli_calls = []
+    bring_up_calls = []
+    connect_calls = []
+
+    monkeypatch.setattr(network_apply, "get_active_wifi_connection", lambda config: {"name": "ESS", "device": "wlan0"})
+    monkeypatch.setattr(network_apply, "find_wifi_profile_names_for_ssid", lambda config, ssid: ["Unit 81 Starlink"])
+    monkeypatch.setattr(network_apply, "bring_up_connection", lambda config, name: bring_up_calls.append(name))
+    monkeypatch.setattr(network_apply, "_verify_wifi_connection", lambda config, expected_ssid: True)
+    monkeypatch.setattr(
+        network_apply,
+        "connect_wifi",
+        lambda config, ssid, password, hidden: connect_calls.append((ssid, password, hidden)),
+    )
+
+    original_modules = __import__("sys").modules
+    class _FakeNetworkManagerModule:
+        @staticmethod
+        def _run_nmcli(config, arguments):
+            run_nmcli_calls.append(arguments)
+            return ""
+
+    original_network_manager = original_modules.get("app.services.network_manager")
+    original_modules["app.services.network_manager"] = _FakeNetworkManagerModule()
+    try:
+        result = network_apply.apply_wifi_settings(
+            {"VERIFY_TIMEOUT_SECONDS": 1, "VERIFY_POLL_SECONDS": 0.01},
+            "Unit 81 Starlink",
+            "correctpass",
+            False,
+        )
+    finally:
+        if original_network_manager is not None:
+            original_modules["app.services.network_manager"] = original_network_manager
+
+    assert result["success"] is True
+    assert run_nmcli_calls == [[
+        "connection",
+        "modify",
+        "Unit 81 Starlink",
+        "802-11-wireless-security.key-mgmt",
+        "wpa-psk",
+        "802-11-wireless-security.psk",
+        "correctpass",
+        "802-11-wireless.hidden",
+        "no",
+        "connection.autoconnect",
+        "yes",
+    ]]
+    assert bring_up_calls == ["Unit 81 Starlink"]
+    assert connect_calls == []
+
+
 def test_apply_ethernet_settings_reconnects_device(monkeypatch):
     calls = []
 

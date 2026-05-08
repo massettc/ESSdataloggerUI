@@ -71,6 +71,11 @@ def _connect_wifi_with_profile_recovery(config: dict[str, Any], ssid: str, passw
         if _try_activate_saved_profiles(config, ssid, _saved_profiles()):
             return
 
+    if password and _saved_profiles():
+        logger.info("attempting saved profile password update for ssid=%s", ssid)
+        if _try_update_saved_profiles_and_activate(config, ssid, password, hidden, _saved_profiles()):
+            return
+
     try:
         connect_wifi(config, ssid=ssid, password=password, hidden=hidden)
     except NetworkManagerError as exc:
@@ -130,6 +135,49 @@ def _try_activate_saved_profiles(config: dict[str, Any], ssid: str, profile_name
             bring_up_connection(config, profile_name)
         except NetworkManagerError as profile_exc:
             logger.warning("saved profile activation failed for profile=%s ssid=%s: %s", profile_name, ssid, profile_exc)
+            continue
+
+        if _verify_wifi_connection(config, ssid):
+            return True
+
+    return False
+
+
+def _try_update_saved_profiles_and_activate(
+    config: dict[str, Any],
+    ssid: str,
+    password: str,
+    hidden: bool,
+    profile_names: list[str],
+) -> bool:
+    from app.services.network_manager import _run_nmcli  # local import to avoid widening public API
+
+    for profile_name in profile_names:
+        try:
+            _run_nmcli(
+                config,
+                [
+                    "connection",
+                    "modify",
+                    profile_name,
+                    "802-11-wireless-security.key-mgmt",
+                    "wpa-psk",
+                    "802-11-wireless-security.psk",
+                    password,
+                    "802-11-wireless.hidden",
+                    "yes" if hidden else "no",
+                    "connection.autoconnect",
+                    "yes",
+                ],
+            )
+            bring_up_connection(config, profile_name)
+        except NetworkManagerError as profile_exc:
+            logger.warning(
+                "saved profile update failed for profile=%s ssid=%s: %s",
+                profile_name,
+                ssid,
+                profile_exc,
+            )
             continue
 
         if _verify_wifi_connection(config, ssid):
