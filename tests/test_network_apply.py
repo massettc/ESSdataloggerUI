@@ -277,21 +277,24 @@ def test_apply_wifi_settings_updates_saved_profile_when_password_is_supplied(mon
             original_modules["app.services.network_manager"] = original_network_manager
 
     assert result["success"] is True
-    assert run_nmcli_calls == [[
-        "connection",
-        "modify",
-        "Unit 81 Starlink",
-        "802-11-wireless-security.key-mgmt",
-        "wpa-psk",
-        "802-11-wireless-security.psk",
-        "correctpass",
-        "802-11-wireless-security.psk-flags",
-        "0",
-        "802-11-wireless.hidden",
-        "no",
-        "connection.autoconnect",
-        "yes",
-    ]]
+    assert run_nmcli_calls == [
+        [
+            "connection",
+            "modify",
+            "Unit 81 Starlink",
+            "802-11-wireless-security.key-mgmt",
+            "wpa-psk",
+            "802-11-wireless-security.psk",
+            "correctpass",
+            "802-11-wireless-security.psk-flags",
+            "0",
+            "802-11-wireless.hidden",
+            "no",
+            "connection.autoconnect",
+            "yes",
+        ],
+        ["connection", "reload"],
+    ]
     assert bring_up_calls == ["Unit 81 Starlink"]
     assert connect_calls == []
 

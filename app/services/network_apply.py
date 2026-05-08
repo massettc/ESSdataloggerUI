@@ -186,7 +186,14 @@ def _try_update_saved_profiles_and_activate(
                     "yes",
                 ],
             )
-            logger.debug("profile modification succeeded for profile=%s - forcing WiFi rescan before activation", profile_name)
+            logger.debug("profile modification succeeded for profile=%s - reloading connections then rescanning", profile_name)
+            # Reload so NM daemon picks up the updated psk/psk-flags from the keyfile
+            # before trying to activate; without this, NM uses its stale in-memory
+            # profile which may still have psk-flags=2 and no stored secret.
+            try:
+                _run_nmcli(config, ["connection", "reload"])
+            except Exception:
+                pass  # best-effort; proceed regardless
             try:
                 force_rescan_wifi(config)
             except Exception:
