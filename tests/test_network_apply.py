@@ -285,6 +285,8 @@ def test_apply_wifi_settings_updates_saved_profile_when_password_is_supplied(mon
         "wpa-psk",
         "802-11-wireless-security.psk",
         "correctpass",
+        "802-11-wireless-security.psk-flags",
+        "0",
         "802-11-wireless.hidden",
         "no",
         "connection.autoconnect",

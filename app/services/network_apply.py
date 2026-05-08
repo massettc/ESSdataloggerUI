@@ -178,6 +178,8 @@ def _try_update_saved_profiles_and_activate(
                     "wpa-psk",
                     "802-11-wireless-security.psk",
                     password,
+                    "802-11-wireless-security.psk-flags",
+                    "0",
                     "802-11-wireless.hidden",
                     "yes" if hidden else "no",
                     "connection.autoconnect",
