@@ -90,7 +90,11 @@ def _connect_wifi_with_profile_recovery(config: dict[str, Any], ssid: str, passw
             ) from exc
 
         if _is_ssid_not_found_error(exc) and _saved_profiles():
-            logger.warning("ssid lookup failed for ssid=%s, trying saved profile activation fallback", ssid)
+            logger.warning("ssid lookup failed for ssid=%s, trying saved profile fallback (password_provided=%s)", ssid, bool(password))
+            # If a password was provided, update the saved profile first so NM has
+            # the secret it needs to bring up the connection even when AP isn't visible.
+            if password and _try_update_saved_profiles_and_activate(config, ssid, password, hidden, _saved_profiles()):
+                return
             if _try_activate_saved_profiles(config, ssid, _saved_profiles()):
                 return
 
