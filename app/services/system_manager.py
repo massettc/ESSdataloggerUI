@@ -60,7 +60,12 @@ def get_update_status(config: dict[str, Any], refresh: bool = False) -> dict[str
 
     branch_result = _run_command([git_bin, "-C", str(repo_path), "rev-parse", "--abbrev-ref", "HEAD"], check=False)
     if branch_result.returncode == 0:
-        status["current_branch"] = branch_result.stdout.strip() or "main"
+        raw = branch_result.stdout.strip() or "main"
+        # Some git versions return "heads/<tag>" instead of "HEAD" when checked out at a tag.
+        # Normalise to "HEAD" so the detached-HEAD path below handles it correctly.
+        if raw.startswith("heads/"):
+            raw = "HEAD"
+        status["current_branch"] = raw
     else:
         status["error"] = _command_error(branch_result, "Unable to read the current git branch")
         return status
@@ -81,7 +86,15 @@ def get_update_status(config: dict[str, Any], refresh: bool = False) -> dict[str
             if remote_ref_result.returncode == 0
             else "main"
         )
-        status["current_branch"] = f"detached ({compare_branch})"
+        # Show the tag name in the UI if HEAD is exactly at a tag
+        tag_result = _run_command(
+            [git_bin, "-C", str(repo_path), "describe", "--exact-match", "--tags", "HEAD"],
+            check=False,
+        )
+        if tag_result.returncode == 0 and tag_result.stdout.strip():
+            status["current_branch"] = tag_result.stdout.strip()
+        else:
+            status["current_branch"] = f"detached ({compare_branch})"
     else:
         compare_branch = status["current_branch"]
 
