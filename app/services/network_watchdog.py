@@ -28,6 +28,10 @@ class FailoverWatchdog:
         self.primary_failures = 0
         self.primary_recoveries = 0
         self.using_backup = False
+        # Track connections that have failed with secrets errors so we don't
+        # hammer NM repeatedly, which puts the connection into activation backoff
+        # and blocks the user from manually reconnecting.
+        self._secrets_failed_connections: set[str] = set()
 
     def run_forever(self) -> None:
         if not self.config.get("WATCHDOG_ENABLED", True):
@@ -193,7 +197,19 @@ class FailoverWatchdog:
 
     def _activate_interface(self, interface_name: str, connection_name: str | None) -> bool:
         if ensure_connection_active(self.config, interface_name, connection_name):
+            # If the connection is now active, clear any secrets-failed record for it
+            if connection_name and connection_name in self._secrets_failed_connections:
+                self._secrets_failed_connections.discard(connection_name)
+                logger.info("cleared secrets-failed record for connection=%s", connection_name)
             return self._interface_is_healthy(interface_name, connection_name)
+
+        if connection_name and connection_name in self._secrets_failed_connections:
+            logger.warning(
+                "skipping activation of connection=%s: previously failed with secrets error; "
+                "user must enter password via the web UI",
+                connection_name,
+            )
+            return False
 
         try:
             if connection_name:
@@ -201,12 +217,25 @@ class FailoverWatchdog:
             else:
                 connect_device(self.config, interface_name)
         except NetworkManagerError as exc:
-            logger.error(
-                "interface activation failed interface=%s connection=%s error=%s",
-                interface_name,
-                connection_name,
-                exc,
-            )
+            error_text = str(exc).lower()
+            if "secrets were required" in error_text or "no secrets" in error_text:
+                if connection_name:
+                    self._secrets_failed_connections.add(connection_name)
+                logger.warning(
+                    "interface activation failed with secrets error — "
+                    "will not retry until user reconnects via web UI. "
+                    "interface=%s connection=%s error=%s",
+                    interface_name,
+                    connection_name,
+                    exc,
+                )
+            else:
+                logger.error(
+                    "interface activation failed interface=%s connection=%s error=%s",
+                    interface_name,
+                    connection_name,
+                    exc,
+                )
             return False
 
         return self._interface_is_healthy(interface_name, connection_name)
