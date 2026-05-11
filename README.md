@@ -80,15 +80,30 @@ sudo bash deploy/update-from-git.sh v0.4.0
 
 1. Make and test your changes locally.
 2. Commit and push them to GitHub.
-3. When you want a deployable milestone, create and push an annotated release tag such as `v0.4.0`:
-   - manual: `git tag -a v0.4.0 -m "Release v0.4.0" && git push origin v0.4.0`
-   - helper script: `bash deploy/create-release-tag.sh 0.4.0`
+3. When you want a deployable milestone, create and push an annotated release tag such as `v0.4.5`:
+   - manual: `git tag -a v0.4.5 -m "Release v0.4.5" && git push origin v0.4.5`
+   - helper script: `bash deploy/create-release-tag.sh 0.4.5`
 4. Install or update the Pi to that exact version:
-   - fresh install: `bash deploy/install-from-git.sh <repo-url> v0.4.0`
-   - existing install: `sudo bash deploy/update-from-git.sh v0.4.0`
+   - fresh install: `bash deploy/install-from-git.sh <repo-url> v0.4.5`
+   - existing install: `sudo bash deploy/update-from-git.sh v0.4.5`
 5. If you want the newest development state instead, use `main` as the ref.
 
 The current repository version marker is stored in `VERSION`.
+
+## Changelog
+
+### v0.4.5 (2026-05-11)
+- **Fix:** Watchdog no longer retries WiFi connections that fail with "Secrets were required". Previously the watchdog hammered NetworkManager repeatedly, putting the connection into NM's activation backoff and blocking the user from reconnecting via the web UI. The connection is now skipped until the user successfully reconnects manually.
+- **Fix:** `connection modify` now explicitly sets `psk-flags=0` so NM stores the PSK directly in the profile instead of treating it as agent-owned.
+- **Fix:** `connection reload` added after `connection modify` so the NM daemon picks up the updated keyfile (including `psk-flags`) before `connection up` runs.
+- **Fix:** WiFi rescan triggered before `connection up` to improve visibility of APs that are not in NM's scan cache.
+- **Fix:** `_wifi_profile_has_stored_secret` now verifies the PSK value is actually non-empty, so profiles with `psk-flags=0` but no stored password no longer appear as "saved" in the web UI.
+- **Fix:** `_is_ssid_not_found_error` extended to catch NM's alternate error message "Wi-Fi network could not be found".
+
+### v0.4.4
+- WiFi connect timeout passed through to `bring_up_connection` (45 s instead of the 15 s command default).
+- Force WiFi rescan added before profile activation.
+- `bring_up_connection` accepts optional `timeout_seconds` parameter.
 
 ## Validation checklist
 

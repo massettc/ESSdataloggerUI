@@ -100,10 +100,10 @@ Replace the port if you changed PI_ADMIN_PORT.
 Append the ref as a second argument to the one-liner:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/massettc/ESSdataloggerUI/main/deploy/install-from-git.sh | bash -s -- https://github.com/massettc/ESSdataloggerUI.git v0.4.0
+curl -fsSL https://raw.githubusercontent.com/massettc/ESSdataloggerUI/main/deploy/install-from-git.sh | bash -s -- https://github.com/massettc/ESSdataloggerUI.git v0.4.5
 ```
 
-Replace `v0.4.0` with any release tag.
+Replace `v0.4.5` with any release tag.
 
 ---
 
@@ -126,7 +126,7 @@ sudo git config --global --add safe.directory /opt/pi-network-admin
 
 ```bash
 cd /opt/pi-network-admin
-sudo bash deploy/update-from-git.sh v0.4.0
+sudo bash deploy/update-from-git.sh v0.4.5
 ```
 
 This lets you pin the Pi to a known-good version.
@@ -159,14 +159,14 @@ git push
 When you want a formal release:
 
 ```bash
-bash deploy/create-release-tag.sh 0.4.1
+bash deploy/create-release-tag.sh 0.4.5
 ```
 
 Then update the Pi to that exact release:
 
 ```bash
 cd /opt/pi-network-admin
-sudo bash deploy/update-from-git.sh v0.4.1
+sudo bash deploy/update-from-git.sh v0.4.5
 ```
 
 ---
