@@ -592,9 +592,17 @@ def replace_netplan_ethernet_profile(
     except NetworkManagerError:
         return connection_name
 
+    interface_name = config.get("ETHERNET_INTERFACE", "eth0")
+
     if not filename or "/run/" not in filename:
-        # Already stored in /etc/ — just update the MAC in-place.
-        set_connection_ethernet_mac(config, connection_name, mac_address)
+        # Already stored in /etc/ — update MAC and ensure the profile is bound
+        # to the correct interface (it may be unbound if created via the NM GUI).
+        _run_nmcli(config, [
+            "connection", "modify", connection_name,
+            "ethernet.cloned-mac-address", mac_address,
+            "connection.interface-name", interface_name,
+            "connection.autoconnect", "yes",
+        ])
         return connection_name
 
     # Read existing IP settings so we can replicate them in the new profile.
@@ -602,8 +610,6 @@ def replace_netplan_ethernet_profile(
         ipv4 = get_connection_ipv4_config(config, connection_name)
     except NetworkManagerError:
         ipv4 = {"method": "auto", "address": "", "prefix": "", "gateway": "", "dns": ""}
-
-    interface_name = config.get("ETHERNET_INTERFACE", "eth0")
     new_name = interface_name  # e.g. "eth0" — netplan ignores non-"netplan-" names
 
     # Build `nmcli connection add` arguments.
