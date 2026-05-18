@@ -5,6 +5,7 @@ from app.services.network_manager import (
     ETHERNET_CONNECTION_TYPE,
     NetworkManagerError,
     list_connection_profiles,
+    persist_connection_to_etc,
     set_connection_ethernet_mac,
 )
 from app.services.network_watchdog import FailoverWatchdog
@@ -37,6 +38,7 @@ def _enforce_ethernet_mac() -> None:
         name = profile["name"]
         try:
             set_connection_ethernet_mac(config, name, mac_address)
+            persist_connection_to_etc(config, name)
             logger.info("enforced MAC %s on ethernet profile '%s'", mac_address, name)
         except NetworkManagerError as exc:
             logger.warning("could not set MAC on profile '%s': %s", name, exc)
