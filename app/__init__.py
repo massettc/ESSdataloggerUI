@@ -10,6 +10,12 @@ from flask import Flask, redirect, url_for
 from .auth import auth_bp
 from .config import Config
 from .routes.network import network_bp
+from .services.network_manager import (
+    ETHERNET_CONNECTION_TYPE,
+    NetworkManagerError,
+    list_connection_profiles,
+    set_connection_ethernet_mac,
+)
 
 
 def create_app(config_overrides: dict[str, Any] | None = None) -> Flask:
@@ -19,9 +25,11 @@ def create_app(config_overrides: dict[str, Any] | None = None) -> Flask:
         app.config.update(config_overrides)
 
     _configure_logging(app)
-    
+
     logger = logging.getLogger("pi_network_admin")
     logger.info("pi-network-admin app initialization started")
+
+    _enforce_ethernet_mac(app.config)
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(network_bp)
@@ -42,6 +50,33 @@ def create_app(config_overrides: dict[str, Any] | None = None) -> Flask:
         return redirect(url_for("network.datalogger"))
 
     return app
+
+
+def _enforce_ethernet_mac(config: dict[str, Any]) -> None:
+    """On startup, pin the cloned MAC address on all ethernet connection profiles.
+
+    This corrects any profile that was modified via the OS UI with a 'clone from
+    host' or random MAC setting, ensuring eth0 always uses the correct hardware
+    address after a service restart.
+    """
+    mac_address = config.get("ETHERNET_MAC_ADDRESS", "")
+    if not mac_address:
+        return
+
+    logger = logging.getLogger("pi_network_admin")
+    try:
+        profiles = list_connection_profiles(config, connection_type=ETHERNET_CONNECTION_TYPE)
+    except NetworkManagerError as exc:
+        logger.warning("could not list ethernet profiles at startup: %s", exc)
+        return
+
+    for profile in profiles:
+        name = profile["name"]
+        try:
+            set_connection_ethernet_mac(config, name, mac_address)
+            logger.info("enforced MAC %s on ethernet profile '%s'", mac_address, name)
+        except NetworkManagerError as exc:
+            logger.warning("could not set MAC on profile '%s': %s", name, exc)
 
 
 def _configure_logging(app: Flask) -> None:

@@ -554,6 +554,22 @@ def get_connection_ipv4_config(config: dict[str, Any], connection_name: str) -> 
     }
 
 
+def set_connection_ethernet_mac(
+    config: dict[str, Any],
+    connection_name: str,
+    mac_address: str,
+) -> None:
+    """Pin the cloned MAC address on an ethernet connection profile.
+
+    This prevents OS-level MAC cloning (e.g. from NetworkManager's random/clone
+    settings or desktop UI) from overriding the physical adapter's address.
+    """
+    _run_nmcli(config, [
+        "connection", "modify", connection_name,
+        "ethernet.cloned-mac-address", mac_address,
+    ])
+
+
 def set_connection_ipv4_config(
     config: dict[str, Any],
     connection_name: str,

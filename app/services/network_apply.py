@@ -25,6 +25,7 @@ from app.services.network_manager import (
     list_connection_profiles,
     persist_connection_to_etc,
     set_connection_autoconnect,
+    set_connection_ethernet_mac,
     set_connection_ipv4_config,
     set_connection_never_default,
 )
@@ -340,6 +341,12 @@ def apply_ethernet_settings(
             set_connection_autoconnect(config, target_connection, True)
             persist_connection_to_etc(config, target_connection)
             config_saved = True
+
+        # Always enforce the fixed MAC address to prevent OS/UI MAC cloning
+        # from overriding the physical adapter address.
+        ethernet_mac = config.get("ETHERNET_MAC_ADDRESS", "")
+        if target_connection and ethernet_mac:
+            set_connection_ethernet_mac(config, target_connection, ethernet_mac)
 
         # When a manual gateway is explicitly provided, keep ethernet eligible for
         # default route so NetworkManager does not discard the gateway.
