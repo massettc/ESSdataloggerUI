@@ -318,6 +318,24 @@ def apply_ethernet_settings(
     if target_connection is None and ip_method in {"auto", "manual"} and previous_connection:
         target_connection = previous_connection["name"]
 
+    # If the active connection is a volatile netplan-managed profile, redirect
+    # settings to the persistent NM-native profile (named after the interface,
+    # e.g. 'eth0').  Saving to a netplan-* profile is futile because the watchdog
+    # deletes it on startup, discarding any IP/gateway changes made via the UI.
+    if target_connection and target_connection.startswith("netplan-"):
+        interface_name = config.get("ETHERNET_INTERFACE", "eth0")
+        try:
+            persistent_profiles = list_connection_profiles(config, connection_type=ETHERNET_CONNECTION_TYPE)
+            persistent_names = {p["name"] for p in persistent_profiles if not p["name"].startswith("netplan-")}
+            if interface_name in persistent_names:
+                logger.info(
+                    "redirecting ethernet settings from volatile '%s' to persistent profile '%s'",
+                    target_connection, interface_name,
+                )
+                target_connection = interface_name
+        except NetworkManagerError:
+            pass  # Fall back to saving on the netplan profile
+
     requested_connection = target_connection or config["ETHERNET_INTERFACE"]
     previous_ipv4_config = None
     config_saved = False
