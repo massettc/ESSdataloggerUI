@@ -5,8 +5,7 @@ from app.services.network_manager import (
     ETHERNET_CONNECTION_TYPE,
     NetworkManagerError,
     list_connection_profiles,
-    persist_connection_to_etc,
-    set_connection_ethernet_mac,
+    replace_netplan_ethernet_profile,
 )
 from app.services.network_watchdog import FailoverWatchdog
 
@@ -15,12 +14,16 @@ app = create_app()
 
 
 def _enforce_ethernet_mac() -> None:
-    """Pin the cloned MAC address on all ethernet profiles.
+    """Replace any netplan-managed ethernet profiles with persistent NM-native ones.
 
-    Called once here (in the watchdog process only) so NM profile changes are
-    made by a single process and don't race against gunicorn workers.
-    `connection modify` updates the profile file; NM applies the new MAC on the
-    next natural connection activation without triggering an immediate reconnect.
+    netplan regenerates profiles in /run/NetworkManager/system-connections/ on
+    every boot, wiping any runtime changes.  replace_netplan_ethernet_profile
+    creates a new keyfile in /etc/ (which netplan never touches) with the pinned
+    MAC address and the same IP settings, then removes the old volatile profile.
+    If the profile is already in /etc/ it just updates the MAC in-place.
+
+    Called once here in the watchdog process so only one process modifies NM
+    profiles at startup.
     """
     config = app.config
     mac_address = config.get("ETHERNET_MAC_ADDRESS", "")
@@ -37,11 +40,10 @@ def _enforce_ethernet_mac() -> None:
     for profile in profiles:
         name = profile["name"]
         try:
-            set_connection_ethernet_mac(config, name, mac_address)
-            persist_connection_to_etc(config, name)
-            logger.info("enforced MAC %s on ethernet profile '%s'", mac_address, name)
+            new_name = replace_netplan_ethernet_profile(config, name, mac_address)
+            logger.info("ethernet MAC enforced on profile '%s' (active name: '%s')", name, new_name)
         except NetworkManagerError as exc:
-            logger.warning("could not set MAC on profile '%s': %s", name, exc)
+            logger.warning("could not enforce MAC on profile '%s': %s", name, exc)
 
 
 if __name__ == "__main__":
