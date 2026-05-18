@@ -13,6 +13,7 @@ from .routes.network import network_bp
 from .services.network_manager import (
     ETHERNET_CONNECTION_TYPE,
     NetworkManagerError,
+    bring_up_connection,
     list_connection_profiles,
     set_connection_ethernet_mac,
 )
@@ -77,6 +78,19 @@ def _enforce_ethernet_mac(config: dict[str, Any]) -> None:
             logger.info("enforced MAC %s on ethernet profile '%s'", mac_address, name)
         except NetworkManagerError as exc:
             logger.warning("could not set MAC on profile '%s': %s", name, exc)
+            continue
+
+        # Bring the connection up immediately so NM applies the new cloned MAC
+        # in a single controlled reconnect now, before the watchdog starts
+        # calling `device reapply`. Without this, every watchdog reapply cycle
+        # detects the profile MAC differs from the live interface MAC and triggers
+        # a full reconnect, causing eth0 to cycle repeatedly.
+        if profile.get("active"):
+            try:
+                bring_up_connection(config, name)
+                logger.info("reactivated '%s' to apply new MAC", name)
+            except NetworkManagerError as exc:
+                logger.warning("could not reactivate '%s' after MAC change: %s", name, exc)
 
 
 def _configure_logging(app: Flask) -> None:
