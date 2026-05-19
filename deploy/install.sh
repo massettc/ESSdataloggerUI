@@ -101,7 +101,84 @@ if [[ -d /etc/cloud || -d "$CI_CFG_DIR" ]]; then
     sudo cp "$APP_DIR/config/cloud-init-preserve-hostname.cfg" "$CI_CFG_DIR/$CI_PRESERVE_HOSTNAME_CFG"
 fi
 sudo systemctl restart NetworkManager
-sudo cp "$APP_DIR/config/sudoers.pi-network-admin" /etc/sudoers.d/pi-network-admin
+
+# ── Network: take ownership of eth0 from netplan ──────────────────────────────
+# Disable cloud-init from regenerating the netplan config, remove the
+# ethernets section from netplan so it never creates a competing netplan-eth0
+# profile, and create a persistent NM-native profile directly in /etc/.
+# After this point the app manages eth0 entirely through nmcli; no netplan
+# profile will ever override it again.
+_setup_ethernet_ownership() {
+    local iface mac_addr np_file nm_conn_file
+    iface="eth0"
+    mac_addr=""
+
+    if [[ -f "$CONFIG_DIR/app.env" ]]; then
+        mac_addr=$(grep -oP '(?<=^PI_ADMIN_ETHERNET_MAC_ADDRESS=)\S+' "$CONFIG_DIR/app.env" 2>/dev/null || true)
+        local custom_iface
+        custom_iface=$(grep -oP '(?<=^PI_ADMIN_ETHERNET_INTERFACE=)\S+' "$CONFIG_DIR/app.env" 2>/dev/null || true)
+        [[ -n "$custom_iface" ]] && iface="$custom_iface"
+    fi
+
+    nm_conn_file="/etc/NetworkManager/system-connections/${iface}.nmconnection"
+
+    # 1. Stop cloud-init from regenerating netplan configs on future reboots.
+    if [[ -d /etc/cloud ]]; then
+        sudo mkdir -p "$CI_CFG_DIR"
+        echo "network: {config: disabled}" | sudo tee "$CI_CFG_DIR/99-pi-network-admin-no-network.cfg" >/dev/null
+        echo "Disabled cloud-init network management."
+    fi
+
+    # 2. Remove the ethernets section from the netplan YAML so netplan stops
+    #    generating netplan-eth0.  WiFi config is left untouched.
+    if command -v netplan >/dev/null 2>&1; then
+        for np_file in /etc/netplan/*.yaml /etc/netplan/*.yml; do
+            [[ -f "$np_file" ]] || continue
+            if sudo grep -qE '^\s+ethernets:' "$np_file" 2>/dev/null; then
+                sudo python3 - "$np_file" <<'PYEOF'
+import sys, yaml
+path = sys.argv[1]
+with open(path) as f:
+    cfg = yaml.safe_load(f) or {}
+net = cfg.setdefault('network', {})
+if 'ethernets' in net:
+    del net['ethernets']
+    with open(path, 'w') as f:
+        yaml.dump(cfg, f, default_flow_style=False, allow_unicode=True)
+    print(f"Removed ethernets section from {path}.")
+else:
+    print(f"No ethernets section in {path}; nothing to remove.")
+PYEOF
+            fi
+        done
+        sudo netplan apply 2>/dev/null || true
+        echo "Netplan applied; netplan-${iface} profile removed."
+    fi
+
+    # 3. Delete any lingering netplan-managed NM profile for this interface.
+    if nmcli -g name connection show 2>/dev/null | grep -q "^netplan-${iface}$"; then
+        sudo nmcli connection delete "netplan-${iface}" 2>/dev/null || true
+        echo "Deleted lingering netplan-${iface} NM profile."
+    fi
+
+    # 4. Create or update the persistent NM profile.
+    if [[ ! -f "$nm_conn_file" ]]; then
+        local -a add_args=(connection add type ethernet ifname "$iface" con-name "$iface"
+            connection.autoconnect yes ipv4.method auto)
+        [[ -n "$mac_addr" ]] && add_args+=(ethernet.cloned-mac-address "$mac_addr")
+        sudo nmcli "${add_args[@]}"
+        echo "Created persistent NM connection '${iface}'."
+    else
+        local -a mod_args=(connection modify "$iface"
+            connection.interface-name "$iface" connection.autoconnect yes)
+        [[ -n "$mac_addr" ]] && mod_args+=(ethernet.cloned-mac-address "$mac_addr")
+        sudo nmcli "${mod_args[@]}"
+        echo "Updated existing NM connection '${iface}'."
+    fi
+}
+_setup_ethernet_ownership
+
+
 sudo chmod 440 /etc/sudoers.d/pi-network-admin
 sudo cp "$APP_DIR/systemd/$SERVICE_NAME" /etc/systemd/system/$SERVICE_NAME
 sudo cp "$APP_DIR/systemd/$WATCHDOG_SERVICE_NAME" /etc/systemd/system/$WATCHDOG_SERVICE_NAME

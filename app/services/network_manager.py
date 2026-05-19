@@ -566,111 +566,78 @@ def set_connection_ethernet_mac(
     ])
 
 
+def ensure_ethernet_profile(
+    config: dict[str, Any],
+    interface_name: str,
+    mac_address: str,
+) -> None:
+    """Ensure a persistent NM ethernet profile exists for interface_name with MAC pinned.
+
+    This is the single source of truth for the eth0 NM connection.  It does not
+    try to detect or fight netplan — the install script handles that by removing
+    eth0 from the netplan config entirely so netplan never generates a competing
+    profile.
+
+    - If a profile named ``interface_name`` already exists: update MAC and
+      interface binding.
+    - If no profile exists: create one with DHCP (IP settings are managed
+      separately through the web UI).
+    """
+    if os.name == "nt":
+        return
+
+    profile_exists = False
+    try:
+        _run_nmcli(config, ["-g", "filename", "connection", "show", interface_name])
+        profile_exists = True
+    except NetworkManagerError:
+        profile_exists = False
+
+    if profile_exists:
+        _run_nmcli(config, [
+            "connection", "modify", interface_name,
+            "ethernet.cloned-mac-address", mac_address,
+            "connection.interface-name", interface_name,
+            "connection.autoconnect", "yes",
+        ])
+        _nm_logger.info("ensured ethernet profile '%s' MAC=%s", interface_name, mac_address)
+    else:
+        _run_nmcli(config, [
+            "connection", "add",
+            "type", "ethernet",
+            "ifname", interface_name,
+            "con-name", interface_name,
+            "ethernet.cloned-mac-address", mac_address,
+            "connection.autoconnect", "yes",
+            "ipv4.method", "auto",
+        ])
+        _nm_logger.info("created ethernet profile '%s' MAC=%s", interface_name, mac_address)
+
+
 def replace_netplan_ethernet_profile(
     config: dict[str, Any],
     connection_name: str,
     mac_address: str,
 ) -> str:
-    """Replace a netplan-managed ethernet profile with a persistent NM-native one.
+    """Deprecated: use ensure_ethernet_profile instead.
 
-    netplan regenerates profiles under /run/NetworkManager/system-connections/
-    on every boot, overwriting any runtime changes (including cloned-mac-address).
-    This function creates a new keyfile in /etc/NetworkManager/system-connections/
-    with the pinned MAC and all existing IP settings, then deletes the volatile
-    netplan profile.  The new profile is named after the interface (e.g. 'eth0')
-    so netplan never touches it.
-
-    Returns the name of the active profile after the operation (either the new
-    name if replaced, or the original name if it was already in /etc/).
+    Left in place for one release cycle to handle Pis that were deployed before
+    the install.sh netplan-ownership step existed.  Deletes any lingering
+    ``netplan-*`` profile for the ethernet interface and delegates to
+    ensure_ethernet_profile.
     """
-    if os.name == "nt":
-        return connection_name
-
-    # Determine where the profile currently lives.
-    try:
-        filename = _run_nmcli(config, ["-g", "filename", "connection", "show", connection_name]).strip()
-    except NetworkManagerError:
-        return connection_name
-
     interface_name = config.get("ETHERNET_INTERFACE", "eth0")
 
-    if not filename or "/run/" not in filename:
-        # Already stored in /etc/ — update MAC and ensure the profile is bound
-        # to the correct interface (it may be unbound if created via the NM GUI).
-        _run_nmcli(config, [
-            "connection", "modify", connection_name,
-            "ethernet.cloned-mac-address", mac_address,
-            "connection.interface-name", interface_name,
-            "connection.autoconnect", "yes",
-        ])
-        return connection_name
+    # Delete the netplan-managed profile if it's still around.
+    if connection_name != interface_name:
+        try:
+            _run_nmcli(config, ["connection", "delete", connection_name])
+            _nm_logger.info("deleted legacy netplan profile '%s'", connection_name)
+        except NetworkManagerError as exc:
+            _nm_logger.warning("could not delete netplan profile '%s': %s", connection_name, exc)
 
-    # Read existing IP settings so we can replicate them in the new profile.
-    try:
-        ipv4 = get_connection_ipv4_config(config, connection_name)
-    except NetworkManagerError:
-        ipv4 = {"method": "auto", "address": "", "prefix": "", "gateway": "", "dns": ""}
-    new_name = interface_name  # e.g. "eth0" — netplan ignores non-"netplan-" names
-
-    # Check if a profile with the target name already exists in /etc/.
-    # This happens on every reboot: netplan recreates netplan-eth0 in /run/ even
-    # though our "eth0" profile already exists in /etc/.  In that case we just
-    # update the existing profile and delete the stale netplan one — we must NOT
-    # call `connection add` again or it will fail / create a duplicate.
-    target_exists = False
-    try:
-        target_filename = _run_nmcli(config, ["-g", "filename", "connection", "show", new_name]).strip()
-        target_exists = bool(target_filename)
-    except NetworkManagerError:
-        target_exists = False
-
-    if target_exists:
-        # Target profile already exists — update it in-place.
-        _run_nmcli(config, [
-            "connection", "modify", new_name,
-            "ethernet.cloned-mac-address", mac_address,
-            "connection.interface-name", interface_name,
-            "connection.autoconnect", "yes",
-        ])
-        _nm_logger.info(
-            "updated existing NM-native profile '%s' with MAC %s",
-            new_name, mac_address,
-        )
-    else:
-        # Create the new persistent profile.
-        cmd = [
-            "connection", "add",
-            "type", "ethernet",
-            "ifname", interface_name,
-            "con-name", new_name,
-            "ethernet.cloned-mac-address", mac_address,
-            "connection.autoconnect", "yes",
-        ]
-
-        if ipv4.get("method") == "manual" and ipv4.get("address"):
-            prefix = ipv4.get("prefix") or "24"
-            cmd += ["ipv4.method", "manual", "ipv4.addresses", f"{ipv4['address']}/{prefix}"]
-            if ipv4.get("gateway"):
-                cmd += ["ipv4.gateway", ipv4["gateway"]]
-            if ipv4.get("dns"):
-                cmd += ["ipv4.dns", ipv4["dns"]]
-        else:
-            cmd += ["ipv4.method", "auto"]
-
-        _run_nmcli(config, cmd)
-        _nm_logger.info(
-            "created NM-native ethernet profile '%s' with MAC %s (replacing netplan profile '%s')",
-            new_name, mac_address, connection_name,
-        )
-
-    # Remove the stale volatile netplan profile so it stops competing with our profile.
-    try:
-        _run_nmcli(config, ["connection", "delete", connection_name])
-        _nm_logger.info("deleted netplan-managed profile '%s'", connection_name)
-    except NetworkManagerError as exc:
-        _nm_logger.warning("could not delete old netplan profile '%s': %s", connection_name, exc)
-
-    return new_name
+    ensure_ethernet_profile(config, interface_name, mac_address)
+    return interface_name
 
 
 def set_connection_ipv4_config(
