@@ -164,10 +164,8 @@ PYEOF
         echo "Deleted lingering netplan-${iface} NM profile."
     fi
 
-    # 4. Delete duplicate UUID-suffixed profiles (e.g. eth0-<uuid>.nmconnection)
-    #    created by previous buggy versions that called 'nmcli connection add'
-    #    when a profile named eth0 already existed.  NM auto-renames duplicates
-    #    to eth0-<uuid> which then compete with the canonical eth0 profile.
+    # 4. Delete duplicate profiles for this interface.
+    #    Phase A: remove UUID-suffixed keyfiles on disk (e.g. eth0-<uuid>.nmconnection).
     local dup_count=0
     for dup_file in "/etc/NetworkManager/system-connections/${iface}-"*.nmconnection; do
         [[ -f "$dup_file" ]] || continue
@@ -176,8 +174,21 @@ PYEOF
     done
     if [[ $dup_count -gt 0 ]]; then
         sudo nmcli connection reload 2>/dev/null || true
-        echo "Cleaned up ${dup_count} duplicate NM profile(s) for ${iface}."
+        echo "Cleaned up ${dup_count} duplicate keyfile(s) for ${iface}."
     fi
+    #    Phase B: via nmcli, delete every profile whose name OR device matches
+    #    this interface, except the canonical UUID from the keyfile.  This handles
+    #    the case where NM has 3 in-memory profiles all named 'eth0'.
+    local canonical_uuid_pre=""
+    if [[ -f "$nm_conn_file" ]]; then
+        canonical_uuid_pre=$(sudo awk -F= '/^uuid[[:space:]]*=/{gsub(/ |\r/,"",$2); print $2}' "$nm_conn_file")
+    fi
+    while IFS=: read -r pname puuid ptype pdevice; do
+        [[ "$pname" == "$iface" || "$pdevice" == "$iface" ]] || continue
+        [[ "$puuid" == "$canonical_uuid_pre" ]] && continue
+        sudo nmcli connection delete "$puuid" 2>/dev/null || true
+        echo "Deleted duplicate NM profile: name='${pname}' uuid=${puuid}."
+    done < <(sudo nmcli -t -f name,uuid,type,device connection show 2>/dev/null || true)
 
     # 5. Create or update the persistent NM profile (check by file, not NM name).
     if [[ ! -f "$nm_conn_file" ]]; then
