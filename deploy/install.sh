@@ -140,6 +140,31 @@ _setup_ethernet_ownership() {
 
     nm_conn_file="/etc/NetworkManager/system-connections/${iface}.nmconnection"
 
+    # 0. Deploy a udev rule that pre-sets the cloned MAC address on the interface
+    #    before NetworkManager activates it.  This prevents NM from changing the MAC
+    #    on an already-active link, which causes the connected device to bounce the
+    #    port (carrier-flap loop every ~4 seconds).
+    #    Because the NM profile uses ethernet.cloned-mac-address=preserve (see below),
+    #    NM will never set or reset the MAC itself — the udev rule is the sole setter.
+    local udev_rule_file="/etc/udev/rules.d/72-pi-network-admin-eth-mac.rules"
+    if [[ -n "$mac_addr" ]]; then
+        sudo tee "$udev_rule_file" > /dev/null << EOF
+# Managed by pi-network-admin install.sh — do not edit by hand.
+# Pre-sets the cloned MAC address before NetworkManager activates the interface.
+# This prevents NM from changing the MAC on a live link, which would cause the
+# connected device to bounce the port (carrier-flap loop).
+SUBSYSTEM=="net", ACTION=="add", ATTR{interface}=="${iface}", RUN+="/usr/bin/ip link set ${iface} address ${mac_addr}"
+EOF
+        sudo udevadm control --reload-rules 2>/dev/null || true
+        # Apply immediately so the current session picks up the MAC without a reboot.
+        sudo ip link set "$iface" address "$mac_addr" 2>/dev/null || true
+        echo "Deployed udev MAC rule for ${iface}: ${mac_addr}"
+    else
+        # No MAC configured — remove any stale rule from a previous install.
+        sudo rm -f "$udev_rule_file" 2>/dev/null || true
+        sudo udevadm control --reload-rules 2>/dev/null || true
+    fi
+
     # 1. Stop cloud-init from regenerating netplan configs on future reboots.
     if [[ -d /etc/cloud ]]; then
         sudo mkdir -p "$CI_CFG_DIR"
@@ -148,7 +173,11 @@ _setup_ethernet_ownership() {
     fi
 
     # 2. Remove the ethernets section from the netplan YAML so netplan stops
-    #    generating netplan-eth0.  WiFi config is left untouched.
+    #    generating netplan-eth0 on future boots.  WiFi config is left untouched.
+    #    We do NOT run 'netplan apply' because it triggers a NetworkManager restart
+    #    that races with the rest of this script.  The yaml edit takes effect the
+    #    next time 'netplan generate' runs (i.e. on reboot).  Any live netplan-eth0
+    #    NM profile is removed directly in step 3 below via nmcli.
     if command -v netplan >/dev/null 2>&1; then
         for np_file in /etc/netplan/*.yaml /etc/netplan/*.yml; do
             [[ -f "$np_file" ]] || continue
@@ -169,8 +198,6 @@ else:
 PYEOF
             fi
         done
-        sudo netplan apply 2>/dev/null || true
-        echo "Netplan applied; netplan-${iface} profile removed."
     fi
 
     # 3. Delete any lingering netplan-managed NM profile for this interface.
@@ -242,7 +269,9 @@ PYEOF
             connection.interface-name   "$iface"
             connection.autoconnect      yes
             connection.autoconnect-retries 0)
-        [[ -n "$mac_addr" ]] && mod_args+=(ethernet.cloned-mac-address "$mac_addr")
+        # Use 'preserve' so NM never changes or resets the MAC itself.
+        # The actual MAC is managed by the udev rule deployed above.
+        [[ -n "$mac_addr" ]] && mod_args+=(ethernet.cloned-mac-address "preserve")
         sudo nmcli "${mod_args[@]}" 2>/dev/null || true
         echo "One '${iface}' profile found; normalised name/MAC (uuid=${eth_uuids[0]})." 
 
@@ -251,7 +280,9 @@ PYEOF
         local -a add_args=(connection add type ethernet ifname "$iface" con-name "$iface"
             connection.autoconnect yes connection.autoconnect-retries 0
             ipv4.method auto)
-        [[ -n "$mac_addr" ]] && add_args+=(ethernet.cloned-mac-address "$mac_addr")
+        # Use 'preserve' so NM never changes or resets the MAC itself.
+        # The actual MAC is managed by the udev rule deployed above.
+        [[ -n "$mac_addr" ]] && add_args+=(ethernet.cloned-mac-address "preserve")
         sudo nmcli "${add_args[@]}"
         echo "No '${iface}' profile found; created one."
 
@@ -268,7 +299,9 @@ PYEOF
         local -a add_args=(connection add type ethernet ifname "$iface" con-name "$iface"
             connection.autoconnect yes connection.autoconnect-retries 0
             ipv4.method auto)
-        [[ -n "$mac_addr" ]] && add_args+=(ethernet.cloned-mac-address "$mac_addr")
+        # Use 'preserve' so NM never changes or resets the MAC itself.
+        # The actual MAC is managed by the udev rule deployed above.
+        [[ -n "$mac_addr" ]] && add_args+=(ethernet.cloned-mac-address "preserve")
         sudo nmcli "${add_args[@]}"
         sudo nmcli connection reload 2>/dev/null || true
         echo "Recreated single '${iface}' profile."
@@ -277,6 +310,7 @@ PYEOF
 _setup_ethernet_ownership
 
 
+sudo cp "$APP_DIR/config/sudoers.pi-network-admin" /etc/sudoers.d/pi-network-admin
 sudo chmod 440 /etc/sudoers.d/pi-network-admin
 sudo cp "$APP_DIR/systemd/$SERVICE_NAME" /etc/systemd/system/$SERVICE_NAME
 sudo cp "$APP_DIR/systemd/$WATCHDOG_SERVICE_NAME" /etc/systemd/system/$WATCHDOG_SERVICE_NAME

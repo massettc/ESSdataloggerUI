@@ -559,10 +559,58 @@ def set_connection_ethernet_mac(
     connection_name: str,
     mac_address: str,
 ) -> None:
-    """Pin the cloned MAC address on an ethernet connection profile."""
+    """Set the cloned MAC address for an ethernet connection.
+
+    The NM profile is set to ``ethernet.cloned-mac-address=preserve`` so that
+    NetworkManager never changes or resets the MAC itself.  The actual MAC is
+    applied directly to the interface via ``ip link set`` and persisted via a
+    udev rule, which pre-sets it at boot before NM activates the interface.
+
+    This pattern eliminates the carrier-flap loop that occurs when NM changes
+    the MAC on an already-active link and the connected device bounces the port.
+    """
+    interface_name = config.get("ETHERNET_INTERFACE", "eth0")
+
+    if os.name != "nt":
+        sudo_bin = config.get("SUDO_BIN", "sudo")
+
+        # 1. Apply the MAC to the live interface immediately.
+        subprocess.run(
+            [sudo_bin, "-n", "ip", "link", "set", interface_name, "address", mac_address],
+            capture_output=True,
+            check=False,
+        )
+
+        # 2. Persist via udev rule so the MAC is pre-set before NM activates on reboot.
+        udev_path = "/etc/udev/rules.d/72-pi-network-admin-eth-mac.rules"
+        rule = (
+            "# Managed by pi-network-admin — do not edit by hand.\n"
+            "# Pre-sets the cloned MAC address before NetworkManager activates the interface.\n"
+            "# This prevents NM from changing the MAC on a live link, which would cause the\n"
+            "# connected device to bounce the port (carrier-flap loop).\n"
+            f'SUBSYSTEM=="net", ACTION=="add", ATTR{{interface}}=="{interface_name}",'
+            f' RUN+="/usr/bin/ip link set {interface_name} address {mac_address}"\n'
+        )
+        try:
+            subprocess.run(
+                [sudo_bin, "-n", "tee", udev_path],
+                input=rule,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+            subprocess.run(
+                [sudo_bin, "-n", "udevadm", "control", "--reload-rules"],
+                capture_output=True,
+                check=False,
+            )
+        except subprocess.CalledProcessError:
+            _nm_logger.warning("failed to write udev MAC rule for %s", interface_name)
+
+    # 3. Set 'preserve' in the NM profile so NM never touches the MAC.
     _run_nmcli(config, [
         "connection", "modify", connection_name,
-        "ethernet.cloned-mac-address", mac_address,
+        "ethernet.cloned-mac-address", "preserve",
     ])
 
 
