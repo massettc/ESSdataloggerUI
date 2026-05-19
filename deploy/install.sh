@@ -70,8 +70,11 @@ fi
 sudo chown -R "$USER_NAME:$USER_NAME" "$APP_DIR" /var/log/pi-network-admin
 
 sudo -u "$USER_NAME" python3 -m venv "$APP_DIR/.venv"
-sudo -u "$USER_NAME" "$APP_DIR/.venv/bin/pip" install --upgrade pip
-sudo -u "$USER_NAME" "$APP_DIR/.venv/bin/pip" install -r "$APP_DIR/requirements.txt"
+# pip upgrade is best-effort; a network outage must not abort the install.
+sudo -u "$USER_NAME" "$APP_DIR/.venv/bin/pip" install --upgrade pip || \
+    echo "Warning: pip upgrade failed (no internet?); continuing with existing pip."
+sudo -u "$USER_NAME" "$APP_DIR/.venv/bin/pip" install -r "$APP_DIR/requirements.txt" || \
+    echo "Warning: pip install failed (no internet?); continuing with existing packages."
 if [[ ! -f "$CONFIG_DIR/app.env" ]]; then
     sudo cp "$APP_DIR/config/app.env.example" "$CONFIG_DIR/app.env"
     echo "Created $CONFIG_DIR/app.env from template."
