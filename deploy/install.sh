@@ -98,6 +98,7 @@ else
     echo "Keeping existing $CONFIG_DIR/technician_commands.json"
 fi
 sudo cp "$APP_DIR/config/networkmanager-unmanaged-docker.conf" "$NM_CONF_DIR/$NM_DOCKER_UNMANAGED_CONF"
+sudo cp "$APP_DIR/config/networkmanager-no-auto-default.conf" "$NM_CONF_DIR/91-pi-network-admin-no-auto-default.conf"
 sudo cp "$APP_DIR/deploy/set-hostname.sh" "$HOSTNAME_HELPER_PATH"
 sudo chmod 755 "$HOSTNAME_HELPER_PATH"
 if [[ -d /etc/cloud || -d "$CI_CFG_DIR" ]]; then
@@ -192,14 +193,18 @@ PYEOF
         echo "Removed orphaned keyfile: $kf"
     done < <(sudo find /etc/NetworkManager/system-connections \
         -maxdepth 1 -name "${iface}*.nmconnection" 2>/dev/null)
-    sudo nmcli connection reload 2>/dev/null || true
 
-    # 5. Create a fresh persistent NM profile (clean slate, no duplicates).
+    # 5. Create a fresh persistent NM profile BEFORE reloading.
+    #    Creating the profile first means NM finds it during reload and never
+    #    needs to auto-create a 'Wired Connection N' fallback.  The
+    #    no-auto-default NM config (installed above) also prevents this, but
+    #    the ordering is a belt-and-suspenders guarantee.
     local -a add_args=(connection add type ethernet ifname "$iface" con-name "$iface"
         connection.autoconnect yes ipv4.method auto)
     [[ -n "$mac_addr" ]] && add_args+=(ethernet.cloned-mac-address "$mac_addr")
     sudo nmcli "${add_args[@]}"
     echo "Created fresh persistent NM connection '${iface}'."
+    sudo nmcli connection reload 2>/dev/null || true
 }
 _setup_ethernet_ownership
 
