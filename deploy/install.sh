@@ -104,7 +104,16 @@ sudo chmod 755 "$HOSTNAME_HELPER_PATH"
 if [[ -d /etc/cloud || -d "$CI_CFG_DIR" ]]; then
     sudo cp "$APP_DIR/config/cloud-init-preserve-hostname.cfg" "$CI_CFG_DIR/$CI_PRESERVE_HOSTNAME_CFG"
 fi
-sudo systemctl restart NetworkManager
+# Restart NetworkManager in the background with a brief delay so that an SSH
+# session running this script is not killed by the momentary network drop.
+# The subshell is detached (nohup + disown) so SIGHUP from a dying SSH session
+# cannot reach it.  We then sleep long enough for NM to finish restarting
+# before the rest of the script continues.
+echo "Restarting NetworkManager (connection may drop briefly if on SSH)..."
+sudo bash -c 'sleep 1; systemctl restart NetworkManager' &
+disown
+sleep 8
+echo "NetworkManager restart complete."
 
 # ── Network: take ownership of eth0 from netplan ──────────────────────────────
 # Disable cloud-init from regenerating the netplan config, remove the
