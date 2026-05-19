@@ -164,54 +164,34 @@ PYEOF
         echo "Deleted lingering netplan-${iface} NM profile."
     fi
 
-    # 4. Delete duplicate profiles for this interface.
-    #    Phase A: remove UUID-suffixed keyfiles on disk (e.g. eth0-<uuid>.nmconnection).
-    local dup_count=0
-    for dup_file in "/etc/NetworkManager/system-connections/${iface}-"*.nmconnection; do
-        [[ -f "$dup_file" ]] || continue
-        sudo rm -f "$dup_file"
-        dup_count=$((dup_count + 1))
+    # 4. Wipe ALL NM profiles for this interface so we start clean.
+    #    Previous buggy installs can leave multiple profiles with the same
+    #    con-name (eth0), different UUIDs, and unpredictable filenames.
+    #    Strategy: collect all UUIDs via nmcli, delete each; then remove every
+    #    keyfile in /etc/ whose filename starts with <iface> (any suffix).
+    local all_uuids
+    mapfile -t all_uuids < <(sudo nmcli -t -f name,uuid,type connection show 2>/dev/null | \
+        awk -F: '$1 == "'"$iface"'" && $3 == "ethernet" {print $2}')
+    for uuid in "${all_uuids[@]:-}"; do
+        [[ -z "$uuid" ]] && continue
+        sudo nmcli connection delete "$uuid" 2>/dev/null || true
+        echo "Deleted NM profile uuid=${uuid} (${iface})."
     done
-    if [[ $dup_count -gt 0 ]]; then
-        sudo nmcli connection reload 2>/dev/null || true
-        echo "Cleaned up ${dup_count} duplicate keyfile(s) for ${iface}."
-    fi
-    #    Phase B: via nmcli, delete every profile whose name OR device matches
-    #    this interface, except the canonical UUID from the keyfile.  This handles
-    #    the case where NM has 3 in-memory profiles all named 'eth0'.
-    local canonical_uuid_pre=""
-    if [[ -f "$nm_conn_file" ]]; then
-        canonical_uuid_pre=$(sudo awk -F= '/^uuid[[:space:]]*=/{gsub(/ |\r/,"",$2); print $2}' "$nm_conn_file")
-    fi
-    while IFS=: read -r pname puuid ptype pdevice; do
-        [[ "$pname" == "$iface" || "$pdevice" == "$iface" ]] || continue
-        [[ "$puuid" == "$canonical_uuid_pre" ]] && continue
-        sudo nmcli connection delete "$puuid" 2>/dev/null || true
-        echo "Deleted duplicate NM profile: name='${pname}' uuid=${puuid}."
-    done < <(sudo nmcli -t -f name,uuid,type,device connection show 2>/dev/null || true)
+    # Remove any remaining keyfiles on disk whose name starts with <iface>.
+    # 'find' handles spaces, dashes, and any other suffix NM may have used.
+    while IFS= read -r kf; do
+        sudo rm -f "$kf"
+        echo "Removed keyfile: $kf"
+    done < <(sudo find /etc/NetworkManager/system-connections \
+        -maxdepth 1 -name "${iface}*.nmconnection" 2>/dev/null)
+    sudo nmcli connection reload 2>/dev/null || true
 
-    # 5. Create or update the persistent NM profile (check by file, not NM name).
-    if [[ ! -f "$nm_conn_file" ]]; then
-        local -a add_args=(connection add type ethernet ifname "$iface" con-name "$iface"
-            connection.autoconnect yes ipv4.method auto)
-        [[ -n "$mac_addr" ]] && add_args+=(ethernet.cloned-mac-address "$mac_addr")
-        sudo nmcli "${add_args[@]}"
-        echo "Created persistent NM connection '${iface}'."
-    else
-        # Get the UUID from the keyfile so we modify by UUID, not name.
-        # Modifying by name fails when duplicates exist (NM returns 'ambiguous').
-        local conn_uuid
-        conn_uuid=$(sudo awk -F= '/^uuid/{print $2}' "$nm_conn_file" | tr -d ' \r')
-        if [[ -n "$conn_uuid" ]]; then
-            local -a mod_args=(connection modify "$conn_uuid"
-                connection.interface-name "$iface" connection.autoconnect yes)
-            [[ -n "$mac_addr" ]] && mod_args+=(ethernet.cloned-mac-address "$mac_addr")
-            sudo nmcli "${mod_args[@]}"
-            echo "Updated existing NM connection '${iface}' (uuid=${conn_uuid})."
-        else
-            echo "Warning: could not read UUID from ${nm_conn_file}; skipping modify."
-        fi
-    fi
+    # 5. Create a fresh persistent NM profile (clean slate, no duplicates).
+    local -a add_args=(connection add type ethernet ifname "$iface" con-name "$iface"
+        connection.autoconnect yes ipv4.method auto)
+    [[ -n "$mac_addr" ]] && add_args+=(ethernet.cloned-mac-address "$mac_addr")
+    sudo nmcli "${add_args[@]}"
+    echo "Created fresh persistent NM connection '${iface}'."
 }
 _setup_ethernet_ownership
 
