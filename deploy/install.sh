@@ -165,46 +165,61 @@ PYEOF
         echo "Deleted lingering netplan-${iface} NM profile."
     fi
 
-    # 4. Wipe ALL NM profiles bound to this interface so we start clean.
-    #    Filter by connection.interface-name (not just con-name) so that
-    #    NM auto-created profiles like "Wired Connection 1" are also caught —
-    #    they use a different con-name but set interface-name = eth0 internally.
-    local del_uuids=()
+    # 4+5. Ensure exactly one NM profile for this interface with the correct MAC.
+    #
+    #   Count profiles whose con-name == iface OR connection.interface-name == iface.
+    #   • 0 profiles  → create one fresh.
+    #   • 1 profile   → just update the MAC; don't touch anything else so saved
+    #                   gateway/IP settings are preserved.
+    #   • 2+ profiles → nuclear wipe and create one fresh (duplicates break NM).
+    #
+    #   This makes the function safe to run on every update without accumulating
+    #   extra profiles.
+    local eth_uuids=()
     while IFS= read -r puuid; do
         [[ -z "$puuid" ]] && continue
         local pcon_name piface_name
-        pcon_name=$(sudo nmcli -g connection.id           connection show "$puuid" 2>/dev/null | tr -d '\r\n')
+        pcon_name=$(sudo nmcli -g connection.id            connection show "$puuid" 2>/dev/null | tr -d '\r\n')
         piface_name=$(sudo nmcli -g connection.interface-name connection show "$puuid" 2>/dev/null | tr -d ' \r\n')
         if [[ "$pcon_name" == "$iface" || "$piface_name" == "$iface" ]]; then
-            del_uuids+=("$puuid")
-            echo "Queued for deletion: '${pcon_name}' (interface=${piface_name:-unset}) uuid=${puuid}"
+            eth_uuids+=("$puuid")
         fi
     done < <(sudo nmcli -t -f uuid,type connection show 2>/dev/null | \
         awk -F: '($2 == "ethernet" || $2 == "802-3-ethernet") {print $1}')
-    if [[ ${#del_uuids[@]} -gt 0 ]]; then
-        for puuid in "${del_uuids[@]}"; do
+
+    local profile_count=${#eth_uuids[@]}
+
+    if [[ $profile_count -eq 1 ]]; then
+        # Happy path: exactly one profile — just set the MAC.  IP/gateway intact.
+        [[ -n "$mac_addr" ]] && sudo nmcli connection modify "${eth_uuids[0]}" \
+            ethernet.cloned-mac-address "$mac_addr" 2>/dev/null || true
+        echo "One '${iface}' profile found; updated MAC (uuid=${eth_uuids[0]})."
+
+    elif [[ $profile_count -eq 0 ]]; then
+        # No profile at all — create one.
+        local -a add_args=(connection add type ethernet ifname "$iface" con-name "$iface"
+            connection.autoconnect yes ipv4.method auto)
+        [[ -n "$mac_addr" ]] && add_args+=(ethernet.cloned-mac-address "$mac_addr")
+        sudo nmcli "${add_args[@]}"
+        echo "No '${iface}' profile found; created one."
+
+    else
+        # Multiple profiles — wipe them all and start clean.
+        echo "Found ${profile_count} profiles for '${iface}'; performing cleanup."
+        for puuid in "${eth_uuids[@]}"; do
             sudo nmcli connection delete "$puuid" 2>/dev/null || true
         done
-        echo "Deleted ${#del_uuids[@]} NM profile(s) for ${iface}."
+        # Remove any orphaned keyfiles.
+        sudo find /etc/NetworkManager/system-connections \
+            -maxdepth 1 -name "${iface}*.nmconnection" -delete 2>/dev/null || true
+        # Create fresh profile BEFORE reloading so NM never sees a gap.
+        local -a add_args=(connection add type ethernet ifname "$iface" con-name "$iface"
+            connection.autoconnect yes ipv4.method auto)
+        [[ -n "$mac_addr" ]] && add_args+=(ethernet.cloned-mac-address "$mac_addr")
+        sudo nmcli "${add_args[@]}"
+        sudo nmcli connection reload 2>/dev/null || true
+        echo "Recreated single '${iface}' profile."
     fi
-    # Remove any orphaned keyfiles whose filename starts with <iface>.
-    while IFS= read -r kf; do
-        sudo rm -f "$kf"
-        echo "Removed orphaned keyfile: $kf"
-    done < <(sudo find /etc/NetworkManager/system-connections \
-        -maxdepth 1 -name "${iface}*.nmconnection" 2>/dev/null)
-
-    # 5. Create a fresh persistent NM profile BEFORE reloading.
-    #    Creating the profile first means NM finds it during reload and never
-    #    needs to auto-create a 'Wired Connection N' fallback.  The
-    #    no-auto-default NM config (installed above) also prevents this, but
-    #    the ordering is a belt-and-suspenders guarantee.
-    local -a add_args=(connection add type ethernet ifname "$iface" con-name "$iface"
-        connection.autoconnect yes ipv4.method auto)
-    [[ -n "$mac_addr" ]] && add_args+=(ethernet.cloned-mac-address "$mac_addr")
-    sudo nmcli "${add_args[@]}"
-    echo "Created fresh persistent NM connection '${iface}'."
-    sudo nmcli connection reload 2>/dev/null || true
 }
 _setup_ethernet_ownership
 
