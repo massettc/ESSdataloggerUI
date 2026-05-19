@@ -165,6 +165,27 @@ PYEOF
         echo "Deleted lingering netplan-${iface} NM profile."
     fi
 
+    # 3b. Delete NM-auto-generated default ethernet profiles ("Ethernet connection N",
+    #     "Wired Connection N") that have no interface binding.  These are created by
+    #     NM on first boot before no-auto-default is deployed.  They confuse NM when
+    #     eth0 has NO-CARRIER because NM may try to activate them instead of our
+    #     canonical profile.
+    while IFS= read -r puuid; do
+        [[ -z "$puuid" ]] && continue
+        local auto_name auto_iface
+        auto_name=$(sudo nmcli -g connection.id connection show "$puuid" 2>/dev/null | tr -d '\r\n')
+        auto_iface=$(sudo nmcli -g connection.interface-name connection show "$puuid" 2>/dev/null | tr -d ' \r\n')
+        # Match "Ethernet connection N" / "Wired Connection N" with no interface binding.
+        if [[ -z "$auto_iface" || "$auto_iface" == "--" ]] && \
+           [[ "$auto_name" =~ ^[Ee]thernet[[:space:]][Cc]onnection[[:space:]][0-9]+$ ]] || \
+           [[ -z "$auto_iface" || "$auto_iface" == "--" ]] && \
+           [[ "$auto_name" =~ ^[Ww]ired[[:space:]][Cc]onnection[[:space:]][0-9]+$ ]]; then
+            sudo nmcli connection delete "$puuid" 2>/dev/null || true
+            echo "Deleted NM auto-default profile: '${auto_name}'."
+        fi
+    done < <(sudo nmcli -t -f uuid,type connection show 2>/dev/null | \
+        awk -F: '($2 == "ethernet" || $2 == "802-3-ethernet") {print $1}')
+
     # 4+5. Ensure exactly one NM profile for this interface with the correct MAC.
     #
     #   Count profiles whose con-name == iface OR connection.interface-name == iface.
