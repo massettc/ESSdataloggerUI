@@ -251,7 +251,16 @@ class FailoverWatchdog:
         and competing with wlan0 or the designated backup for internet traffic.
         """
         backup_interface = self.config.get("BACKUP_INTERFACE", "")
-        backup_name = self._configured_connection_name(backup_interface) or ""
+        ethernet_interface = self.config.get("ETHERNET_INTERFACE", "")
+
+        # Resolve connection names for managed ethernet interfaces.  Fall back to the
+        # interface name itself when the connection isn't currently active (e.g. eth0 shows
+        # as connected in device status but NM connection show lists DEVICE=-- during boot).
+        backup_name = self._configured_connection_name(backup_interface) or backup_interface
+        ethernet_name = self._configured_connection_name(ethernet_interface) or ethernet_interface
+
+        managed_names = {n for n in (backup_name, ethernet_name) if n}
+        managed_ifaces = {i for i in (backup_interface, ethernet_interface) if i}
 
         try:
             profiles = list_connection_profiles(self.config, connection_type=ETHERNET_CONNECTION_TYPE)
@@ -260,7 +269,7 @@ class FailoverWatchdog:
             return
 
         for profile in profiles:
-            if profile["name"] == backup_name or profile["device"] == backup_interface:
+            if profile["name"] in managed_names or profile["device"] in managed_ifaces:
                 continue
             try:
                 set_connection_never_default(self.config, profile["name"], enabled=True)
