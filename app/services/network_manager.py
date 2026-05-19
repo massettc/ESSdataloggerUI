@@ -615,6 +615,33 @@ def ensure_ethernet_profile(
             "ensured ethernet profile '%s' uuid=%s MAC=%s",
             interface_name, canonical_uuid, mac_address,
         )
+        return
+
+    # No canonical file found.  Before creating a new profile, check whether NM
+    # already manages this interface under a different name/filename (e.g. after
+    # a manual rename or a legacy install).  Creating blindly would add a
+    # duplicate that breaks NM and causes the gateway to disappear.
+    try:
+        active_raw = _run_nmcli(config, ["-g", "GENERAL.CONNECTION", "device", "show", interface_name])
+        active_name = active_raw.strip()
+    except NetworkManagerError:
+        active_name = ""
+
+    if active_name and active_name != "--":
+        # An existing profile is already managing this interface.  Rename it to
+        # the canonical name so the keyfile ends up at eth0.nmconnection and
+        # this branch is never reached again.
+        _run_nmcli(config, [
+            "connection", "modify", active_name,
+            "connection.id", interface_name,
+            "connection.interface-name", interface_name,
+            "ethernet.cloned-mac-address", mac_address,
+            "connection.autoconnect", "yes",
+        ])
+        _nm_logger.info(
+            "renamed existing profile '%s' -> '%s' MAC=%s",
+            active_name, interface_name, mac_address,
+        )
     else:
         _run_nmcli(config, [
             "connection", "add",

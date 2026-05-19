@@ -190,10 +190,18 @@ PYEOF
     local profile_count=${#eth_uuids[@]}
 
     if [[ $profile_count -eq 1 ]]; then
-        # Happy path: exactly one profile — just set the MAC.  IP/gateway intact.
-        [[ -n "$mac_addr" ]] && sudo nmcli connection modify "${eth_uuids[0]}" \
-            ethernet.cloned-mac-address "$mac_addr" 2>/dev/null || true
-        echo "One '${iface}' profile found; updated MAC (uuid=${eth_uuids[0]})."
+        # Happy path: exactly one profile.
+        # Set connection.id = iface so NM writes the keyfile as <iface>.nmconnection.
+        # Without this the file keeps its old name (e.g. 'Wired Connection 1.nmconnection')
+        # and the watchdog can't find the canonical path, causing it to create a
+        # duplicate on every boot.
+        local mod_args=(connection modify "${eth_uuids[0]}"
+            connection.id          "$iface"
+            connection.interface-name "$iface"
+            connection.autoconnect yes)
+        [[ -n "$mac_addr" ]] && mod_args+=(ethernet.cloned-mac-address "$mac_addr")
+        sudo nmcli "${mod_args[@]}" 2>/dev/null || true
+        echo "One '${iface}' profile found; normalised name/MAC (uuid=${eth_uuids[0]})." 
 
     elif [[ $profile_count -eq 0 ]]; then
         # No profile at all — create one.
