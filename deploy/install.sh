@@ -224,9 +224,10 @@ PYEOF
         # and the watchdog can't find the canonical path, causing it to create a
         # duplicate on every boot.
         local mod_args=(connection modify "${eth_uuids[0]}"
-            connection.id          "$iface"
-            connection.interface-name "$iface"
-            connection.autoconnect yes)
+            connection.id               "$iface"
+            connection.interface-name   "$iface"
+            connection.autoconnect      yes
+            connection.autoconnect-retries 0)
         [[ -n "$mac_addr" ]] && mod_args+=(ethernet.cloned-mac-address "$mac_addr")
         sudo nmcli "${mod_args[@]}" 2>/dev/null || true
         echo "One '${iface}' profile found; normalised name/MAC (uuid=${eth_uuids[0]})." 
@@ -234,7 +235,8 @@ PYEOF
     elif [[ $profile_count -eq 0 ]]; then
         # No profile at all — create one.
         local -a add_args=(connection add type ethernet ifname "$iface" con-name "$iface"
-            connection.autoconnect yes ipv4.method auto)
+            connection.autoconnect yes connection.autoconnect-retries 0
+            ipv4.method auto)
         [[ -n "$mac_addr" ]] && add_args+=(ethernet.cloned-mac-address "$mac_addr")
         sudo nmcli "${add_args[@]}"
         echo "No '${iface}' profile found; created one."
@@ -250,7 +252,8 @@ PYEOF
             -maxdepth 1 -name "${iface}*.nmconnection" -delete 2>/dev/null || true
         # Create fresh profile BEFORE reloading so NM never sees a gap.
         local -a add_args=(connection add type ethernet ifname "$iface" con-name "$iface"
-            connection.autoconnect yes ipv4.method auto)
+            connection.autoconnect yes connection.autoconnect-retries 0
+            ipv4.method auto)
         [[ -n "$mac_addr" ]] && add_args+=(ethernet.cloned-mac-address "$mac_addr")
         sudo nmcli "${add_args[@]}"
         sudo nmcli connection reload 2>/dev/null || true

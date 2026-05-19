@@ -18,7 +18,8 @@ ExecStartPost=/usr/bin/bash -c '\
   sleep 0.5; \
   /usr/bin/nmcli device set wlan0 managed on 2>/dev/null; \
   sleep 0.5; \
-  /usr/bin/logger -t pi-network-admin "WiFi interface reset completed after service start"'
+  /usr/bin/nmcli connection up eth0 2>/dev/null || true; \
+  /usr/bin/logger -t pi-network-admin "WiFi interface reset and eth0 bring-up completed after service start"'
 Restart=always
 RestartSec=5
 
