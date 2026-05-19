@@ -164,24 +164,32 @@ PYEOF
         echo "Deleted lingering netplan-${iface} NM profile."
     fi
 
-    # 4. Wipe ALL NM profiles for this interface so we start clean.
-    #    Previous buggy installs can leave multiple profiles with the same
-    #    con-name (eth0), different UUIDs, and unpredictable filenames.
-    #    Strategy: collect all UUIDs via nmcli, delete each; then remove every
-    #    keyfile in /etc/ whose filename starts with <iface> (any suffix).
-    local all_uuids
-    mapfile -t all_uuids < <(sudo nmcli -t -f name,uuid,type connection show 2>/dev/null | \
-        awk -F: '$1 == "'"$iface"'" && $3 == "ethernet" {print $2}')
-    for uuid in "${all_uuids[@]:-}"; do
-        [[ -z "$uuid" ]] && continue
-        sudo nmcli connection delete "$uuid" 2>/dev/null || true
-        echo "Deleted NM profile uuid=${uuid} (${iface})."
-    done
-    # Remove any remaining keyfiles on disk whose name starts with <iface>.
-    # 'find' handles spaces, dashes, and any other suffix NM may have used.
+    # 4. Wipe ALL NM profiles bound to this interface so we start clean.
+    #    Filter by connection.interface-name (not just con-name) so that
+    #    NM auto-created profiles like "Wired Connection 1" are also caught —
+    #    they use a different con-name but set interface-name = eth0 internally.
+    local del_uuids=()
+    while IFS= read -r puuid; do
+        [[ -z "$puuid" ]] && continue
+        local pcon_name piface_name
+        pcon_name=$(sudo nmcli -g connection.id           connection show "$puuid" 2>/dev/null | tr -d '\r\n')
+        piface_name=$(sudo nmcli -g connection.interface-name connection show "$puuid" 2>/dev/null | tr -d ' \r\n')
+        if [[ "$pcon_name" == "$iface" || "$piface_name" == "$iface" ]]; then
+            del_uuids+=("$puuid")
+            echo "Queued for deletion: '${pcon_name}' (interface=${piface_name:-unset}) uuid=${puuid}"
+        fi
+    done < <(sudo nmcli -t -f uuid,type connection show 2>/dev/null | \
+        awk -F: '($2 == "ethernet" || $2 == "802-3-ethernet") {print $1}')
+    if [[ ${#del_uuids[@]} -gt 0 ]]; then
+        for puuid in "${del_uuids[@]}"; do
+            sudo nmcli connection delete "$puuid" 2>/dev/null || true
+        done
+        echo "Deleted ${#del_uuids[@]} NM profile(s) for ${iface}."
+    fi
+    # Remove any orphaned keyfiles whose filename starts with <iface>.
     while IFS= read -r kf; do
         sudo rm -f "$kf"
-        echo "Removed keyfile: $kf"
+        echo "Removed orphaned keyfile: $kf"
     done < <(sudo find /etc/NetworkManager/system-connections \
         -maxdepth 1 -name "${iface}*.nmconnection" 2>/dev/null)
     sudo nmcli connection reload 2>/dev/null || true
