@@ -107,12 +107,17 @@ fi
 # Restart NetworkManager in the background with a brief delay so that an SSH
 # session running this script is not killed by the momentary network drop.
 # The subshell is detached (nohup + disown) so SIGHUP from a dying SSH session
-# cannot reach it.  We then sleep long enough for NM to finish restarting
-# before the rest of the script continues.
+# cannot reach it.  We then poll until NM is fully active before continuing.
 echo "Restarting NetworkManager (connection may drop briefly if on SSH)..."
 sudo bash -c 'sleep 1; systemctl restart NetworkManager' &
 disown
-sleep 8
+for _nm_wait in $(seq 1 30); do
+    sleep 2
+    if sudo systemctl is-active --quiet NetworkManager 2>/dev/null && \
+       sudo nmcli general status &>/dev/null; then
+        break
+    fi
+done
 echo "NetworkManager restart complete."
 
 # ── Network: take ownership of eth0 from netplan ──────────────────────────────
