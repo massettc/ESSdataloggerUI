@@ -196,6 +196,13 @@ PYEOF
     #
     #   This makes the function safe to run on every update without accumulating
     #   extra profiles.
+    #
+    #   Reload NM's keyfile cache first so that profiles saved by the web UI
+    #   (or written externally) are visible before we count.  Without this, NM
+    #   may not yet have loaded a freshly-written keyfile and we'd incorrectly
+    #   enter the 0-profile branch, replacing a static-IP profile with DHCP.
+    sudo nmcli connection reload 2>/dev/null || true
+
     local eth_uuids=()
     while IFS= read -r puuid; do
         [[ -z "$puuid" ]] && continue
