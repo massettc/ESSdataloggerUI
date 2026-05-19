@@ -161,7 +161,22 @@ PYEOF
         echo "Deleted lingering netplan-${iface} NM profile."
     fi
 
-    # 4. Create or update the persistent NM profile.
+    # 4. Delete duplicate UUID-suffixed profiles (e.g. eth0-<uuid>.nmconnection)
+    #    created by previous buggy versions that called 'nmcli connection add'
+    #    when a profile named eth0 already existed.  NM auto-renames duplicates
+    #    to eth0-<uuid> which then compete with the canonical eth0 profile.
+    local dup_count=0
+    for dup_file in "/etc/NetworkManager/system-connections/${iface}-"*.nmconnection; do
+        [[ -f "$dup_file" ]] || continue
+        sudo rm -f "$dup_file"
+        dup_count=$((dup_count + 1))
+    done
+    if [[ $dup_count -gt 0 ]]; then
+        sudo nmcli connection reload 2>/dev/null || true
+        echo "Cleaned up ${dup_count} duplicate NM profile(s) for ${iface}."
+    fi
+
+    # 5. Create or update the persistent NM profile (check by file, not NM name).
     if [[ ! -f "$nm_conn_file" ]]; then
         local -a add_args=(connection add type ethernet ifname "$iface" con-name "$iface"
             connection.autoconnect yes ipv4.method auto)
@@ -169,11 +184,19 @@ PYEOF
         sudo nmcli "${add_args[@]}"
         echo "Created persistent NM connection '${iface}'."
     else
-        local -a mod_args=(connection modify "$iface"
-            connection.interface-name "$iface" connection.autoconnect yes)
-        [[ -n "$mac_addr" ]] && mod_args+=(ethernet.cloned-mac-address "$mac_addr")
-        sudo nmcli "${mod_args[@]}"
-        echo "Updated existing NM connection '${iface}'."
+        # Get the UUID from the keyfile so we modify by UUID, not name.
+        # Modifying by name fails when duplicates exist (NM returns 'ambiguous').
+        local conn_uuid
+        conn_uuid=$(sudo awk -F= '/^uuid/{print $2}' "$nm_conn_file" | tr -d ' \r')
+        if [[ -n "$conn_uuid" ]]; then
+            local -a mod_args=(connection modify "$conn_uuid"
+                connection.interface-name "$iface" connection.autoconnect yes)
+            [[ -n "$mac_addr" ]] && mod_args+=(ethernet.cloned-mac-address "$mac_addr")
+            sudo nmcli "${mod_args[@]}"
+            echo "Updated existing NM connection '${iface}' (uuid=${conn_uuid})."
+        else
+            echo "Warning: could not read UUID from ${nm_conn_file}; skipping modify."
+        fi
     fi
 }
 _setup_ethernet_ownership

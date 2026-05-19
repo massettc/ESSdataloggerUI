@@ -586,21 +586,35 @@ def ensure_ethernet_profile(
     if os.name == "nt":
         return
 
-    profile_exists = False
-    try:
-        _run_nmcli(config, ["-g", "filename", "connection", "show", interface_name])
-        profile_exists = True
-    except NetworkManagerError:
-        profile_exists = False
+    # Use the canonical keyfile path as the source of truth rather than NM's
+    # name-based lookup.  NM name lookups are ambiguous when duplicate profiles
+    # with the same con-name exist (e.g. eth0-<uuid>.nmconnection created by
+    # previous buggy versions); they silently fail or modify the wrong profile.
+    nm_etc = "/etc/NetworkManager/system-connections"
+    canonical = os.path.join(nm_etc, f"{interface_name}.nmconnection")
 
-    if profile_exists:
+    # Read UUID from the canonical file so we can modify by UUID (never ambiguous).
+    canonical_uuid: str | None = None
+    if os.path.isfile(canonical):
+        try:
+            import configparser as _cp
+            parser = _cp.ConfigParser()
+            parser.read(canonical)
+            canonical_uuid = parser.get("connection", "uuid", fallback=None)
+        except Exception:  # noqa: BLE001
+            pass
+
+    if canonical_uuid:
         _run_nmcli(config, [
-            "connection", "modify", interface_name,
+            "connection", "modify", canonical_uuid,
             "ethernet.cloned-mac-address", mac_address,
             "connection.interface-name", interface_name,
             "connection.autoconnect", "yes",
         ])
-        _nm_logger.info("ensured ethernet profile '%s' MAC=%s", interface_name, mac_address)
+        _nm_logger.info(
+            "ensured ethernet profile '%s' uuid=%s MAC=%s",
+            interface_name, canonical_uuid, mac_address,
+        )
     else:
         _run_nmcli(config, [
             "connection", "add",
