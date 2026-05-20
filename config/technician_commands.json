@@ -66,9 +66,10 @@
   {
     "id": "run-install",
     "label": "Run install.sh",
-    "command": "sudo /bin/bash /opt/pi-network-admin/deploy/install.sh",
+    "command": "/bin/bash /opt/pi-network-admin/deploy/install.sh",
     "description": "Re-run the full install script. Use this after editing /etc/pi-network-admin/app.env (e.g. to change the Ethernet MAC address) to apply the new configuration.",
     "confirm": true,
+    "privileged": true,
     "builtin": false
   }
 ]

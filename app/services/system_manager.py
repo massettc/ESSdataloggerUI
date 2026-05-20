@@ -372,7 +372,43 @@ def start_technician_command(config: dict[str, Any], command_id: str) -> dict[st
     if not selected:
         return {"success": False, "message": "Saved button was not found."}
 
-    return start_custom_technician_command(config, selected.get("label", "Saved command"), selected.get("command", ""))
+    label = selected.get("label", "Saved command")
+    command = selected.get("command", "")
+    if selected.get("privileged", False):
+        return start_privileged_technician_command(config, label, command)
+    return start_custom_technician_command(config, label, command)
+
+
+def start_privileged_technician_command(config: dict[str, Any], label: str, command: str) -> dict[str, Any]:
+    """Run a shell command via sudo systemd-run so it survives a service restart."""
+    label = label.strip() or "Privileged command"
+    command = command.strip()
+    if not command:
+        return {"success": False, "message": "A command is required."}
+    if not _is_linux_target():
+        return {"success": False, "message": "Privileged commands are only available on the Pi target device."}
+
+    bash_bin = str(config.get("BASH_BIN", "/bin/bash") or "/bin/bash")
+    sudo_bin = str(config.get("SUDO_BIN", "sudo") or "sudo")
+    unit_name = "pi-network-admin-privileged-cmd"
+    run_cmd = [sudo_bin, "systemd-run", "--no-block", f"--unit={unit_name}",
+               bash_bin, "-lc", command]
+    try:
+        subprocess.Popen(run_cmd, close_fds=True)
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        return {"success": False, "message": f"Unable to start {label}: {exc}"}
+
+    payload = {
+        "command_label": label,
+        "command": command,
+        "status": "running",
+        "output": "Command started with elevated privileges. The service will restart when complete.",
+        "ran_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "finished_at": None,
+        "pid": None,
+    }
+    _write_technician_output(config, payload)
+    return {"success": True, "message": f"{label} started."}
 
 
 def start_custom_technician_command(config: dict[str, Any], label: str, command: str) -> dict[str, Any]:
@@ -1003,9 +1039,10 @@ def _default_technician_commands() -> list[dict[str, Any]]:
             {
                 "id": "run-install",
                 "label": "Run install.sh",
-                "command": "sudo /bin/bash /opt/pi-network-admin/deploy/install.sh",
+                "command": "/bin/bash /opt/pi-network-admin/deploy/install.sh",
                 "description": "Re-run the full install script. Use this after editing /etc/pi-network-admin/app.env (e.g. to change the Ethernet MAC address) to apply the new configuration.",
                 "confirm": True,
+                "privileged": True,
                 "builtin": False,
             },
         ]
