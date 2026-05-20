@@ -63,6 +63,9 @@ Key values to check:
 - `PI_ADMIN_PRIMARY_CONNECTION_NAME` — NetworkManager connection name for Wi-Fi
 - `PI_ADMIN_BACKUP_CONNECTION_NAME` — NetworkManager connection name for Ethernet
 - `PI_ADMIN_PORT` — app port (default `8181`; do not use port 80)
+- `PI_ADMIN_PRIMARY_ROUTE_METRIC` — route metric for the primary (Wi-Fi) interface (default `100`)
+- `PI_ADMIN_BACKUP_ROUTE_METRIC` — route metric for the backup (Ethernet) interface (default `600`)
+- `PI_ADMIN_EXTRA_ETHERNET_ROUTE_METRIC` — route metric for any additional Ethernet port (default `300`); sits between primary and backup so a second Ethernet port is preferred over the backup when plugged in
 - `PI_ADMIN_DATAPLICITY_INSTALL_URL` — your account-specific enrollment URL from the Dataplicity dashboard (e.g. `https://www.dataplicity.com/xxxxxxxx.py`). Required to use the Install Dataplicity button on the System tab.
 
 Authentication is disabled by default — the app is open to anyone on the local network.
@@ -187,7 +190,8 @@ After the app is deployed, verify the following:
 10. Confirm Modbus registers are updating: 1000 (alarm), 1002 (internet online), 1004 (last push age sec), 1006 (queue size).
 11. The System tab shows correct Docker and Portainer status badges.
 12. Click **Install update** on the System tab — the service should restart, come back on the new version, and the update log should show "Update complete".
-13. Open the Technician Tools tab, edit `/opt/opsviewer/opsviewer-env.json` with the correct `EDGE_DEVICE_ID` and `EventHub__ConnectionString`, save, then click **Redeploy opsviewer2-edge**.
+13. Open the Technician Tools tab and click **Run install.sh** — the output should show "Command started with elevated privileges. The service will restart when complete." The page will briefly lose connection; refresh after ~30 seconds and confirm the service is back up.
+14. Open the Technician Tools tab, edit `/opt/opsviewer/opsviewer-env.json` with the correct `EDGE_DEVICE_ID` and `EventHub__ConnectionString`, save, then click **Redeploy opsviewer2-edge**.
 14. Confirm the opsviewer2-edge container is running with correct config: `docker inspect opsviewer2-edge | grep -A2 Env`.
 15. A reboot brings all three services back automatically.
 
@@ -243,7 +247,8 @@ docker logs opsviewer2-edge --tail 50
 ## 10. Notes
 
 - The app keeps the runtime environment file in `/etc/pi-network-admin/app.env` so normal updates do not overwrite your live settings.
-- `technician_commands.json` is refreshed from the repo on every update so new tech tool buttons are always deployed.
+- `technician_commands.json` and `plc_alarm.json` are **merged** from the repo template on every `install.sh` run — new fields and built-in command fixes are applied automatically while any custom entries or values you have set are preserved.
+- Technician commands flagged `"privileged": true` (e.g. **Run install.sh**, **Redeploy opsviewer2-edge**) are launched via `sudo systemd-run --no-block` in an isolated cgroup. The web service restart they may trigger does not abort the command. The terminal output panel will show "Process ended unexpectedly" when the connection drops during the restart — this is expected; refresh the page after ~30 seconds.
 - Updates launched from the System tab use `systemd-run --no-block` to run in an isolated cgroup — the update script will continue running even as the web service restarts mid-update.
 - Use tagged releases for field deployments when you want a stable, repeatable version.
 - Keep Ethernet connected during first setup so the Pi stays reachable if Wi-Fi is not configured correctly.

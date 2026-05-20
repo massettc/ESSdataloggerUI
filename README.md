@@ -7,14 +7,15 @@ Local technician web UI for a Raspberry Pi datalogger. The ESSdataloggerUI app l
 - Dashboard with interface state, active connection name, IP, gateway, and DNS
 - Wi-Fi workflow with scan, select, password entry, connect, verification, and rollback to previous profile
 - Ethernet profile selection plus DHCP or static IPv4 configuration with verification and rollback; gateway field normalised (nmcli `--` sentinel stripped)
-- Background watchdog service that probes upstream connectivity, promotes the configured primary interface, and fails over to the backup interface when needed; suppresses extra Ethernet interfaces from stealing the default route
+- Background watchdog service that probes upstream connectivity, promotes the configured primary interface, and fails over to the backup interface when needed; suppresses extra Ethernet interfaces from stealing the default route; configurable per-interface route metrics (`PI_ADMIN_PRIMARY_ROUTE_METRIC`, `PI_ADMIN_BACKUP_ROUTE_METRIC`, `PI_ADMIN_EXTRA_ETHERNET_ROUTE_METRIC`) allow a secondary Ethernet port to be preferred over the backup without displacing Wi-Fi
 - PLC alarm worker that writes a Modbus holding register (reg 1000) when cloud delivery is unhealthy for a configurable duration, plus three live status registers every poll cycle:
   - **1002** — internet online (1 = reachable, 0 = offline)
   - **1004** — seconds since last opsviewer push (65535 if unknown)
   - **1006** — opsviewer queue depth (buffered records pending upload)
+  - Register addresses are configurable in `/etc/pi-network-admin/plc_alarm.json` (`internet_register`, `last_push_age_register`, `queue_size_register`)
 - opsviewer2-edge Docker container managed from the web UI: edit `EDGE_DEVICE_ID` and `EventHub__ConnectionString` in the JSON editor on the Technician Tools tab, then click **Redeploy opsviewer2-edge** to recreate the container with the new config
 - System tab: hostname management, disk usage, git-based app updates (isolated via `systemd-run` so the update survives the service restart), one-click Docker install, one-click Portainer install/start, one-click Dataplicity install
-- Technician Tools tab: live terminal output for saved and custom commands; JSON file editor for runtime config files
+- Technician Tools tab: live terminal output for saved and custom commands; JSON file editor for runtime config files; built-in **Run install.sh** button re-applies the full install (useful after editing `app.env`); commands flagged `privileged: true` run via `sudo systemd-run --no-block` in an isolated cgroup so they survive the service restart they may trigger
 - File-based audit logging
 - Deployment scaffolding for systemd and restricted sudo access to `nmcli`
 - Authentication disabled by default (open LAN access) — enable with `PI_ADMIN_AUTH_ENABLED=true`
@@ -91,6 +92,15 @@ sudo bash deploy/update-from-git.sh v0.4.0
 The current repository version marker is stored in `VERSION`.
 
 ## Changelog
+
+### v0.4.6 (2026-05-20)
+- **Feat:** `PI_ADMIN_EXTRA_ETHERNET_ROUTE_METRIC` env var (default `300`) sets the route metric for extra/secondary Ethernet interfaces (e.g. `eth1`). A value between the primary (wlan0=100) and backup (eth0=600) means `eth1` is preferred over `eth0` when plugged in without displacing `wlan0` as the internet path.
+- **Feat:** PLC alarm register addresses (`internet_register`, `last_push_age_register`, `queue_size_register`) are now configurable in `/etc/pi-network-admin/plc_alarm.json` (defaults: 1002 / 1004 / 1006). The values are preserved across `install.sh` re-runs.
+- **Feat:** **Run install.sh** quick action button on the Technician Tools tab. Runs `deploy/install.sh` via `sudo systemd-run --no-block` in an isolated cgroup so it survives the service restart it triggers.
+- **Feat:** `privileged: true` flag for technician command entries. Commands with this flag are launched via `sudo systemd-run --no-block` rather than as the service account. Built-in entries `run-install` and `redeploy-opsviewer` use this flag.
+- **Feat:** `install.sh` now **merges** `technician_commands.json` and `plc_alarm.json` on every run instead of only copying them on first install. New template fields are added; existing customisations are preserved. The `command` and `privileged` fields of built-in entries are always synced from the template so fixes propagate automatically.
+- **Feat:** `pi` user gains passwordless `sudo` for `install.sh` and `update-from-git.sh` so re-deploys from SSH no longer require typing the system password.
+- **Fix:** `_load_technician_commands` was discarding the `privileged` field when parsing the JSON file. Commands flagged `privileged: true` were silently routed to the unprivileged execution path. The field is now preserved.
 
 ### v0.4.5 (2026-05-11)
 - **Fix:** Watchdog no longer retries WiFi connections that fail with "Secrets were required". Previously the watchdog hammered NetworkManager repeatedly, putting the connection into NM's activation backoff and blocking the user from reconnecting via the web UI. The connection is now skipped until the user successfully reconnects manually.
