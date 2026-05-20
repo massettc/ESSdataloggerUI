@@ -226,7 +226,7 @@ def test_suppress_extra_ethernet_uses_high_metric_when_prefer_wlan(monkeypatch):
     watchdog._suppress_extra_ethernet_defaults()
 
     assert ("Extra eth", 9999) in metrics
-    assert not any(name == "Extra eth" for name, _ in never_defaults)
+    assert ("Extra eth", False) in never_defaults  # never-default must be cleared
     assert "eth1" in reapplied
     # Managed interface must not be touched
     assert not any(name == "Wired connection 1" for name, _ in metrics)

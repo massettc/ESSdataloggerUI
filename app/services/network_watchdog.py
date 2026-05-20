@@ -283,7 +283,10 @@ class FailoverWatchdog:
                 if prefer_wlan:
                     # High metric keeps subnet/return-path routes in the main table
                     # while ensuring this connection never wins the default-route
-                    # election against the managed interfaces.
+                    # election against the managed interfaces.  Explicitly clear any
+                    # previously-set never-default so the default gateway route is
+                    # also restored (at metric 9999, it won't beat wlan0=100 or eth0=600).
+                    set_connection_never_default(self.config, profile["name"], enabled=False)
                     set_connection_metric(self.config, profile["name"], 9999)
                     if profile["device"]:
                         reapply_device(self.config, profile["device"])
