@@ -924,6 +924,7 @@ def _load_technician_commands(config: dict[str, Any]) -> list[dict[str, Any]]:
                 "description": str(entry.get("description", "")).strip(),
                 "confirm": bool(entry.get("confirm", False)),
                 "builtin": bool(entry.get("builtin", False)),
+                "privileged": bool(entry.get("privileged", False)),
             }
         )
 
