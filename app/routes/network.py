@@ -436,7 +436,7 @@ def _build_connectivity_badges(state: dict[str, object], config: dict[str, objec
     internet_class = "status-online" if internet_access else "status-offline"
 
     wifi_state = str((wifi_interface or {}).get("state", "")).lower()
-    wifi_connected = "connected" in wifi_state
+    wifi_connected = wifi_state == "connected"
     wifi_connection = str((wifi_interface or {}).get("connection", "")).strip()
     if wifi_connected and wifi_connection and wifi_connection != "-":
         wifi_label = wifi_connection
