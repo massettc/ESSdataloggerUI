@@ -186,3 +186,82 @@ def test_watchdog_uses_active_connection_name_when_not_configured(monkeypatch):
 
     assert watchdog._configured_connection_name("eth0") == "eth0-profile"
     assert watchdog._configured_connection_name("wlan0") == "wlan0-profile"
+
+
+def test_suppress_extra_ethernet_uses_high_metric_when_prefer_wlan(monkeypatch):
+    """When PREFER_WLAN_FOR_INTERNET=True, extra ethernet gets metric 9999 (not never-default)
+    so that subnet/return-path routes remain in the main table."""
+    config = dict(BASE_CONFIG)
+    config["PREFER_WLAN_FOR_INTERNET"] = True
+    watchdog = network_watchdog.FailoverWatchdog(config)
+
+    metrics = []
+    never_defaults = []
+    reapplied = []
+
+    monkeypatch.setattr(
+        network_watchdog,
+        "list_connection_profiles",
+        lambda config, connection_type=None: [
+            {"name": "Wired connection 1", "device": "eth0", "type": "ethernet", "active": True},
+            {"name": "Extra eth", "device": "eth1", "type": "ethernet", "active": True},
+        ],
+    )
+    monkeypatch.setattr(
+        network_watchdog,
+        "set_connection_metric",
+        lambda config, name, metric: metrics.append((name, metric)),
+    )
+    monkeypatch.setattr(
+        network_watchdog,
+        "set_connection_never_default",
+        lambda config, name, enabled: never_defaults.append((name, enabled)),
+    )
+    monkeypatch.setattr(
+        network_watchdog,
+        "reapply_device",
+        lambda config, device: reapplied.append(device),
+    )
+
+    watchdog._suppress_extra_ethernet_defaults()
+
+    assert ("Extra eth", 9999) in metrics
+    assert not any(name == "Extra eth" for name, _ in never_defaults)
+    assert "eth1" in reapplied
+    # Managed interface must not be touched
+    assert not any(name == "Wired connection 1" for name, _ in metrics)
+
+
+def test_suppress_extra_ethernet_uses_never_default_when_prefer_wlan_false(monkeypatch):
+    """When PREFER_WLAN_FOR_INTERNET=False, extra ethernet gets never-default=yes."""
+    config = dict(BASE_CONFIG)
+    config["PREFER_WLAN_FOR_INTERNET"] = False
+    watchdog = network_watchdog.FailoverWatchdog(config)
+
+    never_defaults = []
+    metrics = []
+
+    monkeypatch.setattr(
+        network_watchdog,
+        "list_connection_profiles",
+        lambda config, connection_type=None: [
+            {"name": "Wired connection 1", "device": "eth0", "type": "ethernet", "active": True},
+            {"name": "Extra eth", "device": "eth1", "type": "ethernet", "active": True},
+        ],
+    )
+    monkeypatch.setattr(
+        network_watchdog,
+        "set_connection_never_default",
+        lambda config, name, enabled: never_defaults.append((name, enabled)),
+    )
+    monkeypatch.setattr(
+        network_watchdog,
+        "set_connection_metric",
+        lambda config, name, metric: metrics.append((name, metric)),
+    )
+    monkeypatch.setattr(network_watchdog, "reapply_device", lambda config, device: None)
+
+    watchdog._suppress_extra_ethernet_defaults()
+
+    assert ("Extra eth", True) in never_defaults
+    assert not any(name == "Extra eth" for name, _ in metrics)

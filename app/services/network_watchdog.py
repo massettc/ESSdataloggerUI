@@ -245,13 +245,21 @@ class FailoverWatchdog:
         return ensure_connection_active(self.config, self.config["BACKUP_INTERFACE"], backup_name)
 
     def _suppress_extra_ethernet_defaults(self) -> None:
-        """Set never-default on ethernet connections that aren't the designated backup.
+        """Prevent extra ethernet connections from winning the default route.
 
-        Prevents secondary ethernet ports (e.g. eth1) from adding a default route
-        and competing with wlan0 or the designated backup for internet traffic.
+        When PREFER_WLAN_FOR_INTERNET is True we deprioritise via a very high
+        route metric (9999) instead of never-default.  This keeps the subnet and
+        return-path routes in the main routing table so that incoming connections
+        (e.g. the web UI) remain reachable even when wlan0 and eth0 are both down
+        and eth1 is the only path.  The high metric ensures eth1 never beats
+        wlan0 (100) or eth0 (600) for the default route when those are healthy.
+
+        When PREFER_WLAN_FOR_INTERNET is False we use never-default to fully
+        suppress the gateway as before.
         """
         backup_interface = self.config.get("BACKUP_INTERFACE", "")
         ethernet_interface = self.config.get("ETHERNET_INTERFACE", "")
+        prefer_wlan = self.config.get("PREFER_WLAN_FOR_INTERNET", False)
 
         # Resolve connection names for managed ethernet interfaces.  Fall back to the
         # interface name itself when the connection isn't currently active (e.g. eth0 shows
@@ -272,7 +280,15 @@ class FailoverWatchdog:
             if profile["name"] in managed_names or profile["device"] in managed_ifaces:
                 continue
             try:
-                set_connection_never_default(self.config, profile["name"], enabled=True)
+                if prefer_wlan:
+                    # High metric keeps subnet/return-path routes in the main table
+                    # while ensuring this connection never wins the default-route
+                    # election against the managed interfaces.
+                    set_connection_metric(self.config, profile["name"], 9999)
+                    if profile["device"]:
+                        reapply_device(self.config, profile["device"])
+                else:
+                    set_connection_never_default(self.config, profile["name"], enabled=True)
                 logger.debug("suppressed default route on extra ethernet connection=%s", profile["name"])
             except NetworkManagerError as exc:
                 logger.warning(
