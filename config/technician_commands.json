@@ -62,5 +62,13 @@
     "description": "Stop, remove, and recreate the opsviewer2-edge container using values from /opt/opsviewer/opsviewer-env.json. Edit that file in the JSON editor above before running this.",
     "confirm": true,
     "builtin": false
+  },
+  {
+    "id": "run-install",
+    "label": "Run install.sh",
+    "command": "sudo /bin/bash /opt/pi-network-admin/deploy/install.sh",
+    "description": "Re-run the full install script. Use this after editing /etc/pi-network-admin/app.env (e.g. to change the Ethernet MAC address) to apply the new configuration.",
+    "confirm": true,
+    "builtin": false
   }
 ]
