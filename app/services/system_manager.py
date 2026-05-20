@@ -984,6 +984,30 @@ def _default_technician_commands() -> list[dict[str, Any]]:
                 "confirm": False,
                 "builtin": False,
             },
+            {
+                "id": "show-opsviewer-device-id",
+                "label": "Show opsviewer device ID",
+                "command": "docker inspect opsviewer2-edge --format '{{range .Config.Env}}{{println .}}{{end}}' | grep EDGE_DEVICE_ID",
+                "description": "Print the EDGE_DEVICE_ID currently set on the running opsviewer2-edge container.",
+                "confirm": False,
+                "builtin": False,
+            },
+            {
+                "id": "redeploy-opsviewer",
+                "label": "Redeploy opsviewer2-edge",
+                "command": "/bin/bash /opt/pi-network-admin/deploy/opsviewer-redeploy.sh",
+                "description": "Stop, remove, and recreate the opsviewer2-edge container using values from /opt/opsviewer/opsviewer-env.json. Edit that file in the JSON editor above before running this.",
+                "confirm": True,
+                "builtin": False,
+            },
+            {
+                "id": "run-install",
+                "label": "Run install.sh",
+                "command": "sudo /bin/bash /opt/pi-network-admin/deploy/install.sh",
+                "description": "Re-run the full install script. Use this after editing /etc/pi-network-admin/app.env (e.g. to change the Ethernet MAC address) to apply the new configuration.",
+                "confirm": True,
+                "builtin": False,
+            },
         ]
 
     return [

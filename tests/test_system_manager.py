@@ -271,6 +271,9 @@ def test_get_technician_tools_state_uses_plcreader_defaults_on_linux(monkeypatch
         "download-plcreader",
         "attach-plcreader",
         "prune-plcreader",
+        "show-opsviewer-device-id",
+        "redeploy-opsviewer",
+        "run-install",
     ]
     assert state["commands"][3]["description"] == "version r1363"
     assert state["commands"][0]["builtin"] is False

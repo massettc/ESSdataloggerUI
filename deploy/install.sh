@@ -95,7 +95,23 @@ if [[ ! -f "$CONFIG_DIR/technician_commands.json" ]]; then
     sudo cp "$APP_DIR/config/technician_commands.json" "$CONFIG_DIR/technician_commands.json"
     echo "Created $CONFIG_DIR/technician_commands.json from template."
 else
-    echo "Keeping existing $CONFIG_DIR/technician_commands.json"
+    # Merge any new command IDs from the template into the existing file so that
+    # commands added in later releases are picked up without wiping user edits.
+    sudo python3 - "$APP_DIR/config/technician_commands.json" "$CONFIG_DIR/technician_commands.json" <<'PYEOF'
+import json, sys
+template_path, live_path = sys.argv[1], sys.argv[2]
+template = json.load(open(template_path))
+live = json.load(open(live_path))
+live_ids = {c["id"] for c in live}
+added = [c for c in template if c["id"] not in live_ids]
+if added:
+    live.extend(added)
+    with open(live_path, "w") as f:
+        json.dump(live, f, indent=2)
+    print("Added " + str(len(added)) + " new command(s): " + ", ".join(c["id"] for c in added))
+else:
+    print("technician_commands.json is up to date.")
+PYEOF
 fi
 sudo cp "$APP_DIR/config/networkmanager-unmanaged-docker.conf" "$NM_CONF_DIR/$NM_DOCKER_UNMANAGED_CONF"
 sudo cp "$APP_DIR/config/networkmanager-no-auto-default.conf" "$NM_CONF_DIR/91-pi-network-admin-no-auto-default.conf"
