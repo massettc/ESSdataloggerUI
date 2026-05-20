@@ -16,6 +16,7 @@ BASE_CONFIG = {
     "PREFER_WLAN_FOR_INTERNET": True,
     "PRIMARY_ROUTE_METRIC": 100,
     "BACKUP_ROUTE_METRIC": 200,
+    "EXTRA_ETHERNET_ROUTE_METRIC": 150,
     "PING_BIN": "ping",
     "WIFI_INTERFACE": "wlan0",
     "ETHERNET_INTERFACE": "eth0",
@@ -25,7 +26,7 @@ BASE_CONFIG = {
 def test_default_preferences_keep_wifi_primary_for_internet():
     assert Config.PRIMARY_INTERFACE == Config.WIFI_INTERFACE
     assert Config.BACKUP_INTERFACE == Config.ETHERNET_INTERFACE
-    assert Config.PRIMARY_ROUTE_METRIC < Config.BACKUP_ROUTE_METRIC
+    assert Config.PRIMARY_ROUTE_METRIC < Config.EXTRA_ETHERNET_ROUTE_METRIC < Config.BACKUP_ROUTE_METRIC
 
 
 def test_watchdog_fails_over_after_threshold(monkeypatch):
@@ -225,7 +226,7 @@ def test_suppress_extra_ethernet_uses_high_metric_when_prefer_wlan(monkeypatch):
 
     watchdog._suppress_extra_ethernet_defaults()
 
-    assert ("Extra eth", 9999) in metrics
+    assert ("Extra eth", 150) in metrics
     assert ("Extra eth", False) in never_defaults  # never-default must be cleared
     assert "eth1" in reapplied
     # Managed interface must not be touched

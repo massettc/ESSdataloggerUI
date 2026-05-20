@@ -286,8 +286,9 @@ class FailoverWatchdog:
                     # election against the managed interfaces.  Explicitly clear any
                     # previously-set never-default so the default gateway route is
                     # also restored (at metric 9999, it won't beat wlan0=100 or eth0=600).
+                    extra_metric = self.config.get("EXTRA_ETHERNET_ROUTE_METRIC", 300)
                     set_connection_never_default(self.config, profile["name"], enabled=False)
-                    set_connection_metric(self.config, profile["name"], 9999)
+                    set_connection_metric(self.config, profile["name"], extra_metric)
                     if profile["device"]:
                         reapply_device(self.config, profile["device"])
                 else:
