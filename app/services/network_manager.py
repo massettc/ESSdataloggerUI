@@ -574,7 +574,8 @@ def set_connection_ethernet_mac(
         sudo_bin = config.get("SUDO_BIN", "sudo")
 
         # 1. Apply the MAC to the live interface immediately.
-        #    Bring the interface down first to avoid EBUSY.
+        #    Bring the interface down first to avoid EBUSY, then bring it back
+        #    up so NM can re-activate the connection with the new MAC.
         subprocess.run(
             [sudo_bin, "-n", "ip", "link", "set", interface_name, "down"],
             capture_output=True,
@@ -582,6 +583,11 @@ def set_connection_ethernet_mac(
         )
         subprocess.run(
             [sudo_bin, "-n", "ip", "link", "set", interface_name, "address", mac_address],
+            capture_output=True,
+            check=False,
+        )
+        subprocess.run(
+            [sudo_bin, "-n", "ip", "link", "set", interface_name, "up"],
             capture_output=True,
             check=False,
         )

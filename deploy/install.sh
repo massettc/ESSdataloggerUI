@@ -165,9 +165,10 @@ EOF
         sudo systemctl daemon-reload 2>/dev/null || true
         sudo systemctl enable "$mac_svc_name" 2>/dev/null || true
         # Apply immediately for the current session: bring interface down, set MAC,
-        # then let NM re-activate the connection.
+        # then bring it back up so NM can re-activate the connection.
         sudo ip link set "$iface" down 2>/dev/null || true
         sudo ip link set "$iface" address "$mac_addr" 2>/dev/null || true
+        sudo ip link set "$iface" up 2>/dev/null || true
         echo "Deployed MAC pre-set service for ${iface}: ${mac_addr}"
     else
         # No MAC configured — disable and remove any previous service.
