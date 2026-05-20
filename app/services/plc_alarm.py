@@ -33,6 +33,9 @@ class PlcAlarmSettings:
     trigger_on_error: bool
     alarm_value: int
     clear_value: int
+    internet_register: int
+    last_push_age_register: int
+    queue_size_register: int
 
 
 def default_plc_alarm_settings() -> dict[str, Any]:
@@ -50,6 +53,9 @@ def default_plc_alarm_settings() -> dict[str, Any]:
         "trigger_on_error": True,
         "alarm_value": 1,
         "clear_value": 0,
+        "internet_register": 1002,
+        "last_push_age_register": 1004,
+        "queue_size_register": 1006,
     }
 
 
@@ -93,6 +99,9 @@ def load_plc_alarm_settings(config: dict[str, Any]) -> PlcAlarmSettings:
             trigger_on_error=bool(merged.get("trigger_on_error", defaults["trigger_on_error"])),
             alarm_value=int(merged.get("alarm_value", defaults["alarm_value"])),
             clear_value=int(merged.get("clear_value", defaults["clear_value"])),
+            internet_register=int(merged.get("internet_register", defaults["internet_register"])),
+            last_push_age_register=int(merged.get("last_push_age_register", defaults["last_push_age_register"])),
+            queue_size_register=int(merged.get("queue_size_register", defaults["queue_size_register"])),
         )
     except (TypeError, ValueError) as exc:
         raise PlcAlarmError(f"PLC alarm config has invalid value types: {config_path}") from exc
@@ -212,9 +221,9 @@ class PlcAlarmWorker:
         queue_reg = min(int(queue), 65535) if isinstance(queue, int) and queue >= 0 else 0
 
         for address, value in (
-            (1002, internet_online),
-            (1004, last_push_reg),
-            (1006, queue_reg),
+            (settings.internet_register, internet_online),
+            (settings.last_push_age_register, last_push_reg),
+            (settings.queue_size_register, queue_reg),
         ):
             try:
                 write_modbus_register_at(settings, address, value)

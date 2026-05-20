@@ -11,5 +11,8 @@
   "trigger_on_backlog": true,
   "trigger_on_error": true,
   "alarm_value": 1,
-  "clear_value": 0
+  "clear_value": 0,
+  "internet_register": 1002,
+  "last_push_age_register": 1004,
+  "queue_size_register": 1006
 }
