@@ -1008,30 +1008,6 @@ def _default_technician_commands() -> list[dict[str, Any]]:
                 "confirm": True,
                 "builtin": False,
             },
-            {
-                "id": "plc-alarm-status",
-                "label": "PLC alarm status",
-                "command": "systemctl status pi-plc-alarm.service --no-pager",
-                "description": "Show the current status of the PLC alarm service.",
-                "confirm": False,
-                "builtin": False,
-            },
-            {
-                "id": "plc-alarm-restart",
-                "label": "Restart PLC alarm",
-                "command": "sudo systemctl restart pi-plc-alarm.service",
-                "description": "Restart the PLC alarm service (e.g. after editing plc_alarm.json).",
-                "confirm": True,
-                "builtin": False,
-            },
-            {
-                "id": "plc-alarm-logs",
-                "label": "PLC alarm logs",
-                "command": "journalctl -u pi-plc-alarm.service -n 80 --no-pager",
-                "description": "Show the last 80 lines of PLC alarm service logs.",
-                "confirm": False,
-                "builtin": False,
-            },
         ]
 
     return [
