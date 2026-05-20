@@ -140,30 +140,43 @@ _setup_ethernet_ownership() {
 
     nm_conn_file="/etc/NetworkManager/system-connections/${iface}.nmconnection"
 
-    # 0. Deploy a udev rule that pre-sets the cloned MAC address on the interface
-    #    before NetworkManager activates it.  This prevents NM from changing the MAC
-    #    on an already-active link, which causes the connected device to bounce the
-    #    port (carrier-flap loop every ~4 seconds).
-    #    Because the NM profile uses ethernet.cloned-mac-address=preserve (see below),
-    #    NM will never set or reset the MAC itself — the udev rule is the sole setter.
-    local udev_rule_file="/etc/udev/rules.d/72-pi-network-admin-eth-mac.rules"
+    # 0. Deploy a systemd service that pre-sets the cloned MAC address before
+    #    NetworkManager starts.  A systemd service is used instead of a udev rule
+    #    because the Pi 5 Ethernet interface is already UP when udev fires its
+    #    ACTION=="add" event, causing ip-link to fail with EBUSY.
+    #    The service brings the interface DOWN, sets the MAC, and exits — NM then
+    #    activates the connection and brings the link back up.
+    local mac_svc_name="pi-network-admin-eth-mac.service"
+    local mac_svc_file="/etc/systemd/system/${mac_svc_name}"
     if [[ -n "$mac_addr" ]]; then
-        sudo tee "$udev_rule_file" > /dev/null << EOF
-# Managed by pi-network-admin install.sh — do not edit by hand.
-# Pre-sets the cloned MAC address before NetworkManager activates the interface.
-# This prevents NM from changing the MAC on a live link, which would cause the
-# connected device to bounce the port (carrier-flap loop).
-SUBSYSTEM=="net", ACTION=="add", ATTR{interface}=="${iface}", RUN+="/usr/bin/ip link set ${iface} address ${mac_addr}"
+        sudo tee "$mac_svc_file" > /dev/null << EOF
+[Unit]
+Description=Pre-set ${iface} MAC address before NetworkManager
+Before=NetworkManager.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c 'ip link set ${iface} down 2>/dev/null || true; ip link set ${iface} address ${mac_addr} 2>/dev/null || true'
+
+[Install]
+WantedBy=network-pre.target
 EOF
-        sudo udevadm control --reload-rules 2>/dev/null || true
-        # Apply immediately so the current session picks up the MAC without a reboot.
+        sudo systemctl daemon-reload 2>/dev/null || true
+        sudo systemctl enable "$mac_svc_name" 2>/dev/null || true
+        # Apply immediately for the current session: bring interface down, set MAC,
+        # then let NM re-activate the connection.
+        sudo ip link set "$iface" down 2>/dev/null || true
         sudo ip link set "$iface" address "$mac_addr" 2>/dev/null || true
-        echo "Deployed udev MAC rule for ${iface}: ${mac_addr}"
+        echo "Deployed MAC pre-set service for ${iface}: ${mac_addr}"
     else
-        # No MAC configured — remove any stale rule from a previous install.
-        sudo rm -f "$udev_rule_file" 2>/dev/null || true
-        sudo udevadm control --reload-rules 2>/dev/null || true
+        # No MAC configured — disable and remove any previous service.
+        sudo systemctl disable "$mac_svc_name" 2>/dev/null || true
+        sudo rm -f "$mac_svc_file" 2>/dev/null || true
+        sudo systemctl daemon-reload 2>/dev/null || true
     fi
+    # Remove the old udev-based rule if present from a previous install.
+    sudo rm -f "/etc/udev/rules.d/72-pi-network-admin-eth-mac.rules" 2>/dev/null || true
 
     # 1. Stop cloud-init from regenerating netplan configs on future reboots.
     if [[ -d /etc/cloud ]]; then

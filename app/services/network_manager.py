@@ -563,11 +563,10 @@ def set_connection_ethernet_mac(
 
     The NM profile is set to ``ethernet.cloned-mac-address=preserve`` so that
     NetworkManager never changes or resets the MAC itself.  The actual MAC is
-    applied directly to the interface via ``ip link set`` and persisted via a
-    udev rule, which pre-sets it at boot before NM activates the interface.
-
-    This pattern eliminates the carrier-flap loop that occurs when NM changes
-    the MAC on an already-active link and the connected device bounces the port.
+    applied directly to the interface and persisted via a systemd service that
+    runs ``Before=NetworkManager.service``.  The service brings the interface
+    DOWN before setting the MAC, which avoids EBUSY on the Pi 5 where the
+    interface is already UP when udev fires.
     """
     interface_name = config.get("ETHERNET_INTERFACE", "eth0")
 
@@ -575,37 +574,53 @@ def set_connection_ethernet_mac(
         sudo_bin = config.get("SUDO_BIN", "sudo")
 
         # 1. Apply the MAC to the live interface immediately.
+        #    Bring the interface down first to avoid EBUSY.
+        subprocess.run(
+            [sudo_bin, "-n", "ip", "link", "set", interface_name, "down"],
+            capture_output=True,
+            check=False,
+        )
         subprocess.run(
             [sudo_bin, "-n", "ip", "link", "set", interface_name, "address", mac_address],
             capture_output=True,
             check=False,
         )
 
-        # 2. Persist via udev rule so the MAC is pre-set before NM activates on reboot.
-        udev_path = "/etc/udev/rules.d/72-pi-network-admin-eth-mac.rules"
-        rule = (
-            "# Managed by pi-network-admin — do not edit by hand.\n"
-            "# Pre-sets the cloned MAC address before NetworkManager activates the interface.\n"
-            "# This prevents NM from changing the MAC on a live link, which would cause the\n"
-            "# connected device to bounce the port (carrier-flap loop).\n"
-            f'SUBSYSTEM=="net", ACTION=="add", ATTR{{interface}}=="{interface_name}",'
-            f' RUN+="/usr/bin/ip link set {interface_name} address {mac_address}"\n'
+        # 2. Persist via a systemd service so the MAC is pre-set before NM on reboot.
+        svc_name = "pi-network-admin-eth-mac.service"
+        svc_path = f"/etc/systemd/system/{svc_name}"
+        svc_content = (
+            "[Unit]\n"
+            f"Description=Pre-set {interface_name} MAC address before NetworkManager\n"
+            "Before=NetworkManager.service\n\n"
+            "[Service]\n"
+            "Type=oneshot\n"
+            "RemainAfterExit=yes\n"
+            f"ExecStart=/bin/sh -c 'ip link set {interface_name} down 2>/dev/null || true;"
+            f" ip link set {interface_name} address {mac_address} 2>/dev/null || true'\n\n"
+            "[Install]\n"
+            "WantedBy=network-pre.target\n"
         )
         try:
             subprocess.run(
-                [sudo_bin, "-n", "tee", udev_path],
-                input=rule,
+                [sudo_bin, "-n", "tee", svc_path],
+                input=svc_content,
                 text=True,
                 capture_output=True,
                 check=True,
             )
             subprocess.run(
-                [sudo_bin, "-n", "udevadm", "control", "--reload-rules"],
+                [sudo_bin, "-n", "systemctl", "daemon-reload"],
+                capture_output=True,
+                check=False,
+            )
+            subprocess.run(
+                [sudo_bin, "-n", "systemctl", "enable", svc_name],
                 capture_output=True,
                 check=False,
             )
         except subprocess.CalledProcessError:
-            _nm_logger.warning("failed to write udev MAC rule for %s", interface_name)
+            _nm_logger.warning("failed to write MAC pre-set service for %s", interface_name)
 
     # 3. Set 'preserve' in the NM profile so NM never touches the MAC.
     _run_nmcli(config, [
