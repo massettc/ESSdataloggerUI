@@ -89,26 +89,58 @@ if [[ ! -f "$CONFIG_DIR/plc_alarm.json" ]]; then
     sudo cp "$APP_DIR/config/plc_alarm.json" "$CONFIG_DIR/plc_alarm.json"
     echo "Created $CONFIG_DIR/plc_alarm.json from template."
 else
-    echo "Keeping existing $CONFIG_DIR/plc_alarm.json"
+    # Add any keys present in the template but missing from the live file (e.g. new
+    # configurable fields added in later releases).  Existing values are preserved.
+    sudo python3 - "$APP_DIR/config/plc_alarm.json" "$CONFIG_DIR/plc_alarm.json" <<'PYEOF'
+import json, sys
+template_path, live_path = sys.argv[1], sys.argv[2]
+template = json.load(open(template_path))
+live = json.load(open(live_path))
+added = [k for k in template if k not in live]
+if added:
+    for k in added:
+        live[k] = template[k]
+    with open(live_path, "w") as f:
+        json.dump(live, f, indent=2)
+    print("Added " + str(len(added)) + " new key(s) to plc_alarm.json: " + ", ".join(added))
+else:
+    print("plc_alarm.json is up to date.")
+PYEOF
 fi
 if [[ ! -f "$CONFIG_DIR/technician_commands.json" ]]; then
     sudo cp "$APP_DIR/config/technician_commands.json" "$CONFIG_DIR/technician_commands.json"
     echo "Created $CONFIG_DIR/technician_commands.json from template."
 else
-    # Merge any new command IDs from the template into the existing file so that
-    # commands added in later releases are picked up without wiping user edits.
+    # Merge from template: add missing IDs and update command+privileged for existing
+    # entries so that fixes to built-in commands are always applied.
     sudo python3 - "$APP_DIR/config/technician_commands.json" "$CONFIG_DIR/technician_commands.json" <<'PYEOF'
 import json, sys
 template_path, live_path = sys.argv[1], sys.argv[2]
 template = json.load(open(template_path))
 live = json.load(open(live_path))
-live_ids = {c["id"] for c in live}
-added = [c for c in template if c["id"] not in live_ids]
-if added:
-    live.extend(added)
+template_map = {c["id"]: c for c in template}
+live_map = {c["id"]: c for c in live}
+added, updated = [], []
+for tid, tc in template_map.items():
+    if tid not in live_map:
+        live.append(tc)
+        added.append(tid)
+    else:
+        # Always sync command and privileged from template so fixes propagate
+        changed = False
+        for field in ("command", "privileged"):
+            if field in tc and live_map[tid].get(field) != tc[field]:
+                live_map[tid][field] = tc[field]
+                changed = True
+        if changed:
+            updated.append(tid)
+if added or updated:
     with open(live_path, "w") as f:
         json.dump(live, f, indent=2)
-    print("Added " + str(len(added)) + " new command(s): " + ", ".join(c["id"] for c in added))
+    if added:
+        print("Added " + str(len(added)) + " new command(s): " + ", ".join(added))
+    if updated:
+        print("Updated " + str(len(updated)) + " command(s): " + ", ".join(updated))
 else:
     print("technician_commands.json is up to date.")
 PYEOF
